@@ -865,3 +865,37 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .community-write-button{padding-left:12px;padding-right:12px}
   .nav-badge{top:4px;right:8px}
 }
+
+.entry-picker-modal {
+  max-width: 520px;
+}
+
+.entry-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.entry-picker-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  text-align: left;
+  min-height: 140px;
+}
+
+.story-chip-compose {
+  flex-shrink: 0;
+}
+
+.story-chip-avatar-compose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.story-chip-avatar-compose svg {
+  width: 20px;
+  height: 20px;
+}

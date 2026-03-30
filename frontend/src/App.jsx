@@ -851,8 +851,9 @@ function formatFeedTimestamp(value) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
 }
 
-function FeedComposerModal({ open, onClose, onCreated }) {
+function FeedComposerModal({ open, mode = 'feed', onClose, onCreated }) {
   const navigate = useNavigate()
+  const isStory = mode === 'story'
   const [form, setForm] = useState({ title: '', content: '' })
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
@@ -869,6 +870,15 @@ function FeedComposerModal({ open, onClose, onCreated }) {
     return () => URL.revokeObjectURL(url)
   }, [imageFile])
 
+  useEffect(() => {
+    if (open) return
+    setForm({ title: '', content: '' })
+    setImageFile(null)
+    setImagePreview('')
+    setSubmitting(false)
+    setError('')
+  }, [open, mode])
+
   if (!open) return null
 
   async function handleSubmit(event) {
@@ -879,10 +889,11 @@ function FeedComposerModal({ open, onClose, onCreated }) {
       setError('')
       let imageUrl = ''
       if (imageFile) {
-        const uploaded = await uploadFile(imageFile, 'feed', null)
+        const uploaded = await uploadFile(imageFile, isStory ? 'story' : 'feed', null)
         imageUrl = uploaded?.item?.url || uploaded?.url || ''
       }
-      const created = await api('/api/feed/posts', {
+      const endpoint = isStory ? '/api/feed/stories' : '/api/feed/posts'
+      const created = await api(endpoint, {
         method: 'POST',
         body: JSON.stringify({
           title: form.title,
@@ -892,7 +903,7 @@ function FeedComposerModal({ open, onClose, onCreated }) {
       })
       setForm({ title: '', content: '' })
       setImageFile(null)
-      onCreated?.(created.item)
+      onCreated?.(created.item, mode)
       navigate('/', { replace: true })
     } catch (err) {
       setError(err.message)
@@ -905,7 +916,7 @@ function FeedComposerModal({ open, onClose, onCreated }) {
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal-card feed-compose-modal" onClick={event => event.stopPropagation()}>
         <div className="modal-head">
-          <h3>피드 생성</h3>
+          <h3>{isStory ? '숏토리 생성' : '피드 생성'}</h3>
           <button type="button" className="ghost" onClick={onClose}>닫기</button>
         </div>
         <form className="stack" onSubmit={handleSubmit}>
@@ -913,15 +924,15 @@ function FeedComposerModal({ open, onClose, onCreated }) {
             <input
               value={form.title}
               onChange={event => setForm(current => ({ ...current, title: event.target.value.slice(0, 120) }))}
-              placeholder="피드 제목을 입력하세요"
+              placeholder={isStory ? '숏토리 제목을 입력하세요' : '피드 제목을 입력하세요'}
             />
           </TextField>
           <TextField label="내용">
             <textarea
               value={form.content}
-              onChange={event => setForm(current => ({ ...current, content: event.target.value.slice(0, 5000) }))}
-              placeholder="오늘 공유하고 싶은 내용을 작성하세요"
-              rows={8}
+              onChange={event => setForm(current => ({ ...current, content: event.target.value.slice(0, isStory ? 2000 : 5000) }))}
+              placeholder={isStory ? '지금 바로 보여주고 싶은 짧은 소식을 작성하세요' : '오늘 공유하고 싶은 내용을 작성하세요'}
+              rows={isStory ? 6 : 8}
             />
           </TextField>
           <TextField label="사진 첨부">
@@ -930,10 +941,34 @@ function FeedComposerModal({ open, onClose, onCreated }) {
           {imagePreview ? <div className="feed-compose-preview"><img src={imagePreview} alt="미리보기" /></div> : null}
           {error ? <div className="error card">{error}</div> : null}
           <div className="split-row responsive-row">
-            <div className="muted small-text">사진은 선택사항입니다. 제목 또는 내용 중 하나는 반드시 입력되어야 합니다.</div>
-            <button type="submit" disabled={submitting}>{submitting ? '등록 중...' : '피드 올리기'}</button>
+            <div className="muted small-text">{isStory ? '숏토리는 24시간 동안 스토리 영역에 노출됩니다. 텍스트 없이 이미지만 올려도 됩니다.' : '사진은 선택사항입니다. 제목 또는 내용 중 하나는 반드시 입력되어야 합니다.'}</div>
+            <button type="submit" disabled={submitting}>{submitting ? '등록 중...' : isStory ? '숏토리 올리기' : '피드 올리기'}</button>
           </div>
         </form>
+      </section>
+    </div>
+  )
+}
+
+function FeedEntryPickerModal({ open, onClose, onSelect }) {
+  if (!open) return null
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="modal-card entry-picker-modal" onClick={event => event.stopPropagation()}>
+        <div className="modal-head">
+          <h3>무엇을 작성할까요?</h3>
+          <button type="button" className="ghost" onClick={onClose}>닫기</button>
+        </div>
+        <div className="entry-picker-grid">
+          <button type="button" className="entry-picker-option" onClick={() => onSelect?.('feed')}>
+            <strong>피드</strong>
+            <span className="muted">기존 피드 작성 화면으로 이동합니다.</span>
+          </button>
+          <button type="button" className="entry-picker-option" onClick={() => onSelect?.('story')}>
+            <strong>숏토리</strong>
+            <span className="muted">인스타그램 스토리처럼 짧게 올리고 24시간 노출됩니다.</span>
+          </button>
+        </div>
       </section>
     </div>
   )
@@ -1010,7 +1045,7 @@ function StoryViewerModal({ item, open, onClose }) {
   if (!open || !item?.profile) return null
   const profile = item.profile
   const owner = item.owner || {}
-  const story = item.story || {}
+  const story = item || {}
   const name = profile.display_name || owner.nickname || profile.title || '사용자'
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -1029,7 +1064,7 @@ function StoryViewerModal({ item, open, onClose }) {
           {story.image_url ? <div className="story-media"><img src={story.image_url} alt={story.title || name} /></div> : null}
           <div className="story-copy-block">
             {story.title ? <h3>{story.title}</h3> : null}
-            <div className="pre-wrap">{story.content || story.summary || '스토리 내용이 없습니다.'}</div>
+            <div className="pre-wrap">{story.content || '스토리 내용이 없습니다.'}</div>
           </div>
           <div className="story-viewer-actions">
             <button type="button" className="ghost" onClick={() => navigate(`/questions/${profile.id}`, { state: { openAsk: true, source: 'story' } })}>질문</button>
@@ -1047,13 +1082,22 @@ function HomePage({ user }) {
   const [items, setItems] = useState([])
   const [stories, setStories] = useState([])
   const [selectedStory, setSelectedStory] = useState(null)
+  const [composerMode, setComposerMode] = useState('feed')
   const [error, setError] = useState('')
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [nextOffset, setNextOffset] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const loadMoreRef = useRef(null)
-  const composeOpen = new URLSearchParams(location.search).get('compose') === '1'
+  const composeParam = new URLSearchParams(location.search).get('compose')
+  const composeOpen = composeParam === '1' || composeParam === 'feed' || composeParam === 'story'
+  const pickerOpen = composeParam === '1'
+  const composerOpen = composeParam === 'feed' || composeParam === 'story'
+
+  useEffect(() => {
+    if (composeParam === 'story') setComposerMode('story')
+    else if (composeParam === 'feed') setComposerMode('feed')
+  }, [composeParam])
 
   const loadFeed = React.useCallback(async (reset = false) => {
     if (loading) return
@@ -1076,7 +1120,8 @@ function HomePage({ user }) {
   const loadStories = React.useCallback(async () => {
     try {
       const data = await api('/api/feed/stories?limit=20')
-      setStories(data.items || [])
+      const ownStory = data.my_story ? [data.my_story] : []
+      setStories([...ownStory, ...(data.items || [])])
     } catch {
       setStories([])
     }
@@ -1109,27 +1154,50 @@ function HomePage({ user }) {
     }
   }
 
-  function handleCreated(item) {
+  function handleCreated(item, mode) {
     if (!item) return
+    if (mode === 'story') {
+      setSelectedStory(item)
+      loadStories()
+      return
+    }
     setItems(current => [item, ...current])
     setSelectedProfile(item.profile || null)
     loadStories()
+  }
+
+  function openCreatePicker() {
+    navigate('/?compose=1')
   }
 
   function closeComposer() {
     navigate('/', { replace: true })
   }
 
+  function handleSelectCompose(nextMode) {
+    setComposerMode(nextMode)
+    navigate(`/?compose=${nextMode}`, { replace: true })
+  }
+
   return (
     <div className="stack page-stack feed-home-page">
-      <FeedComposerModal open={composeOpen} onClose={closeComposer} onCreated={handleCreated} />
+      <FeedEntryPickerModal open={pickerOpen} onClose={closeComposer} onSelect={handleSelectCompose} />
+      <FeedComposerModal open={composerOpen} mode={composerMode} onClose={closeComposer} onCreated={handleCreated} />
       <StoryViewerModal item={selectedStory} open={Boolean(selectedStory)} onClose={() => setSelectedStory(null)} />
       <section className="card stack home-story-card">
         <div className="story-strip" role="list" aria-label="스토리 목록">
+          <button type="button" className="story-chip story-chip-compose" onClick={openCreatePicker} role="listitem">
+            <span className="story-chip-ring">
+              <span className="story-chip-avatar story-chip-avatar-compose">
+                <IconGlyph name="compose" label="피드추가" />
+              </span>
+            </span>
+            <span className="story-chip-name">피드추가</span>
+          </button>
           {stories.length ? stories.map((item, index) => {
             const profile = item.profile || {}
             const owner = item.owner || {}
-            const label = profile.display_name || owner.nickname || profile.title || '스토리'
+            const label = item.viewer?.is_own_story ? '내 숏토리' : profile.display_name || owner.nickname || profile.title || '숏토리'
             return (
               <button key={`story-${item.id}-${index}`} type="button" className={`story-chip ${index < 5 ? 'story-chip-priority' : ''}`} onClick={() => setSelectedStory(item)} role="listitem">
                 <span className="story-chip-ring">
@@ -1138,7 +1206,7 @@ function HomePage({ user }) {
                 <span className="story-chip-name">{label}</span>
               </button>
             )
-          }) : <div className="muted small-text">표시할 스토리가 없습니다.</div>}
+          }) : <div className="muted small-text">표시할 숏토리가 없습니다.</div>}
         </div>
       </section>
 
@@ -1151,15 +1219,6 @@ function HomePage({ user }) {
 
       {error ? <div className="card error">{error}</div> : null}
 
-      <section className="card stack latest-feed-card">
-        <div className="split-row responsive-row latest-feed-head">
-          <h3>최신 피드</h3>
-          <button type="button" className="feed-compose-trigger" onClick={() => navigate('/?compose=1')}>
-            <IconGlyph name="compose" label="피드추가" />
-            <span>피드추가</span>
-          </button>
-        </div>
-      </section>
 
       <div className="feed-post-list">
         {items.length ? items.map(item => (

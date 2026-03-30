@@ -995,6 +995,29 @@ def serialize_feed_post(conn, row: dict, viewer: dict | None = None) -> dict:
     }
 
 
+def serialize_feed_story(conn, row: dict, viewer: dict | None = None) -> dict:
+    owner = conn.execute("SELECT * FROM users WHERE id = ? LIMIT 1", (row['user_id'],)).fetchone()
+    profile_row = get_primary_profile_for_user(conn, int(row['user_id']))
+    viewer_id = int(viewer['id']) if viewer and viewer.get('id') else 0
+    profile = serialize_profile(conn, row_to_dict(profile_row), include_private=False) if profile_row else None
+    title = (row.get('title') or '').strip()
+    content = (row.get('content') or '').strip()
+    return {
+        'id': row['id'],
+        'title': title,
+        'content': content,
+        'image_url': row.get('image_url') or '',
+        'created_at': row.get('created_at') or '',
+        'expires_at': row.get('expires_at') or '',
+        'owner': user_public_dict(owner) if owner else None,
+        'profile': profile,
+        'viewer': {
+            'friend_request_status': get_friend_request_status(conn, viewer_id or None, int(row['user_id'])),
+            'is_own_story': bool(viewer_id and viewer_id == int(row['user_id'])),
+        },
+    }
+
+
 def fetch_feed_posts(conn, viewer: dict | None, limit: int = 10, offset: int = 0) -> list[dict]:
     viewer_id = int(viewer['id']) if viewer and viewer.get('id') else 0
     rows = [row_to_dict(r) for r in conn.execute("SELECT * FROM feed_posts ORDER BY created_at DESC, id DESC").fetchall()]
@@ -2379,40 +2402,48 @@ def create_report(payload: ReportIn, request: Request, user=Depends(current_user
 def feed_stories(limit: int = Query(default=20, ge=1, le=50), user=Depends(current_user_optional)):
     with get_conn() as conn:
         viewer_id = int(user['id']) if user and user.get('id') else 0
-        profile_rows = [row_to_dict(r) for r in conn.execute("SELECT * FROM app_profiles WHERE COALESCE(feed_profile_public, 0) = 1 AND COALESCE(visibility_mode, 'link_only') <> 'private' ORDER BY updated_at DESC, id DESC").fetchall()]
+        now_value = utcnow()
+        rows = [row_to_dict(r) for r in conn.execute("SELECT * FROM feed_stories WHERE expires_at > ? ORDER BY created_at DESC, id DESC", (now_value,)).fetchall()]
         items: list[dict] = []
         seen_users: set[int] = set()
-        for profile_row in profile_rows:
-            owner_id = int(profile_row.get('user_id') or 0)
-            if not owner_id or owner_id in seen_users:
+        own_story = None
+        for row in rows:
+            owner_id = int(row.get('user_id') or 0)
+            if not owner_id:
                 continue
             if viewer_id and owner_id == viewer_id:
+                own_story = serialize_feed_story(conn, row, user)
+                continue
+            if owner_id in seen_users:
                 continue
             if viewer_id and either_side_blocked(conn, viewer_id, owner_id):
                 continue
-            latest_post = conn.execute("SELECT * FROM feed_posts WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 1", (owner_id,)).fetchone()
-            if not latest_post:
-                continue
-            owner_row = conn.execute("SELECT * FROM users WHERE id = ? LIMIT 1", (owner_id,)).fetchone()
-            latest_dict = row_to_dict(latest_post)
-            content = (latest_dict.get('content') or '').strip()
-            items.append({
-                'id': profile_row['id'],
-                'profile': serialize_profile(conn, profile_row, include_private=False),
-                'owner': user_public_dict(owner_row) if owner_row else None,
-                'story': {
-                    'id': latest_dict['id'],
-                    'title': (latest_dict.get('title') or '').strip(),
-                    'content': content,
-                    'summary': (content[:72] + ('…' if len(content) > 72 else '')) if content else '',
-                    'image_url': latest_dict.get('image_url') or '',
-                    'created_at': latest_dict.get('created_at') or '',
-                },
-            })
+            items.append(serialize_feed_story(conn, row, user))
             seen_users.add(owner_id)
             if len(items) >= limit:
                 break
-        return {'items': items}
+        return {'items': items, 'my_story': own_story}
+
+
+@app.post("/api/feed/stories")
+def create_feed_story(payload: FeedStoryCreateIn, request: Request, user=Depends(current_user)):
+    title = (payload.title or '').strip()[:120]
+    content = (payload.content or '').strip()[:2000]
+    image_url = (payload.image_url or '').strip()[:1000]
+    if not title and not content and not image_url:
+        raise HTTPException(status_code=400, detail="숏토리 내용 또는 이미지를 입력해주세요.")
+    with get_conn() as conn:
+        normalized = enforce_text_safety(conn, request=request, user=user, event_type="feed_story_create", target_type="feed_story", target_id=0, text_value=(title + "\n" + content).strip() or title or "story", min_length=1, burst_limit=30, day_limit=200)
+        if image_url and not image_url.startswith(('http://', 'https://', '/uploads/')):
+            image_url = ''
+        created_at = utcnow()
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        conn.execute(
+            "INSERT INTO feed_stories(user_id, title, content, image_url, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (user['id'], title, content if content else normalized, image_url, created_at, expires_at),
+        )
+        row = conn.execute("SELECT * FROM feed_stories WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user['id'],)).fetchone()
+        return {"item": serialize_feed_story(conn, row_to_dict(row), user)}
 
 
 @app.get("/api/feed/posts")

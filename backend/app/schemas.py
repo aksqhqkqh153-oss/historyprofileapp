@@ -133,6 +133,11 @@ class FeedPostCreateIn(BaseModel):
     content: str = ""
     image_url: str = ""
 
+class FeedStoryCreateIn(BaseModel):
+    title: str = ""
+    content: str = ""
+    image_url: str = ""
+
 class FriendRequestActionIn(BaseModel):
     action: str = "accept"
 

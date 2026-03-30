@@ -345,9 +345,21 @@ CREATE TABLE IF NOT EXISTS verification_codes (
 CREATE TABLE IF NOT EXISTS feed_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
+    title TEXT DEFAULT '',
     content TEXT NOT NULL,
     image_url TEXT DEFAULT '',
     created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS feed_stories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT DEFAULT '',
+    content TEXT DEFAULT '',
+    image_url TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -1744,6 +1756,15 @@ def seed_if_empty(conn: sqlite3.Connection) -> None:
     for user_id, content, image_url in posts:
         conn.execute("INSERT INTO feed_posts(user_id, content, image_url, created_at) VALUES (?, ?, ?, ?)", (user_id, content, image_url, utcnow()))
 
+    story_items = [
+        (2, "오늘 출근 전 체크", "강남권 오전 일정 가능합니다. 상담은 DM 주세요.", ""),
+        (3, "현장 점검 완료", "사무실 이전 동선 체크를 마쳤습니다. 오후 상담 가능합니다.", ""),
+    ]
+    for user_id, title, content, image_url in story_items:
+        created_at = utcnow()
+        expires_at = (datetime.utcnow() + timedelta(hours=24)).replace(microsecond=0).isoformat()
+        conn.execute("INSERT INTO feed_stories(user_id, title, content, image_url, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)", (user_id, title, content, image_url, created_at, expires_at))
+
     conn.execute("INSERT INTO feed_likes(post_id, user_id, created_at) VALUES (1, 3, ?)", (utcnow(),))
     conn.execute("INSERT INTO feed_likes(post_id, user_id, created_at) VALUES (1, 4, ?)", (utcnow(),))
     conn.execute("INSERT INTO feed_bookmarks(post_id, user_id, created_at) VALUES (2, 2, ?)", (utcnow(),))
@@ -1964,6 +1985,15 @@ def init_db() -> None:
             'status_c_count': 'INTEGER NOT NULL DEFAULT 0',
             'day_memo': "TEXT NOT NULL DEFAULT ''",
             'is_handless_day': 'INTEGER NOT NULL DEFAULT 0',
+        })
+        _ensure_columns(conn, 'feed_posts', {
+            'title': "TEXT DEFAULT ''",
+        })
+        _ensure_columns(conn, 'feed_stories', {
+            'title': "TEXT DEFAULT ''",
+            'content': "TEXT DEFAULT ''",
+            'image_url': "TEXT DEFAULT ''",
+            'expires_at': "TEXT NOT NULL DEFAULT ''",
         })
         _ensure_columns(conn, 'dm_messages', {
             'reply_to_id': 'INTEGER',
