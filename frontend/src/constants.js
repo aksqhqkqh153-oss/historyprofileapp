@@ -1,10 +1,10 @@
 export const NAV_ITEMS = [
   { path: '/', label: '홈' },
-  { path: '/chats', label: '채팅' },
   { path: '/friends', label: '친구' },
+  { path: '/chats', label: '채팅' },
   { path: '/community', label: '대화' },
   { path: '/questions', label: '질문' },
-  { path: '/profile', label: '프로필' },
+  { path: '/more', label: '기타' },
 ]
 
 export const MENU_ITEMS = [

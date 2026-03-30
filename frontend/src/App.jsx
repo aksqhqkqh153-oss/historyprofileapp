@@ -15,6 +15,7 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/questions')) return '질문'
   if (pathname.startsWith('/community')) return '대화'
   if (pathname.startsWith('/profile')) return '프로필'
+  if (pathname.startsWith('/more')) return '기타'
   if (pathname.startsWith('/admin')) return '관리자'
   if (pathname.startsWith('/url-shortener')) return 'URLs단축'
   if (pathname.startsWith('/qr-generator')) return 'QR생성'
@@ -114,7 +115,7 @@ const NAV_META = {
   '/friends': { icon: 'friends' },
   '/questions': { icon: 'questions' },
   '/community': { icon: 'conversation' },
-  '/profile': { icon: 'profile' },
+  '/more': { icon: 'more' },
 }
 
 function formatBadgeCount(value, max = 99) {
@@ -274,6 +275,7 @@ function AppShell({ user, setUser }) {
   const menuButtonRef = useRef(null)
   const searchButtonRef = useRef(null)
   const alertButtonRef = useRef(null)
+  const settingsButtonRef = useRef(null)
   const profileSwitchButtonRef = useRef(null)
   const counts = useNotificationCounts(user, location.pathname)
   const [multiProfiles, setMultiProfiles] = useState([])
@@ -382,12 +384,10 @@ function AppShell({ user, setUser }) {
               <div className="dropdown-title">메뉴</div>
               <div className="dropdown-list">
                 {MENU_ITEMS.map(item => <Link key={item.path} className="dropdown-item dropdown-item-with-icon" to={item.path}><IconGlyph name={item.path === '/url-shortener' ? 'link' : 'qr'} label={item.label} /><span>{item.label}</span></Link>)}
-                {isAdmin ? <Link className="dropdown-item dropdown-item-with-icon" to="/admin"><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></Link> : null}
               </div>
             </AnchoredPopup>
-            <button ref={profileSwitchButtonRef} type="button" className="ghost topbar-profile-switch" onClick={async () => { await loadMultiProfiles(); togglePopup('profiles') }} aria-expanded={activePopup === 'profiles'} aria-label="계정 전환">
-              <span className="topbar-profile-name">{activeProfileLabel}</span>
-              <span className="topbar-profile-caret">▾</span>
+            <button ref={profileSwitchButtonRef} type="button" className="ghost topbar-profile-switch topbar-text-trigger" onClick={async () => { await loadMultiProfiles(); togglePopup('profiles') }} aria-expanded={activePopup === 'profiles'} aria-label="계정 전환">
+              <span className="topbar-profile-name">계정전환</span>
             </button>
             <AnchoredPopup anchorRef={profileSwitchButtonRef} open={activePopup === 'profiles'} className="dropdown-popup profile-switch-popup stack">
               <div className="dropdown-title">계정 전환</div>
@@ -412,12 +412,10 @@ function AppShell({ user, setUser }) {
                 <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={openMultiProfileManager}><IconGlyph name="settings" label="멀티 프로필 관리" /><span>멀티 프로필 관리</span></button>
                 <button type="button" className={multiProfiles.length >= 3 ? 'dropdown-item ghost dropdown-item-with-icon locked-button' : 'dropdown-item ghost dropdown-item-with-icon'} onClick={handleCreateMultiProfile} disabled={multiProfiles.length >= 3 || multiProfileManagerBusy}><IconGlyph name="userAdd" label="멀티 프로필 추가" /><span>멀티 프로필 추가</span></button>
                 {multiProfiles.length >= 3 ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={handleOpenProfileLimitGuide}><IconGlyph name="compose" label="추가개방" /><span>추가개방</span></button> : null}
-                {isAdmin ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/admin')}><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></button> : null}
                 <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={logout}><IconGlyph name="logout" label="로그아웃" /><span>로그아웃</span></button>
               </div>
             </AnchoredPopup>
           </div>
-          <div className="page-heading"><span className="page-heading-mark">P</span><span>{pageTitle(location.pathname)}</span></div>
           <div className="topbar-right popup-anchor-group popup-anchor-group-right">
             <button ref={searchButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button" onClick={() => setActivePopup('search')} aria-expanded={activePopup === 'search'} aria-label="검색">
               <IconGlyph name="search" label="검색" />
@@ -443,7 +441,17 @@ function AppShell({ user, setUser }) {
                 </button>
               </div>
             </AnchoredPopup>
+            <button ref={settingsButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button" onClick={() => togglePopup('settings')} aria-expanded={activePopup === 'settings'} aria-label="설정">
+              <IconGlyph name="settings" label="설정" />
+            </button>
+            <AnchoredPopup anchorRef={settingsButtonRef} open={activePopup === 'settings'} align="right" className="settings-popup dropdown-popup stack settings-panel">
+              <div className="dropdown-title">설정</div>
+              <div className="dropdown-list">
+                {isAdmin ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/admin')}><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></button> : null}
+              </div>
+            </AnchoredPopup>
           </div>
+          <div className="page-heading"><span className="page-heading-mark">P</span><span>{pageTitle(location.pathname)}</span></div>
         </div>
       </header>
       <MultiProfileManagerModal
@@ -476,6 +484,7 @@ function AppShell({ user, setUser }) {
           <Route path="/questions/:profileId" element={<QuestionProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/more" element={<MorePage />} />
           <Route path="/url-shortener" element={<UrlShortenerPage />} />
           <Route path="/qr-generator" element={<QrGeneratorPage />} />
           <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
@@ -501,6 +510,19 @@ function AppShell({ user, setUser }) {
         })}
       </nav>
     </div>
+  )
+}
+
+function MorePage() {
+  return (
+    <section className="page-stack">
+      <div className="card stack more-page-card">
+        <div className="stack gap-8">
+          <strong>기타</strong>
+          <div className="muted">준비 중인 부가 기능 화면입니다.</div>
+        </div>
+      </div>
+    </section>
   )
 }
 
