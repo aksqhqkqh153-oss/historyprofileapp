@@ -320,17 +320,6 @@ function AppShell({ user, setUser }) {
           </div>
           <div className="page-heading"><span className="page-heading-mark">H</span><span>{pageTitle(location.pathname)}</span></div>
           <div className="topbar-right popup-anchor-group popup-anchor-group-right">
-            {location.pathname === '/' ? (
-              <button
-                type="button"
-                className="ghost topbar-compose-button"
-                onClick={() => navigate('/?compose=1')}
-                aria-label="피드추가"
-              >
-                <IconGlyph name="compose" label="피드추가" />
-                <span>피드추가</span>
-              </button>
-            ) : null}
             <button ref={searchButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button" onClick={() => setActivePopup('search')} aria-expanded={activePopup === 'search'} aria-label="검색">
               <IconGlyph name="search" label="검색" />
             </button>
@@ -599,7 +588,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
                 setIsAnonymous(checked)
                 setNickname(checked ? '익명' : (String(getStoredUser()?.nickname || '').trim() || '익명'))
               }} />
-              <span>익명전환</span>
+              <span>ㅁ 익명전환</span>
             </label>
           </div>
           <label>질문 내용</label>
