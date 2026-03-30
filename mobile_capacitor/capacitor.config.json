@@ -1,6 +1,6 @@
 {
   "appId": "com.historyprofile.app",
-  "appName": "프토리",
+  "appName": "historyprofile_app",
   "webDir": "../frontend/dist",
   "server": {
     "androidScheme": "https"

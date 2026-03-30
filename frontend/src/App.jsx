@@ -94,6 +94,8 @@ function IconGlyph({ name, label }) {
     compose: <svg {...common}><path d="M12 5v14" /><path d="M5 12h14" /></svg>,
     back: <svg {...common}><path d="M15 18l-6-6 6-6" /><path d="M9 12h10" /></svg>,
     trash: <svg {...common}><path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 13h10l1-13" /><path d="M9 7V4h6v3" /></svg>,
+    more: <svg {...common}><circle cx="6" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="18" cy="12" r="1.5" /></svg>,
+    chatMini: <svg {...common}><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4.5 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z" /></svg>,
   }
   return <span className="icon-symbol" aria-label={label}>{icons[name] || icons.home}</span>
 }
@@ -123,7 +125,7 @@ function formatBadgeCount(value, max = 99) {
 }
 
 function useNotificationCounts(user, pathname) {
-  const [counts, setCounts] = useState({ notifications: 0, chats: 0, questions: 0 })
+  const [counts, setCounts] = useState({ notifications: 0, chats: 0, questions: 0, friends: 0 })
 
   useEffect(() => {
     let cancelled = false
@@ -131,9 +133,10 @@ function useNotificationCounts(user, pathname) {
     async function loadCounts() {
       if (!user) return
       try {
-        const profileData = await api('/api/profiles')
+        const [profileData, requestData] = await Promise.all([api('/api/profiles'), api('/api/friends/requests')])
         const profiles = profileData.items || []
         const questionUnread = profiles.reduce((sum, profile) => sum + ((profile.questions || []).filter(item => item.status === 'pending').length), 0)
+        const friendUnread = (requestData.incoming || []).length
 
         let chatUnread = 0
         const lastViewedAt = getStoredChatLastViewedAt()
@@ -161,7 +164,8 @@ function useNotificationCounts(user, pathname) {
           setCounts({
             chats: Math.min(chatUnread, 100),
             questions: questionUnread,
-            notifications: chatUnread + questionUnread,
+            friends: friendUnread,
+            notifications: chatUnread + questionUnread + friendUnread,
           })
         }
       } catch {
@@ -388,6 +392,10 @@ function AppShell({ user, setUser }) {
                   <span>채팅</span>
                   <strong>{formatBadgeCount(counts.chats, 100) || '0'}</strong>
                 </button>
+                <button type="button" className="dropdown-item ghost dropdown-item-between" onClick={() => closePopupAndNavigate('/friends')}>
+                  <span>친구요청</span>
+                  <strong>{formatBadgeCount(counts.friends, 999) || '0'}</strong>
+                </button>
                 <button type="button" className="dropdown-item ghost dropdown-item-between" onClick={() => closePopupAndNavigate('/questions')}>
                   <span>질문</span>
                   <strong>{formatBadgeCount(counts.questions, 999) || '0'}</strong>
@@ -452,7 +460,13 @@ function AppShell({ user, setUser }) {
 
       <nav className="bottom-nav">
         {NAV_ITEMS.map(item => {
-          const badgeValue = item.path === '/chats' ? formatBadgeCount(counts.chats, 100) : item.path === '/questions' ? formatBadgeCount(counts.questions, 999) : ''
+          const badgeValue = item.path === '/chats'
+            ? formatBadgeCount(counts.chats, 100)
+            : item.path === '/questions'
+              ? formatBadgeCount(counts.questions, 999)
+              : item.path === '/friends'
+                ? formatBadgeCount(counts.friends, 999)
+                : ''
           return (
             <Link key={item.path} to={item.path} className={location.pathname === item.path ? 'nav-item active nav-item-with-badge' : 'nav-item nav-item-with-badge'}>
               <span className="nav-item-label"><span className="nav-item-icon"><IconGlyph name={NAV_META[item.path]?.icon || 'home'} label={item.label} /></span><span className="nav-item-text">{item.label}</span></span>
@@ -1138,78 +1152,147 @@ function HomePage({ user }) {
 }
 
 function FriendsPage() {
+  const navigate = useNavigate()
+  const currentUser = getStoredUser() || {}
   const [friends, setFriends] = useState([])
   const [requests, setRequests] = useState({ incoming: [], outgoing: [] })
+  const [profiles, setProfiles] = useState([])
   const [tab, setTab] = useState('list')
+  const [selectedFriend, setSelectedFriend] = useState(null)
+  const [openMenuId, setOpenMenuId] = useState(null)
 
   async function load() {
-    const [friendsData, requestData] = await Promise.all([api('/api/friends'), api('/api/friends/requests')])
+    const [friendsData, requestData, profileData] = await Promise.all([api('/api/friends'), api('/api/friends/requests'), api('/api/profiles')])
     setFriends(friendsData.items || [])
     setRequests({ incoming: requestData.incoming || [], outgoing: requestData.outgoing || [] })
+    setProfiles(profileData.items || [])
   }
 
   useEffect(() => { load() }, [])
 
-  async function report(item) {
-    const reason = window.prompt('신고 사유를 입력하세요', '부적절한 행동')
-    if (!reason) return
-    await api('/api/reports', { method: 'POST', body: JSON.stringify({ target_type: 'user', target_id: item.id, reason }) })
-    window.alert('신고가 접수되었습니다.')
-  }
+  const activeProfile = useMemo(() => {
+    const activeId = getStoredActiveProfileId()
+    return profiles.find(item => Number(item.id) === Number(activeId)) || profiles[0] || null
+  }, [profiles])
 
   async function respondRequest(requestId, action) {
     await api(`/api/friends/requests/${requestId}/respond`, { method: 'POST', body: JSON.stringify({ action }) })
     await load()
   }
 
+  async function blockFriend(item) {
+    if (!window.confirm(`${item.nickname || item.name || '이 사용자'}를 차단하시겠습니까?`)) return
+    await api(`/api/blocks/${item.id}`, { method: 'POST' })
+    setOpenMenuId(null)
+    await load()
+  }
+
+  function openFriendProfile(item) {
+    setSelectedFriend(item)
+    setOpenMenuId(null)
+  }
+
+  const requestBadge = formatBadgeCount(requests.incoming.length, 999)
+  const myDisplayName = activeProfile?.display_name || activeProfile?.title || currentUser.nickname || currentUser.name || '내 프로필'
+  const myIntro = activeProfile?.headline || activeProfile?.bio || currentUser.one_liner || '한 줄 소개를 작성해보세요.'
+  const myAvatar = activeProfile?.profile_image_url || currentUser.photo_url || ''
+
   return (
-    <div className="stack page-stack friends-page">
-      <section className="card stack">
-        <div className="split-row responsive-row friends-page-head">
-          <div className="friends-page-head-spacer" aria-hidden="true"></div>
-          <div className="tab-row friends-tab-row">
-            <button type="button" className={tab === 'list' ? 'tab active' : 'tab'} onClick={() => setTab('list')}>목록 {friends.length}</button>
-            <button type="button" className={tab === 'requests' ? 'tab active' : 'tab'} onClick={() => setTab('requests')}>요청 {requests.incoming.length}</button>
-          </div>
+    <div className="stack page-stack friends-page kakao-friends-page">
+      <section className="card stack friends-kakao-card">
+        <article className="friend-kakao-row friend-kakao-row-me">
+          <button type="button" className="friend-kakao-main friend-kakao-main-static">
+            <span className="friend-kakao-avatar">{myAvatar ? <img src={myAvatar} alt={myDisplayName} /> : <span>{myDisplayName.slice(0, 1)}</span>}</span>
+            <span className="friend-kakao-copy">
+              <strong>{myDisplayName}</strong>
+              <span className="muted small-text">{myIntro}</span>
+            </span>
+          </button>
+        </article>
+
+        <div className="tab-row friends-tab-row kakao-friends-tabs">
+          <button type="button" className={tab === 'list' ? 'tab active badge-tab-button' : 'tab badge-tab-button'} onClick={() => setTab('list')}>
+            <span>목록</span>
+          </button>
+          <button type="button" className={tab === 'requests' ? 'tab active badge-tab-button' : 'tab badge-tab-button'} onClick={() => setTab('requests')}>
+            <span>요청</span>
+            {requestBadge ? <span className="tab-badge">{requestBadge}</span> : null}
+          </button>
         </div>
 
         {tab === 'list' ? (
-          <div className="list">
-            {friends.length ? friends.map(item => (
-              <div key={item.id} className="list-row split-row">
-                <div>
-                  <strong>{item.nickname}</strong>
-                  <div className="muted small-text">{item.email}</div>
-                  {item.primary_profile_slug ? <div className="small-text">공개 프로필: /p/{item.primary_profile_slug}</div> : null}
-                </div>
-                <div className="action-wrap">
-                  {item.primary_profile_slug ? <Link className="ghost button-link" to={`/p/${item.primary_profile_slug}`}>프로필</Link> : null}
-                  <Link className="ghost button-link" to="/chats">채팅</Link>
-                  <button type="button" className="ghost" onClick={() => report(item)}>신고</button>
-                </div>
-              </div>
-            )) : <div className="muted">친구 목록이 없습니다.</div>}
+          <div className="friends-kakao-list">
+            {friends.length ? friends.map(item => {
+              const displayName = item.nickname || item.name || '사용자'
+              const intro = item.one_liner || item.email || '한 줄 소개가 없습니다.'
+              return (
+                <article key={item.id} className="friend-kakao-row">
+                  <button type="button" className="friend-kakao-main" onClick={() => openFriendProfile(item)}>
+                    <span className="friend-kakao-avatar">{item.photo_url ? <img src={item.photo_url} alt={displayName} /> : <span>{displayName.slice(0, 1)}</span>}</span>
+                    <span className="friend-kakao-copy">
+                      <strong>{displayName}</strong>
+                      <span className="muted small-text">{intro}</span>
+                    </span>
+                  </button>
+                  <div className="friend-kakao-actions">
+                    <button type="button" className="ghost icon-button friend-chat-icon-button" onClick={() => navigate('/chats')} aria-label="채팅" title="채팅">
+                      <IconGlyph name="chatMini" label="채팅" />
+                    </button>
+                    <div className="friend-more-wrap">
+                      <button type="button" className="ghost icon-button friend-more-button" onClick={() => setOpenMenuId(current => current === item.id ? null : item.id)} aria-label="더보기" title="더보기">
+                        <IconGlyph name="more" label="더보기" />
+                      </button>
+                      {openMenuId === item.id ? (
+                        <div className="friend-row-menu floating-popup">
+                          <button type="button" className="ghost friend-row-menu-item" onClick={() => blockFriend(item)}>친구차단</button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              )
+            }) : <div className="muted">친구 목록이 없습니다.</div>}
           </div>
         ) : (
-          <div className="bordered-box stack">
-            <strong>받은 요청</strong>
-            <div className="list compact-list">
-              {requests.incoming.length ? requests.incoming.map(item => (
-                <div key={`incoming-${item.id}`} className="list-row split-row">
-                  <div>
+          <div className="friends-request-board stack">
+            {requests.incoming.length ? requests.incoming.map(item => (
+              <article key={`incoming-${item.id}`} className="friend-kakao-row friend-request-row">
+                <button type="button" className="friend-kakao-main" onClick={() => openFriendProfile(item)}>
+                  <span className="friend-kakao-avatar">{item.photo_url ? <img src={item.photo_url} alt={item.nickname || item.name || '사용자'} /> : <span>{(item.nickname || item.name || '사').slice(0, 1)}</span>}</span>
+                  <span className="friend-kakao-copy">
                     <strong>{item.nickname || item.name || '사용자'}</strong>
-                    <div className="muted small-text">친구 요청 도착</div>
-                  </div>
-                  <div className="action-wrap">
-                    <button type="button" onClick={() => respondRequest(item.id, 'accept')}>수락</button>
-                    <button type="button" className="ghost" onClick={() => respondRequest(item.id, 'reject')}>거절</button>
-                  </div>
+                    <span className="muted small-text">나에게 새 친구요청을 보냈습니다.</span>
+                  </span>
+                </button>
+                <div className="action-wrap compact-friend-request-actions">
+                  <button type="button" onClick={() => respondRequest(item.id, 'accept')}>수락</button>
+                  <button type="button" className="ghost" onClick={() => respondRequest(item.id, 'reject')}>거절</button>
                 </div>
-              )) : <div className="muted">받은 친구 요청이 없습니다.</div>}
-            </div>
+              </article>
+            )) : <div className="muted">받은 친구 요청이 없습니다.</div>}
           </div>
         )}
       </section>
+
+      {selectedFriend ? (
+        <ModalFrame title={selectedFriend.nickname || selectedFriend.name || '친구 프로필'} onClose={() => setSelectedFriend(null)} className="friend-profile-modal">
+          <section className="profile-showcase profile-showcase-expanded friend-profile-modal-card">
+            <div className="profile-meta profile-meta-overlap friend-profile-header">
+              <div className="avatar large-avatar profile-avatar-overlap">{selectedFriend.photo_url ? <img src={selectedFriend.photo_url} alt={selectedFriend.nickname || selectedFriend.name || '친구'} /> : <span>{(selectedFriend.nickname || selectedFriend.name || '사').slice(0, 1)}</span>}</div>
+              <div className="profile-head-copy">
+                <h3>{selectedFriend.nickname || selectedFriend.name || '사용자'}</h3>
+                <div className="muted">{selectedFriend.one_liner || '한 줄 소개가 없습니다.'}</div>
+                <div className="muted small-text">{selectedFriend.email || '이메일 정보 없음'}</div>
+                {selectedFriend.primary_profile_slug ? <div className="muted small-text">공개 프로필: /p/{selectedFriend.primary_profile_slug}</div> : null}
+              </div>
+            </div>
+            <div className="split-row responsive-row friend-profile-modal-actions">
+              <button type="button" onClick={() => navigate('/chats')}>채팅하기</button>
+              <button type="button" className="ghost" onClick={() => setSelectedFriend(null)}>닫기</button>
+            </div>
+          </section>
+        </ModalFrame>
+      ) : null}
     </div>
   )
 }
