@@ -274,15 +274,23 @@ function AppShell({ user, setUser }) {
   const menuButtonRef = useRef(null)
   const searchButtonRef = useRef(null)
   const alertButtonRef = useRef(null)
-  const settingsButtonRef = useRef(null)
+  const profileSwitchButtonRef = useRef(null)
   const counts = useNotificationCounts(user, location.pathname)
   const [multiProfiles, setMultiProfiles] = useState([])
   const [multiProfileManagerOpen, setMultiProfileManagerOpen] = useState(false)
   const [multiProfileManagerBusy, setMultiProfileManagerBusy] = useState(false)
+  const activeProfileId = getStoredActiveProfileId()
+  const activeProfile = useMemo(() => multiProfiles.find(item => Number(item.id) === Number(activeProfileId)) || multiProfiles[0] || null, [multiProfiles, activeProfileId])
+  const activeProfileLabel = activeProfile?.display_name || activeProfile?.title || user?.nickname || user?.name || '내 계정'
+  const activeProfileDescription = activeProfile?.headline || activeProfile?.bio || user?.email || ''
 
   useEffect(() => {
     setActivePopup('')
   }, [location.pathname])
+
+  useEffect(() => {
+    loadMultiProfiles().catch(() => null)
+  }, [])
 
   async function runSearch() {
     if (!searchWord.trim()) return
@@ -320,6 +328,7 @@ function AppShell({ user, setUser }) {
   async function handleMultiProfileSwitch(profileId) {
     const nextId = Number(profileId) || null
     setStoredActiveProfileId(nextId)
+    setActivePopup('')
     setMultiProfileManagerOpen(false)
     window.dispatchEvent(new CustomEvent('historyprofile:active-profile-change', { detail: { profileId: nextId } }))
     navigate('/questions', { replace: location.pathname === '/questions' })
@@ -346,6 +355,7 @@ function AppShell({ user, setUser }) {
         setStoredActiveProfileId(createdId)
         window.dispatchEvent(new CustomEvent('historyprofile:active-profile-change', { detail: { profileId: createdId } }))
       }
+      setActivePopup('')
     } catch (err) {
       window.alert(err.message)
     } finally {
@@ -364,7 +374,7 @@ function AppShell({ user, setUser }) {
     <div className="app-shell">
       <header className="topbar-fixed">
         <div className="topbar" ref={popupRef}>
-          <div className="topbar-left popup-anchor-group">
+          <div className="topbar-left popup-anchor-group topbar-left-profile-group">
             <button ref={menuButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button" onClick={() => togglePopup('menu')} aria-expanded={activePopup === 'menu'} aria-label="메뉴">
               <IconGlyph name="menu" label="메뉴" />
             </button>
@@ -375,15 +385,45 @@ function AppShell({ user, setUser }) {
                 {isAdmin ? <Link className="dropdown-item dropdown-item-with-icon" to="/admin"><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></Link> : null}
               </div>
             </AnchoredPopup>
+            <button ref={profileSwitchButtonRef} type="button" className="ghost topbar-profile-switch" onClick={async () => { await loadMultiProfiles(); togglePopup('profiles') }} aria-expanded={activePopup === 'profiles'} aria-label="계정 전환">
+              <span className="topbar-profile-name">{activeProfileLabel}</span>
+              <span className="topbar-profile-caret">▾</span>
+            </button>
+            <AnchoredPopup anchorRef={profileSwitchButtonRef} open={activePopup === 'profiles'} className="dropdown-popup profile-switch-popup stack">
+              <div className="dropdown-title">계정 전환</div>
+              <div className="dropdown-user-box">
+                <strong>{activeProfileLabel}</strong>
+                <div className="muted small-text">{activeProfileDescription || '현재 사용 중인 계정'}</div>
+              </div>
+              <div className="dropdown-list profile-switch-list">
+                {multiProfiles.length ? multiProfiles.map(item => {
+                  const selected = Number(item.id) === Number(activeProfile?.id)
+                  const label = item.display_name || item.title || '멀티 프로필'
+                  return (
+                    <button key={item.id} type="button" className={selected ? 'dropdown-item ghost dropdown-item-between active-profile-dropdown-item' : 'dropdown-item ghost dropdown-item-between'} onClick={() => handleMultiProfileSwitch(item.id)}>
+                      <span>{label}</span>
+                      <span className="muted small-text">{selected ? '현재 계정' : (item.headline || item.bio || '전환')}</span>
+                    </button>
+                  )
+                }) : <div className="muted small-text profile-switch-empty">등록된 멀티 프로필이 없습니다.</div>}
+              </div>
+              <div className="dropdown-list profile-switch-actions">
+                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/profile')}><IconGlyph name="profile" label="프로필" /><span>내 프로필 관리</span></button>
+                <button type="button" className={multiProfiles.length >= 3 ? 'dropdown-item ghost dropdown-item-with-icon locked-button' : 'dropdown-item ghost dropdown-item-with-icon'} onClick={handleCreateMultiProfile} disabled={multiProfiles.length >= 3 || multiProfileManagerBusy}><IconGlyph name="userAdd" label="멀티 프로필 추가" /><span>멀티 프로필 추가</span></button>
+                {multiProfiles.length >= 3 ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={handleOpenProfileLimitGuide}><IconGlyph name="compose" label="추가개방" /><span>추가개방</span></button> : null}
+                {isAdmin ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/admin')}><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></button> : null}
+                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={logout}><IconGlyph name="logout" label="로그아웃" /><span>로그아웃</span></button>
+              </div>
+            </AnchoredPopup>
           </div>
-          <div className="page-heading"><span className="page-heading-mark">H</span><span>{pageTitle(location.pathname)}</span></div>
+          <div className="page-heading"><span className="page-heading-mark">P</span><span>{pageTitle(location.pathname)}</span></div>
           <div className="topbar-right popup-anchor-group popup-anchor-group-right">
             <button ref={searchButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button" onClick={() => setActivePopup('search')} aria-expanded={activePopup === 'search'} aria-label="검색">
               <IconGlyph name="search" label="검색" />
             </button>
             <button ref={alertButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button badge-button" onClick={() => togglePopup('alerts')} aria-expanded={activePopup === 'alerts'} aria-label="알림">
               <IconGlyph name="bell" label="알림" />
-              {totalNotificationLabel ? <span className="icon-badge topbar-badge">{totalNotificationLabel}</span> : null}
+              {totalNotificationLabel ? <span className="count-badge topbar-badge">{totalNotificationLabel}</span> : null}
             </button>
             <AnchoredPopup anchorRef={alertButtonRef} open={activePopup === 'alerts'} align="right" className="settings-popup dropdown-popup stack settings-panel">
               <div className="dropdown-title">알림</div>
@@ -400,22 +440,6 @@ function AppShell({ user, setUser }) {
                   <span>질문</span>
                   <strong>{formatBadgeCount(counts.questions, 999) || '0'}</strong>
                 </button>
-              </div>
-            </AnchoredPopup>
-            <button ref={settingsButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button" onClick={() => togglePopup('settings')} aria-expanded={activePopup === 'settings'} aria-label="설정">
-              <IconGlyph name="settings" label="설정" />
-            </button>
-            <AnchoredPopup anchorRef={settingsButtonRef} open={activePopup === 'settings'} align="right" className="settings-popup dropdown-popup stack settings-panel">
-              <div className="dropdown-title">설정</div>
-              <div className="dropdown-user-box">
-                <strong>{user.nickname}</strong>
-                <div className="muted small-text">{user.email}</div>
-              </div>
-              <div className="dropdown-list">
-                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/profile')}><IconGlyph name="profile" label="프로필" /><span>내 프로필 관리</span></button>
-                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={openMultiProfileManager}><IconGlyph name="userAdd" label="계정변경(멀티)" /><span>계정변경(멀티)</span></button>
-                {isAdmin ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/admin')}><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></button> : null}
-                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={logout}><IconGlyph name="logout" label="로그아웃" /><span>로그아웃</span></button>
               </div>
             </AnchoredPopup>
           </div>
@@ -470,7 +494,7 @@ function AppShell({ user, setUser }) {
           return (
             <Link key={item.path} to={item.path} className={location.pathname === item.path ? 'nav-item active nav-item-with-badge' : 'nav-item nav-item-with-badge'}>
               <span className="nav-item-label"><span className="nav-item-icon"><IconGlyph name={NAV_META[item.path]?.icon || 'home'} label={item.label} /></span><span className="nav-item-text">{item.label}</span></span>
-              {badgeValue ? <span className="nav-badge">{badgeValue}</span> : null}
+              {badgeValue ? <span className="count-badge nav-badge">{badgeValue}</span> : null}
             </Link>
           )
         })}
@@ -1216,7 +1240,7 @@ function FriendsPage() {
           </button>
           <button type="button" className={tab === 'requests' ? 'tab active badge-tab-button' : 'tab badge-tab-button'} onClick={() => setTab('requests')}>
             <span>요청</span>
-            {requestBadge ? <span className="tab-badge">{requestBadge}</span> : null}
+            {requestBadge ? <span className="count-badge tab-badge">{requestBadge}</span> : null}
           </button>
         </div>
 
@@ -1517,10 +1541,7 @@ function CommunityPage({ user }) {
   return (
     <div className="stack page-stack community-page">
       <section className="card stack community-head-card">
-        <div className="split-row responsive-row community-title-row community-title-row-right">
-          <button type="button" onClick={() => navigate('/community/new')}>작성</button>
-        </div>
-        <div className="community-filter-row">
+        <div className="community-toolbar-row">
           <select value={draftPrimaryCategory} onChange={e => {
             const nextPrimary = e.target.value
             setDraftPrimaryCategory(nextPrimary)
@@ -1534,6 +1555,7 @@ function CommunityPage({ user }) {
           <button type="button" className="community-search-button" onClick={handleSearch} aria-label="검색" title="검색">
             <IconGlyph name="search" label="검색" />
           </button>
+          <button type="button" className="community-write-button" onClick={() => navigate('/community/new')}>작성</button>
         </div>
       </section>
       {error ? <div className="card error">{error}</div> : null}
