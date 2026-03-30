@@ -1,0 +1,11 @@
+# PowerShell - 최초 GitHub 업로드
+cd C:\Users\최성규\Downloads\historyprofileapp
+
+git init
+git branch -M main
+git config --global user.name "최성규"
+git config --global user.email "본인깃허브이메일@example.com"
+git remote add origin https://github.com/본인계정/historyprofileapp.git
+git add .
+git commit -m "chore: initial historyprofileapp project"
+git push -u origin main

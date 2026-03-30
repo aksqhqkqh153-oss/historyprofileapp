@@ -1,0 +1,40 @@
+배포 추천 및 실행 순서 (이청잘 앱)
+
+[상황 요약]
+- 예상 앱 사용자: 30~50명
+- 일정 1건당 이미지 첨부 예상치: 약 30MB
+- 하루 10건 일정 기준 신규 이미지 업로드 예상치: 약 300MB/일, 약 9GB/월
+- 채팅, 일정, 이미지, 위치 기능이 포함된 로그인 기반 앱
+
+[무료 최선 - 테스트용]
+1. Render Free
+   - 장점: FastAPI/React 테스트 배포가 쉬움
+   - 단점: 서비스가 15분 무접속 시 잠들고, 로컬 파일이 유지되지 않음
+   - 결론: 기능 점검/데모용으로만 추천
+2. Cloudflare R2
+   - 이미지 저장용으로 무료 10GB 구간 활용 가능
+   - 무료 구간을 넘기기 시작하면 사용량에 따라 과금
+
+[저비용 차선 - 실운영 추천]
+1. Railway Hobby
+   - 소규모 FastAPI 백엔드 운영에 적합
+   - 월 $5 최소 사용 구조
+2. Cloudflare R2
+   - 이미지 파일 저장소로 추천
+   - egress 요금이 없어 모바일 앱에서 이미지 조회가 많아도 운영이 단순함
+3. Cloudflare DNS / 도메인 연결
+   - www.historyprofile.com 운영 도메인 연결
+
+[추천 조합]
+- 1순위: Railway Hobby + Cloudflare R2 + Cloudflare DNS
+- 2순위: Render Starter + Cloudflare R2
+- 3순위: Backblaze B2 + Railway/Render (다운로드보다 보관비 절감 우선일 때)
+
+[실행 순서]
+1) 도메인 ICJ24APP.COM 연결
+2) 백엔드 운영 서버 배포
+3) 이미지 저장소(R2) 버킷 생성
+4) 앱에서 이미지 업로드 경로를 로컬 저장이 아닌 R2로 변경
+5) frontend/.env.production 반영
+6) 정책 페이지 외부 공개 확인
+7) Android/iOS 패키징 진행

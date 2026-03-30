@@ -1,0 +1,98 @@
+[historyprofile_app 작업 진행 메모]
+기준일: 2026-03-28
+기준 ZIP: historyprofile_app_update_20260328_v6.zip
+
+1. 이번 차수 목표
+- v5 상태 기준 후속 요청 반영
+- Turnstile 운영키 실주입 구조 점검 및 운영 검증 준비
+- Twilio Verify 실계정 연결 테스트 구조 점검
+- 관리자 대량 일괄 검수 UI 추가
+- main.py / App.jsx 모듈 분리 리팩토링
+- 전체 안정화/최적화 및 문서화
+
+2. 이번 차수 실제 반영 작업
+[완료]
+1) main.py 리팩토링
+- backend/app/constants.py 생성
+- backend/app/schemas.py 생성
+- backend/app/integrations.py 생성
+- main.py 에서 상수/입력스키마/보안연동 로직 일부 분리
+- Turnstile 검증, Twilio Verify 요청, 통합 상태 조회 로직을 integrations.py 로 이동
+
+2) App.jsx 리팩토링
+- frontend/src/constants.js 생성
+- frontend/src/hooks/useTurnstileConfig.jsx 생성
+- frontend/src/components/TurnstileWidget.jsx 생성
+- frontend/src/components/ui.jsx 생성
+- frontend/src/pages/AuthPage.jsx 생성
+- frontend/src/pages/AdminPage.jsx 생성
+- App.jsx 는 앱 셸/라우팅 중심으로 정리
+
+3) 관리자 대량 일괄 검수 UI 추가
+- 신고 다중 선택 후 일괄 해결/기각 가능
+- 업로드 다중 선택 후 일괄 승인/반려 가능
+- /api/admin/reports/bulk-resolve 추가
+- /api/admin/uploads/bulk-review 추가
+- 운영 연동 상태 카드 추가
+  * Turnstile 설정 여부
+  * Twilio Verify 설정 여부
+  * 간단 SMS 테스트 버튼
+
+4) Turnstile 운영 반영 보강
+- settings.py 정리 및 TURNSTILE_ALLOWED_HOSTNAMES 지원
+- 서버측 Siteverify 결과의 hostname 검증 로직 추가
+- 운영 도메인 화이트리스트 설정 가능
+- .env.example 에 TURNSTILE_ALLOWED_HOSTNAMES 예시 추가
+
+5) Twilio Verify 운영 반영 보강
+- 관리자 화면에서 테스트 휴대폰 번호로 발송 시도 가능
+- 실계정 미설정 시 demo provider 로 동작
+- 실계정 설정 시 Twilio Verify API 사용
+- 연동 상태를 관리자 화면에서 즉시 확인 가능
+
+6) 안정화/최적화
+- backend py_compile 통과
+- app import 성공
+- frontend npm run build 성공
+- 최신 frontend dist 를 backend/static 으로 재동기화
+
+[부분 완료]
+1) Turnstile 운영키 실주입 후 실배포 검증
+- 코드/환경변수/허용 호스트/관리자 상태확인 UI 까지 반영 완료
+- 실제 운영키 주입 및 Cloudflare 대시보드 확인은 사용자 계정 접근이 없어 미실행
+
+2) Twilio Verify 실계정 연결 테스트
+- 실계정 연동 코드와 관리자 테스트 경로는 준비 완료
+- 실제 SID/Auth Token/Service SID 로 실발송 테스트는 계정 접근이 없어 미실행
+
+[미완료]
+1) 실제 운영 환경 키 주입 후 외부 배포 콘솔 검증
+2) 결제 시스템 연동
+3) 공개 프로필 완전 SSR 프레임워크 전환
+4) 관리자 고급 필터/정렬/엑셀 내보내기
+5) 레거시 문서/스크립트 정리
+
+3. 이번 차수 점검 결과
+- backend/app/*.py py_compile 통과
+- backend.app.main import 성공
+- FastAPI routes 로딩 확인
+- frontend build 성공
+- 관리자 화면에 bulk moderation UI 반영 완료
+
+4. 다음 차수 권장 순서
+1) 실제 운영키 주입 후 Cloudflare/Twilio 배포 검증
+2) 관리자 검수 필터/검색/일괄 메모 템플릿 추가
+3) 결제 제외 상태 유지 시 저장공간/프로필 슬롯 고도화
+4) 공개 프로필 SSR/SSG 파이프라인 정교화
+5) 이후 PG/구독 결제 연동
+
+5. GPT 참고 메모
+- 이번 차수는 “실배포 준비도 상승 + 코드 분리 + 관리자 효율화”가 핵심.
+- 실운영 검증은 외부 계정/키 접근이 필요한 항목이라 코드 준비와 테스트 경로까지만 반영됨.
+- 다음 GPT 점검 시 backend/app/constants.py / schemas.py / integrations.py 와 frontend/src/pages, components, hooks 구조를 우선 참고할 것.
+
+[2026-03-28 배포 준비 차수]
+- Git/Cloudflare Pages/Railway 최초 연동용 배포 가이드 추가
+- scripts/deploy 폴더에 Windows PowerShell 스크립트 추가
+- README에 배포 퀵스타트 링크 추가
+- 상태: 완료

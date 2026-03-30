@@ -1,0 +1,94 @@
+[현재 상태]
+이 프로젝트는 FastAPI + React(Vite) 기반 웹앱입니다.
+지금 상태 그대로는 앱스토어에 바로 제출할 Android AAB / iOS IPA 구조가 아닙니다.
+이번 업데이트에서는 Android/iOS 패키징을 위한 Capacitor 래퍼를 추가했습니다.
+
+[가장 적합한 방식]
+현재 프로젝트는 이미 웹 프런트가 구현되어 있으므로, Flutter로 재개발하는 것보다
+Capacitor로 Android/iOS 앱으로 감싸는 방식이 가장 효율적입니다.
+
+사유:
+1. 기존 React 화면을 재사용 가능
+2. VSCode에서 현재처럼 바로 수정 가능
+3. 웹/앱 병행 운영이 쉬움
+4. 앱스토어 대응용 Android/iOS 프로젝트를 추가할 수 있음
+
+[Flutter를 지금 선택했을 때]
+Flutter는 좋은 프레임워크이지만, 이 프로젝트는 이미 React 기반으로 구축되어 있습니다.
+Flutter로 가면 화면, 상태관리, 라우팅, 폼, 레이아웃을 사실상 다시 만들어야 합니다.
+즉, 신규 프로젝트라면 Flutter도 고려할 수 있지만, 현재 상태에서는 비효율적입니다.
+
+[현재 사용자님이 원하는 두 조건]
+1. 구글 플레이 / 애플 앱스토어 등록 심사 가능한 정도의 프로젝트 파일
+2. 로컬 PC에서 VSCode로 쉽게 압축 해제 후 수정 가능한 프로젝트 파일
+
+=> 현재 기준 최적 해법은
+   "웹 원본 유지 + Capacitor 래퍼 추가" 입니다.
+
+[이번 업데이트로 추가된 것]
+1. mobile_capacitor/
+   - Android/iOS 래퍼용 package.json
+   - capacitor.config.json
+   - Android/iOS 초기화 및 동기화 스크립트
+2. docs/
+   - 구글 플레이 / 애플 앱스토어 등록 절차 및 체크리스트
+   - 현재 상태 / 다음 단계 메모
+3. docx/
+   - 동일 메모 복사본 (사용자 요청 반영용)
+
+[바로 되는 것]
+- VSCode에서 frontend/, backend/를 계속 수정 가능
+- Android/iOS 패키징 준비용 래퍼가 존재
+- 앱스토어 제출 준비 문서가 프로젝트 내부에 존재
+
+[아직 직접 해야 하는 것]
+1. Android Studio 설치
+2. macOS + Xcode 설치 (iOS용)
+3. 운영용 HTTPS 서버 배포
+4. 개인정보처리방침 URL 공개
+5. 계정 삭제 기능 및 삭제 요청 웹 링크 준비
+6. 심사용 계정 준비
+7. 스토어 스크린샷 / 아이콘 / 설명 작성
+8. Android AAB / iOS Archive 빌드
+9. Google Play Console / App Store Connect 메타데이터 입력
+
+[권장 진행 순서]
+1. 기존 웹 프로젝트 로컬 실행 확인
+2. frontend/.env.production 에 운영 API 주소 입력
+3. 운영 서버(HTTPS)에 backend/frontend 배포
+4. mobile_capacitor 에서 Android/iOS 프로젝트 생성
+5. Android Studio / Xcode에서 실제 기기 테스트
+6. 정책 문서/개인정보처리방침/계정삭제 경로 점검
+7. Google Play 비공개 테스트
+8. App Store TestFlight 테스트
+9. 각 스토어 심사 제출
+
+[Android 진행]
+1. mobile_capacitor 폴더 이동
+2. npm install
+3. npm run init:android
+4. npm run sync:android
+5. npm run open:android
+6. Android Studio에서 target SDK / icon / signing / AAB 설정
+7. Google Play Console 업로드
+
+[iOS 진행]
+1. Mac에서 mobile_capacitor 폴더 이동
+2. npm install
+3. npm run init:ios
+4. npm run sync:ios
+5. npm run open:ios
+6. Xcode에서 signing / bundle id / capabilities 설정
+7. App Store Connect 업로드
+
+[현재 주의사항]
+- iOS는 Windows에서 최종 빌드가 불가합니다. Mac이 필요합니다.
+- Google Play / Apple App Review 모두 로그인 가능한 심사용 계정이 필요합니다.
+- 계정 생성 기능이 있으면 계정 삭제 기능도 앱 내부에 있어야 합니다.
+- 로컬 127.0.0.1 서버 주소로는 심사가 불가능합니다.
+
+[결론]
+가능합니다.
+다만 "현재 웹 프로젝트 그대로 즉시 앱스토어 업로드"는 아니고,
+"현재 웹 프로젝트를 계속 유지하면서 앱스토어 제출 가능한 구조로 확장"하는 방식으로 가야 합니다.
+이번 업데이트는 바로 그 방향으로 맞춘 기반 버전입니다.

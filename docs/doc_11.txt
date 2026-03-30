@@ -1,0 +1,20 @@
+[공통 준비]
+- 운영용 HTTPS 서버
+- 개인정보처리방침 URL
+- 계정 삭제 기능 + 웹 삭제 링크
+- 심사용 계정
+- 앱 아이콘 / 스크린샷 / 설명문
+- 데이터 수집 항목 정리
+
+[Google Play]
+- target API 최신 기준 맞추기
+- AAB 생성
+- Play Console App content / Data safety / App access 작성
+- 개인 개발자 계정일 경우 비공개 테스트 요건 확인
+
+[Apple App Store]
+- Apple Developer Program 가입
+- App Privacy 작성
+- TestFlight 테스트
+- App Review 정보 작성
+- 계정 삭제 기능 제공

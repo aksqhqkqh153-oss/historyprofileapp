@@ -1,0 +1,13 @@
+{
+  "appId": "com.historyprofile.app",
+  "appName": "historyprofile_app",
+  "webDir": "../frontend/dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

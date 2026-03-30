@@ -1,0 +1,9 @@
+Project name: historyprofileapp-production
+Service name: historyprofileapp-backend
+Source Repo: 본인계정/historyprofileapp
+Branch: main
+Root Directory: backend
+Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Healthcheck Path: /api/health
+Public Networking: ON
+Variables: 03_RAILWAY_VARIABLES_TEMPLATE.env 파일 참고

@@ -1,0 +1,23 @@
+아래 조건대로 프로젝트 파일을 새 PC 기준으로 완성본 ZIP으로 정리해줘.
+
+1. 내가 첨부한 프로젝트 파일을 기준으로 작업해줘.
+2. ZIP은 압축을 풀면 중간 폴더 없이 바로 프로젝트 루트 파일들이 보여야 해.
+3. 작업 경로는 C:\Users\최성규\Downloads\historyprofileapp 기준으로 맞춰줘.
+4. C:\Users\최성규\Downloads 에서 historyprofileapp 폴더를 생성하는 명령어를 알려줘.
+5. 첨부한 프로젝트 파일을 C:\Users\최성규\Downloads\historyprofileapp 에 덮어씌우는 명령어를 알려줘.
+6. 덮어씌운 뒤 GitHub에 최신화하는 전체 명령어를 알려줘.
+7. GitHub 새 repo 생성 시 어떤 값을 입력해야 하는지 항목별로 알려줘.
+8. GitHub에서 main 브랜치 기준으로 최초 커밋, 최초 push, 이후 수정 push 명령어를 구분해서 알려줘.
+9. Cloudflare Pages 연동 시 어떤 값을 입력해야 하는지 항목별로 알려줘.
+10. Railway 연동 시 어떤 값을 입력해야 하는지 항목별로 알려줘.
+11. Railway Variables에 넣을 변수명과 값 예시를 .env 형식으로 정리해줘.
+12. Railway에서 Root Directory, Start Command, Healthcheck Path 등 세팅값을 정확히 알려줘.
+13. 결과물은 수정된 프로젝트 ZIP + 실행 절차 + 복붙용 명령어까지 한 번에 받을 수 있게 정리해줘.
+14. 설명은 초보자도 이해할 수 있게 단계별로 써줘.
+15. 수정 전/후가 필요한 파일이 있으면 파일별로 구분해서 전체 코드로 보여줘.
+
+추가 조건:
+- ZIP 내부에 프로젝트 폴더가 한 번 더 들어가면 안 돼.
+- Windows PowerShell 기준으로 명령어를 작성해줘.
+- GitHub, Cloudflare, Railway에서 실제로 어떤 칸에 무엇을 입력해야 하는지 빠짐없이 적어줘.
+- 배포 중 자주 나는 실수와 체크포인트도 같이 적어줘.

@@ -1,0 +1,25 @@
+historyprofile_app 테스트 계정 안내
+
+공통 비밀번호
+- demo1234!
+
+관리자
+- demo.admin@historyprofile.com
+
+일반회원
+- demo.user@historyprofile.com
+- test01@historyprofile.com
+- test02@historyprofile.com
+- test03@historyprofile.com
+- test04@historyprofile.com
+- test05@historyprofile.com
+- test06@historyprofile.com
+- test07@historyprofile.com
+- test08@historyprofile.com
+- test09@historyprofile.com
+- test10@historyprofile.com
+
+배포 후 참고
+1. 프론트에서 종료된 c222 Railway 도메인을 호출하지 않도록 수정됨
+2. 현재 기본 API는 3f81 Railway 도메인으로 지정됨
+3. api.historyprofile.com 이 연결되어 있으면 자동 대체 후보로 사용됨

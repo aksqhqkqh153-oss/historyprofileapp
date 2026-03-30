@@ -1,0 +1,7 @@
+# PowerShell - 수정 후 최신화
+cd C:\Users\최성규\Downloads\historyprofileapp
+
+git status
+git add .
+git commit -m "feat: update historyprofileapp"
+git push origin main

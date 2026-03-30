@@ -1,0 +1,9 @@
+# 다른 폴더의 프로젝트를 historyprofileapp 폴더에 덮어씌우기
+# 예시 원본 경로는 source_project 입니다.
+robocopy "C:\Users\최성규\Downloads\source_project" "C:\Users\최성규\Downloads\historyprofileapp" /E /R:1 /W:1 /XD node_modules .git dist build .venv __pycache__
+
+# 덮어씌운 뒤 Git 최신화
+cd C:\Users\최성규\Downloads\historyprofileapp
+git add .
+git commit -m "feat: replace project files with updated source"
+git push origin main

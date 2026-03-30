@@ -1,0 +1,9 @@
+Project name: historyprofileapp-frontend
+Production branch: main
+Framework preset: Vite
+Root directory: frontend
+Build command: npm run build
+Build output directory: dist
+Environment Variables:
+VITE_API_BASE_URL=https://api.historyprofile.com
+VITE_TURNSTILE_SITE_KEY=실제값

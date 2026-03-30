@@ -1,0 +1,109 @@
+[historyprofile_app 구조 및 기반 메모]
+기준일: 2026-03-28 (v6 기준)
+
+1. 프로젝트 성격
+- 프로필/경력 앱 전용 구조
+- 텍스트 기반 경력 신뢰도 기록이 메인
+- 사진/영상은 보조 미디어
+- 실시간 채팅/친구/질문/공개 프로필/링크허브/QR 포함
+
+2. 주요 기술 기반
+[프론트엔드]
+- React 18
+- Vite 5
+- React Router
+- App.jsx 중심 구조에서 pages/components/hooks 분리 시작
+- Turnstile 위젯 렌더링 포함
+
+[백엔드]
+- FastAPI
+- Uvicorn
+- main.py 중심 구조에서 constants/schemas/integrations 모듈 분리 시작
+- SQLite 기본 / PostgreSQL 전환 가능
+- 공개 프로필 정적 HTML 생성 기능 포함
+
+[보안/인증]
+- JWT 유사 토큰(auth_tokens)
+- 휴대폰 인증 필수 구조
+- Cloudflare Turnstile 연동 가능
+- 서버측 Siteverify + hostname 검증 구조 포함
+- Twilio Verify 기반 실 SMS 인증 구조
+
+[파일 저장]
+- 로컬 업로드 기본
+- Cloudflare R2 분기 지원 구조 존재
+- 이미지 미리보기 / 영상 썸네일 생성
+- 공개 정적 프로필 HTML 은 backend/static/public_profiles 저장
+
+[모바일]
+- Capacitor 래퍼 구조 포함
+- 웹 + 모바일 래핑 병행 가능
+
+3. 현재 주요 코드 분리 포인트
+- backend/app/constants.py : 정책값/제한값/상수
+- backend/app/schemas.py : Pydantic 입력 모델
+- backend/app/integrations.py : Turnstile/Twilio 연동
+- frontend/src/pages/AuthPage.jsx : 로그인/회원가입
+- frontend/src/pages/AdminPage.jsx : 관리자 화면
+- frontend/src/components/TurnstileWidget.jsx : CAPTCHA 위젯
+- frontend/src/hooks/useTurnstileConfig.jsx : 공개 설정 조회 훅
+- frontend/src/components/ui.jsx : 공용 UI 조각
+
+4. 현재 핵심 도메인 테이블
+- users
+- auth_tokens
+- app_profiles
+- app_careers
+- app_introductions
+- app_links
+- app_qr_codes
+- app_questions
+- app_uploads
+- app_reports
+- app_blocks
+- app_moderation_notes
+- app_abuse_events
+- app_phone_verifications
+- dm_messages
+
+5. 현재 핵심 정책
+- 무료 멀티 프로필 2개
+- 추가 프로필 슬롯은 추후 유료화 전제
+- 계정 전체 미디어 기본 1GB
+- 영상 업로드 하루 총 50MB
+- 채팅 미디어 월 기본 100MB
+- 연락처 1개당 계정 1개
+- 공개 프로필 visibility_mode: private / link_only / search
+- 질문 허용 question_permission: none / members / any
+- Turnstile 허용 호스트 화이트리스트 지원
+
+6. 운영 환경변수 핵심
+- TURNSTILE_SITE_KEY
+- TURNSTILE_SECRET_KEY
+- TURNSTILE_ALLOWED_HOSTNAMES
+- TWILIO_ACCOUNT_SID
+- TWILIO_AUTH_TOKEN
+- TWILIO_VERIFY_SERVICE_SID
+- R2_* 계열
+- DATABASE_URL / SQLITE_DB_PATH
+
+7. 현재 한계
+- 백엔드 main.py 비중이 여전히 큼
+- 프론트 App.jsx 비중이 여전히 큼
+- 실제 운영키/실계정 검증 미실행
+- 결제 미연동
+- 공개 프로필 완전 SSR 프레임워크 미적용
+- 레거시 문서/스크립트 일부 잔존
+
+8. 다음 구조개선 권장
+- backend/app/routes, services, repositories 단위 분리
+- frontend/src/pages 추가 분리 (ProfilePage, PublicProfilePage, QuestionsPage 등)
+- 공개 프로필 정적 생성 서비스 모듈 분리
+- 관리자 bulk 작업과 검수 메모를 별도 서비스로 분리
+- 실제 SMS/결제/통계를 provider adapter 형태로 분리
+
+[배포 구조 메모]
+- GitHub 저장소: aksqhqkqh153-oss/historyprofile_app
+- Cloudflare Pages: frontend 루트, Vite build, dist 산출물
+- Railway: Dockerfile 기반 backend 배포, /api/health 헬스체크
+- 비고: 실 Turnstile/Twilio 키는 플랫폼 Variables에만 저장
