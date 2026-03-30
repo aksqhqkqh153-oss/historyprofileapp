@@ -272,6 +272,9 @@ function AppShell({ user, setUser }) {
   const alertButtonRef = useRef(null)
   const settingsButtonRef = useRef(null)
   const counts = useNotificationCounts(user, location.pathname)
+  const [multiProfiles, setMultiProfiles] = useState([])
+  const [multiProfileManagerOpen, setMultiProfileManagerOpen] = useState(false)
+  const [multiProfileManagerBusy, setMultiProfileManagerBusy] = useState(false)
 
   useEffect(() => {
     setActivePopup('')
@@ -297,6 +300,57 @@ function AppShell({ user, setUser }) {
     setUser(null)
     setActivePopup('')
     navigate('/', { replace: true })
+  }
+
+  async function loadMultiProfiles() {
+    const data = await api('/api/profiles')
+    setMultiProfiles(data.items || [])
+  }
+
+  async function openMultiProfileManager() {
+    setActivePopup('')
+    await loadMultiProfiles()
+    setMultiProfileManagerOpen(true)
+  }
+
+  async function handleMultiProfileSwitch(profileId) {
+    const nextId = Number(profileId) || null
+    setStoredActiveProfileId(nextId)
+    setMultiProfileManagerOpen(false)
+    window.dispatchEvent(new CustomEvent('historyprofile:active-profile-change', { detail: { profileId: nextId } }))
+    navigate('/questions', { replace: location.pathname === '/questions' })
+  }
+
+  async function handleCreateMultiProfile() {
+    if (multiProfiles.length >= 3) return
+    const displayName = window.prompt('새 멀티 프로필 이름 또는 닉네임을 입력하세요.', '')
+    if (!displayName || !displayName.trim()) return
+    const description = window.prompt('멀티프로필 설명을 입력하세요.', '') || ''
+    setMultiProfileManagerBusy(true)
+    try {
+      const payload = {
+        ...emptyProfile(),
+        title: displayName.trim(),
+        display_name: displayName.trim(),
+        headline: description.trim(),
+        bio: description.trim(),
+      }
+      const data = await api('/api/profiles', { method: 'POST', body: JSON.stringify(payload) })
+      const createdId = data?.item?.id || null
+      await loadMultiProfiles()
+      if (createdId) {
+        setStoredActiveProfileId(createdId)
+        window.dispatchEvent(new CustomEvent('historyprofile:active-profile-change', { detail: { profileId: createdId } }))
+      }
+    } catch (err) {
+      window.alert(err.message)
+    } finally {
+      setMultiProfileManagerBusy(false)
+    }
+  }
+
+  function handleOpenProfileLimitGuide() {
+    window.alert('멀티프로필 3개 이상 등록 시 5,000원 비용 결제가 필요합니다. 결제 연동 후 추가 개방이 가능합니다.')
   }
 
   const isAdmin = user?.role === 'admin' || Number(user?.grade || 99) <= 1
@@ -351,6 +405,7 @@ function AppShell({ user, setUser }) {
               </div>
               <div className="dropdown-list">
                 <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/profile')}><IconGlyph name="profile" label="프로필" /><span>내 프로필 관리</span></button>
+                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={openMultiProfileManager}><IconGlyph name="userAdd" label="계정변경(멀티)" /><span>계정변경(멀티)</span></button>
                 {isAdmin ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/admin')}><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></button> : null}
                 <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={logout}><IconGlyph name="logout" label="로그아웃" /><span>로그아웃</span></button>
               </div>
@@ -358,6 +413,15 @@ function AppShell({ user, setUser }) {
           </div>
         </div>
       </header>
+      <MultiProfileManagerModal
+        open={multiProfileManagerOpen}
+        profiles={multiProfiles}
+        busy={multiProfileManagerBusy}
+        onClose={() => !multiProfileManagerBusy && setMultiProfileManagerOpen(false)}
+        onSelect={handleMultiProfileSwitch}
+        onAdd={handleCreateMultiProfile}
+        onUnlock={handleOpenProfileLimitGuide}
+      />
       {activePopup && activePopup !== 'search' ? <button type="button" className="popup-backdrop" aria-label="팝업 닫기" onClick={() => setActivePopup('')} /> : null}
       {activePopup === 'search' ? (
         <SearchScreen
@@ -1102,7 +1166,7 @@ function FriendsPage() {
     <div className="stack page-stack friends-page">
       <section className="card stack">
         <div className="split-row responsive-row friends-page-head">
-          <h3>친구</h3>
+          <div className="friends-page-head-spacer" aria-hidden="true"></div>
           <div className="tab-row friends-tab-row">
             <button type="button" className={tab === 'list' ? 'tab active' : 'tab'} onClick={() => setTab('list')}>목록 {friends.length}</button>
             <button type="button" className={tab === 'requests' ? 'tab active' : 'tab'} onClick={() => setTab('requests')}>요청 {requests.incoming.length}</button>
@@ -1340,6 +1404,8 @@ function CommunityPage({ user }) {
   const [error, setError] = useState('')
   const [primaryCategory, setPrimaryCategory] = useState('전체')
   const [secondaryCategory, setSecondaryCategory] = useState('전체')
+  const [draftPrimaryCategory, setDraftPrimaryCategory] = useState('전체')
+  const [draftSecondaryCategory, setDraftSecondaryCategory] = useState('전체')
 
   async function load(nextPrimary = primaryCategory, nextSecondary = secondaryCategory) {
     try {
@@ -1357,26 +1423,34 @@ function CommunityPage({ user }) {
     }
   }
 
-  useEffect(() => { load(primaryCategory, secondaryCategory) }, [primaryCategory, secondaryCategory])
+  useEffect(() => { load('전체', '전체') }, [])
+
+  function handleSearch() {
+    setPrimaryCategory(draftPrimaryCategory)
+    setSecondaryCategory(draftSecondaryCategory)
+    load(draftPrimaryCategory, draftSecondaryCategory)
+  }
 
   return (
     <div className="stack page-stack community-page">
       <section className="card stack community-head-card">
-        <div className="split-row responsive-row community-title-row">
-          <h3>대화</h3>
-          <button type="button" onClick={() => navigate('/community/new')}>대화</button>
+        <div className="split-row responsive-row community-title-row community-title-row-right">
+          <button type="button" onClick={() => navigate('/community/new')}>작성</button>
         </div>
         <div className="community-filter-row">
-          <select value={primaryCategory} onChange={e => {
+          <select value={draftPrimaryCategory} onChange={e => {
             const nextPrimary = e.target.value
-            setPrimaryCategory(nextPrimary)
-            setSecondaryCategory('전체')
+            setDraftPrimaryCategory(nextPrimary)
+            setDraftSecondaryCategory('전체')
           }}>
             {Object.keys(COMMUNITY_CATEGORY_OPTIONS).map(item => <option key={item} value={item}>{item}</option>)}
           </select>
-          <select value={secondaryCategory} onChange={e => setSecondaryCategory(e.target.value)}>
-            {(COMMUNITY_CATEGORY_OPTIONS[primaryCategory] || ['전체']).map(item => <option key={item} value={item}>{item}</option>)}
+          <select value={draftSecondaryCategory} onChange={e => setDraftSecondaryCategory(e.target.value)}>
+            {(COMMUNITY_CATEGORY_OPTIONS[draftPrimaryCategory] || ['전체']).map(item => <option key={item} value={item}>{item}</option>)}
           </select>
+          <button type="button" className="community-search-button" onClick={handleSearch} aria-label="검색" title="검색">
+            <IconGlyph name="search" label="검색" />
+          </button>
         </div>
       </section>
       {error ? <div className="card error">{error}</div> : null}
@@ -1409,7 +1483,6 @@ function CommunityPostCard({ item }) {
 function QuestionsPage() {
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(() => getStoredActiveProfileId())
-  const navigate = useNavigate()
   const selected = useMemo(() => profiles.find(item => item.id === selectedId) || null, [profiles, selectedId])
 
   async function loadProfiles(preferredId = selectedId) {
@@ -1424,21 +1497,22 @@ function QuestionsPage() {
   useEffect(() => { loadProfiles() }, [])
   useEffect(() => { setStoredActiveProfileId(selectedId) }, [selectedId])
 
+  useEffect(() => {
+    function handleActiveProfileChange(event) {
+      const nextId = Number(event?.detail?.profileId || getStoredActiveProfileId()) || null
+      loadProfiles(nextId)
+    }
+    window.addEventListener('historyprofile:active-profile-change', handleActiveProfileChange)
+    return () => window.removeEventListener('historyprofile:active-profile-change', handleActiveProfileChange)
+  }, [selectedId])
+
   async function refreshSelected() {
     const data = await api('/api/profiles')
     setProfiles(data.items || [])
   }
 
   return (
-    <div className="stack page-stack">
-      <section className="card stack">
-        <div className="inline-form responsive-row">
-          <select value={selectedId || ''} onChange={e => setSelectedId(Number(e.target.value))}>
-            {profiles.map(item => <option key={item.id} value={item.id}>{item.display_name || item.title}</option>)}
-          </select>
-          {selected ? <button type="button" className="ghost" onClick={() => navigate(`/questions/${selected.id}`)}>질문 화면 보기</button> : null}
-        </div>
-      </section>
+    <div className="stack page-stack questions-page">
       {selected ? <QuestionBoard profile={selected} ownerNickname={getStoredUser()?.nickname || '나'} isOwner onRefresh={refreshSelected} canAsk={false} /> : <div className="card">질문을 관리할 프로필이 없습니다.</div>}
     </div>
   )
@@ -1475,6 +1549,14 @@ function ProfilePage() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    function handleActiveProfileChange(event) {
+      const nextId = Number(event?.detail?.profileId || getStoredActiveProfileId()) || null
+      load(nextId)
+    }
+    window.addEventListener('historyprofile:active-profile-change', handleActiveProfileChange)
+    return () => window.removeEventListener('historyprofile:active-profile-change', handleActiveProfileChange)
+  }, [selectedId])
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const requestedTab = params.get('tab')
@@ -1797,6 +1879,35 @@ function ProfilePage() {
   )
 }
 
+
+function MultiProfileManagerModal({ open, profiles, busy = false, onClose, onSelect, onAdd, onUnlock }) {
+  if (!open) return null
+  const addLocked = profiles.length >= 3
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <div className="modal-card stack multi-profile-manager-modal" role="dialog" aria-modal="true" aria-label="계정변경(멀티)">
+        <div className="multi-profile-manager-head">
+          <BackIconButton onClick={onClose} />
+          <strong>계정변경(멀티)</strong>
+          <span className="multi-profile-manager-head-spacer" aria-hidden="true"></span>
+        </div>
+        <div className="stack multi-profile-manager-list">
+          {profiles.length ? profiles.map(item => (
+            <button key={item.id} type="button" className="list-row split-row multi-profile-manager-item" onClick={() => onSelect?.(item.id)}>
+              <strong>{item.display_name || item.title || '프로필'}</strong>
+              <span className="muted small-text">{item.headline || item.bio || item.current_work || '멀티프로필설명'}</span>
+            </button>
+          )) : <div className="bordered-box muted">등록된 멀티 프로필이 없습니다.</div>}
+        </div>
+        <div className="split-row responsive-row multi-profile-manager-actions">
+          <button type="button" disabled={addLocked || busy} className={addLocked ? 'locked-button' : ''} onClick={onAdd}>{busy ? '추가 중...' : '멀티 프로필 추가'}</button>
+          <button type="button" className="ghost" onClick={onUnlock}>추가개방</button>
+        </div>
+        {addLocked ? <div className="muted small-text">멀티프로필 3개 이상 등록 시 5,000원 비용 결제가 필요합니다.</div> : null}
+      </div>
+    </div>
+  )
+}
 
 function MultiProfileSelector({ profiles, selectedId, setSelectedId, onOpenModal, onDeleteSelected, deleteDisabled = false }) {
   const [popupOpen, setPopupOpen] = useState(false)
