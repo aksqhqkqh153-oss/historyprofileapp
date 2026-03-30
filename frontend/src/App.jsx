@@ -409,6 +409,7 @@ function AppShell({ user, setUser }) {
               </div>
               <div className="dropdown-list profile-switch-actions">
                 <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/profile')}><IconGlyph name="profile" label="프로필" /><span>내 프로필 관리</span></button>
+                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={openMultiProfileManager}><IconGlyph name="settings" label="멀티 프로필 관리" /><span>멀티 프로필 관리</span></button>
                 <button type="button" className={multiProfiles.length >= 3 ? 'dropdown-item ghost dropdown-item-with-icon locked-button' : 'dropdown-item ghost dropdown-item-with-icon'} onClick={handleCreateMultiProfile} disabled={multiProfiles.length >= 3 || multiProfileManagerBusy}><IconGlyph name="userAdd" label="멀티 프로필 추가" /><span>멀티 프로필 추가</span></button>
                 {multiProfiles.length >= 3 ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={handleOpenProfileLimitGuide}><IconGlyph name="compose" label="추가개방" /><span>추가개방</span></button> : null}
                 {isAdmin ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/admin')}><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></button> : null}
@@ -430,15 +431,15 @@ function AppShell({ user, setUser }) {
               <div className="dropdown-list">
                 <button type="button" className="dropdown-item ghost dropdown-item-between" onClick={() => closePopupAndNavigate('/chats')}>
                   <span>채팅</span>
-                  <strong>{formatBadgeCount(counts.chats, 100) || '0'}</strong>
+                  {formatBadgeCount(counts.chats, 100) ? <span className="count-badge dropdown-inline-badge">{formatBadgeCount(counts.chats, 100)}</span> : <span className="muted small-text">0</span>}
                 </button>
                 <button type="button" className="dropdown-item ghost dropdown-item-between" onClick={() => closePopupAndNavigate('/friends')}>
                   <span>친구요청</span>
-                  <strong>{formatBadgeCount(counts.friends, 999) || '0'}</strong>
+                  {formatBadgeCount(counts.friends, 999) ? <span className="count-badge dropdown-inline-badge">{formatBadgeCount(counts.friends, 999)}</span> : <span className="muted small-text">0</span>}
                 </button>
                 <button type="button" className="dropdown-item ghost dropdown-item-between" onClick={() => closePopupAndNavigate('/questions')}>
                   <span>질문</span>
-                  <strong>{formatBadgeCount(counts.questions, 999) || '0'}</strong>
+                  {formatBadgeCount(counts.questions, 999) ? <span className="count-badge dropdown-inline-badge">{formatBadgeCount(counts.questions, 999)}</span> : <span className="muted small-text">0</span>}
                 </button>
               </div>
             </AnchoredPopup>
