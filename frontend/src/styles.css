@@ -985,3 +985,20 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
     grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
   }
 }
+
+.current-profile-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.current-profile-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-strong);
+}
+
+.current-profile-icon .icon-symbol {
+  width: 16px;
+  height: 16px;
+}

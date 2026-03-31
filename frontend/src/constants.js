@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
 ]
 
 export const MENU_ITEMS = [
+  { path: '/schedule', label: '일정' },
   { path: '/url-shortener', label: 'URLs단축' },
   { path: '/qr-generator', label: 'QR생성' },
 ]

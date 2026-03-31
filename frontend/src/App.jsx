@@ -16,6 +16,7 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/community')) return '대화'
   if (pathname.startsWith('/profile')) return '프로필'
   if (pathname.startsWith('/more')) return '기타'
+  if (pathname.startsWith('/schedule')) return '일정'
   if (pathname.startsWith('/admin')) return '관리자'
   if (pathname.startsWith('/url-shortener')) return 'URLs단축'
   if (pathname.startsWith('/qr-generator')) return 'QR생성'
@@ -87,6 +88,7 @@ function IconGlyph({ name, label }) {
     questions: <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M9.3 9.2a2.7 2.7 0 1 1 4.2 2.2c-.9.7-1.5 1.2-1.5 2.4" /><path d="M12 17h.01" /></svg>,
     conversation: <svg {...common}><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H13l-4.5 4V16H6.5A2.5 2.5 0 0 1 4 13.5z" /><path d="M8 9h8" /><path d="M8 12h5" /></svg>,
     profile: <svg {...common}><path d="M18 20a6 6 0 0 0-12 0" /><circle cx="12" cy="9" r="4" /></svg>,
+    calendar: <svg {...common}><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4" /><path d="M16 3v4" /><path d="M4 10h16" /></svg>,
     link: <svg {...common}><path d="M10 13a5 5 0 0 0 7.1 0l2.1-2.1a5 5 0 1 0-7.1-7.1L11 5" /><path d="M14 11a5 5 0 0 0-7.1 0L4.8 13.1a5 5 0 1 0 7.1 7.1L13 19" /></svg>,
     qr: <svg {...common}><path d="M4 4h6v6H4z" /><path d="M14 4h6v6h-6z" /><path d="M4 14h6v6H4z" /><path d="M14 14h2" /><path d="M18 14h2v2" /><path d="M14 18h2v2" /><path d="M18 18h2" /></svg>,
     admin: <svg {...common}><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z" /><path d="M9.5 12.5 11 14l3.5-4" /></svg>,
@@ -383,32 +385,36 @@ function AppShell({ user, setUser }) {
             <AnchoredPopup anchorRef={menuButtonRef} open={activePopup === 'menu'} className="menu-popup dropdown-popup">
               <div className="dropdown-title">메뉴</div>
               <div className="dropdown-list">
-                {MENU_ITEMS.map(item => <Link key={item.path} className="dropdown-item dropdown-item-with-icon" to={item.path}><IconGlyph name={item.path === '/url-shortener' ? 'link' : 'qr'} label={item.label} /><span>{item.label}</span></Link>)}
+                {MENU_ITEMS.map(item => {
+                  const iconName = item.path === '/schedule' ? 'calendar' : item.path === '/url-shortener' ? 'link' : 'qr'
+                  return <Link key={item.path} className="dropdown-item dropdown-item-with-icon" to={item.path}><IconGlyph name={iconName} label={item.label} /><span>{item.label}</span></Link>
+                })}
               </div>
             </AnchoredPopup>
             <button ref={profileSwitchButtonRef} type="button" className="ghost topbar-profile-switch topbar-text-trigger" onClick={async () => { await loadMultiProfiles(); togglePopup('profiles') }} aria-expanded={activePopup === 'profiles'} aria-label="계정 전환">
               <span className="topbar-profile-name">계정전환</span>
             </button>
             <AnchoredPopup anchorRef={profileSwitchButtonRef} open={activePopup === 'profiles'} className="dropdown-popup profile-switch-popup stack">
-              <div className="dropdown-title">계정 전환</div>
-              <div className="dropdown-user-box">
-                <strong>{activeProfileLabel}</strong>
-                <div className="muted small-text">{activeProfileDescription || '현재 사용 중인 계정'}</div>
-              </div>
               <div className="dropdown-list profile-switch-list">
                 {multiProfiles.length ? multiProfiles.map(item => {
                   const selected = Number(item.id) === Number(activeProfile?.id)
                   const label = item.display_name || item.title || '멀티 프로필'
                   return (
-                    <button key={item.id} type="button" className={selected ? 'dropdown-item ghost dropdown-item-between active-profile-dropdown-item' : 'dropdown-item ghost dropdown-item-between'} onClick={() => handleMultiProfileSwitch(item.id)}>
-                      <span>{label}</span>
-                      <span className="muted small-text">{selected ? '현재 계정' : (item.headline || item.bio || '전환')}</span>
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={selected ? 'dropdown-item ghost dropdown-item-between active-profile-dropdown-item' : 'dropdown-item ghost dropdown-item-between'}
+                      onClick={() => selected ? closePopupAndNavigate('/profile') : handleMultiProfileSwitch(item.id)}
+                    >
+                      <span className={selected ? 'current-profile-entry' : ''}>
+                        {selected ? <><span className="current-profile-icon"><IconGlyph name="profile" label="내 프로필 관리" /></span><span>{label}(내 프로필 관리)</span></> : label}
+                      </span>
+                      <span className="muted small-text">{selected ? '현재 계정' : '전환'}</span>
                     </button>
                   )
-                }) : <div className="muted small-text profile-switch-empty">등록된 멀티 프로필이 없습니다.</div>}
+                }) : <button type="button" className="dropdown-item ghost dropdown-item-between active-profile-dropdown-item" onClick={() => closePopupAndNavigate('/profile')}><span className="current-profile-entry"><span className="current-profile-icon"><IconGlyph name="profile" label="내 프로필 관리" /></span><span>{activeProfileLabel}(내 프로필 관리)</span></span><span className="muted small-text">현재 계정</span></button>}
               </div>
               <div className="dropdown-list profile-switch-actions">
-                <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/profile')}><IconGlyph name="profile" label="프로필" /><span>내 프로필 관리</span></button>
                 <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={openMultiProfileManager}><IconGlyph name="settings" label="멀티 프로필 관리" /><span>멀티 프로필 관리</span></button>
                 <button type="button" className={multiProfiles.length >= 3 ? 'dropdown-item ghost dropdown-item-with-icon locked-button' : 'dropdown-item ghost dropdown-item-with-icon'} onClick={handleCreateMultiProfile} disabled={multiProfiles.length >= 3 || multiProfileManagerBusy}><IconGlyph name="userAdd" label="멀티 프로필 추가" /><span>멀티 프로필 추가</span></button>
                 {multiProfiles.length >= 3 ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={handleOpenProfileLimitGuide}><IconGlyph name="compose" label="추가개방" /><span>추가개방</span></button> : null}
@@ -485,6 +491,7 @@ function AppShell({ user, setUser }) {
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/more" element={<MorePage />} />
+          <Route path="/schedule" element={<SchedulePage />} />
           <Route path="/url-shortener" element={<UrlShortenerPage />} />
           <Route path="/qr-generator" element={<QrGeneratorPage />} />
           <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
@@ -520,6 +527,19 @@ function MorePage() {
         <div className="stack gap-8">
           <strong>기타</strong>
           <div className="muted">준비 중인 부가 기능 화면입니다.</div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SchedulePage() {
+  return (
+    <section className="page-stack">
+      <div className="card stack more-page-card">
+        <div className="stack gap-8">
+          <strong>일정</strong>
+          <div className="muted">일정 기능을 연결하기 위한 기본 화면입니다.</div>
         </div>
       </div>
     </section>
