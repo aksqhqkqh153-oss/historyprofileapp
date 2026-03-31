@@ -583,6 +583,7 @@ const LOCAL_STORAGE_KEYS = {
   introManager: 'historyprofile_local_intro_manager_items',
   introHistory: 'historyprofile_local_intro_manager_history',
   shareLinks: 'historyprofile_local_share_links_items',
+  shareLinkCategories: 'historyprofile_local_share_link_categories',
   vaultSettings: 'historyprofile_local_vault_settings',
 }
 
@@ -590,6 +591,33 @@ const LOCAL_STORAGE_KEYS = {
 const DEFAULT_VAULT_FOLDERS = ['자료', '이력서', '즐겨찾기', '포트폴리오', '증빙자료', '자기소개서']
 const DEFAULT_VAULT_CATEGORIES = ['자료', '이력서', '포트폴리오', '증빙자료', '자기소개서']
 const VAULT_GRID_LIMITS = { '3x3': 9, '4x4': 16, '5x5': 25 }
+
+const DEFAULT_SHARE_LINK_CATEGORIES = ['소개', '채용', '영업', '기타']
+
+function normalizeShareLinkCategories(value) {
+  const items = Array.isArray(value) ? value : []
+  const cleaned = Array.from(new Set(items.map(item => String(item || '').trim()).filter(Boolean)))
+  return cleaned.length ? cleaned : [...DEFAULT_SHARE_LINK_CATEGORIES]
+}
+
+function copyToClipboard(value) {
+  const text = String(value || '')
+  if (!text) return
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => null)
+    return
+  }
+  if (typeof window !== 'undefined') window.prompt('복사할 내용을 확인해주세요.', text)
+}
+
+function usageToneClass(ratio) {
+  const value = Number(ratio || 0)
+  if (value > 90) return 'danger'
+  if (value > 70) return 'warning'
+  if (value > 50) return 'positive'
+  return 'neutral'
+}
+
 
 function ensureFolderSlots(grid, folders, slots) {
   const limit = VAULT_GRID_LIMITS[grid] || 9
@@ -804,6 +832,10 @@ function StorageVaultPage() {
   const [settingsScreen, setSettingsScreen] = useState('')
   const [planInfo, setPlanInfo] = useState(null)
   const [profiles, setProfiles] = useState([])
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchWord, setSearchWord] = useState('')
+  const [searchFilter, setSearchFilter] = useState('전체')
+  const [usageOpen, setUsageOpen] = useState(false)
   const [form, setForm] = useState({ category: vaultSettings.categories[0] || '자료', title: '', folder: vaultSettings.folders[0] || '자료', tags: '', favorite: false })
   const [selectedFile, setSelectedFile] = useState(null)
   const [draftCategories, setDraftCategories] = useState(vaultSettings.categories.length ? vaultSettings.categories : [...DEFAULT_VAULT_CATEGORIES])
@@ -906,14 +938,8 @@ function StorageVaultPage() {
   function updateCategoryRow(index, value) {
     setDraftCategories(current => current.map((item, idx) => idx === index ? value : item))
   }
-
-  function addCategoryRow() {
-    setDraftCategories(current => [...current, ''])
-  }
-
-  function removeCategoryRow(index) {
-    setDraftCategories(current => current.length <= 1 ? current : current.filter((_, idx) => idx !== index))
-  }
+  function addCategoryRow() { setDraftCategories(current => [...current, '']) }
+  function removeCategoryRow(index) { setDraftCategories(current => current.length <= 1 ? current : current.filter((_, idx) => idx !== index)) }
 
   function changeLayoutGrid(nextGrid) {
     setDraftLayout(current => {
@@ -1046,56 +1072,63 @@ function StorageVaultPage() {
     }
   }
 
-  function removeItem(itemId) {
-    const target = items.find(entry => entry.id === itemId)
-    setItems(current => current.filter(entry => entry.id !== itemId))
+  function removeItem(id) {
+    const target = items.find(item => item.id === id)
+    setItems(current => current.filter(item => item.id !== id))
     if (target) syncPlanInfoStorage(target.size_bytes, 'remove')
+    setSelectedDownloads(current => current.filter(item => item !== id))
   }
 
   function downloadSelectedFiles() {
-    const targets = currentFolderItems.filter(item => selectedDownloads.includes(item.id) && item.file_url)
-    if (!targets.length) {
+    const selectedItems = items.filter(item => selectedDownloads.includes(item.id) && item.file_url)
+    if (!selectedItems.length) {
       window.alert('다운로드할 파일을 선택해주세요.')
       return
     }
-    targets.forEach(item => window.open(item.file_url, '_blank', 'noopener,noreferrer'))
+    selectedItems.forEach(item => window.open(item.file_url, '_blank', 'noopener,noreferrer'))
   }
 
-  const totalLimitBytes = Number(planInfo?.plan?.storage_limit_bytes || (1024 * 1024 * 1024))
-  const totalLimitLabel = `${(totalLimitBytes / 1024 / 1024 / 1024).toFixed(totalLimitBytes >= 2 * 1024 * 1024 * 1024 ? 0 : 1)}GB`
-  const usedBytes = Number(planInfo?.usage?.total_storage_bytes || items.reduce((sum, item) => sum + Number(item.size_bytes || 0), 0))
-  const usedRatio = Math.max(0, Math.min(100, totalLimitBytes ? (usedBytes / totalLimitBytes) * 100 : 0))
-  const remainingBytes = Math.max(totalLimitBytes - usedBytes, 0)
-  const dailyVideoLimitBytes = Number(planInfo?.plan?.daily_video_limit_bytes || (100 * 1024 * 1024))
-  const dailyVideoBytes = Number(planInfo?.usage?.daily_video_bytes || 0)
-
-  const folderCards = vaultSettings.folderSlots.map((folder, index) => {
-    const count = !folder ? 0 : folder === '즐겨찾기'
-      ? items.filter(item => item.favorite).length
-      : items.filter(item => item.folder === folder || item.category === folder).length
-    return { key: `${folder || 'empty'}-${index}`, name: folder, count, index }
-  })
-
-  const profileUsage = profiles.map(profile => ({
-    id: profile.id,
-    name: profile.display_name || profile.title,
-    usedBytes: estimateProfileUploadBytes(profile),
-  }))
-  const sharedBytes = Math.max(usedBytes - profileUsage.reduce((sum, item) => sum + item.usedBytes, 0), 0)
-
+  const planStorageLimitBytes = Number(planInfo?.limits?.storage_limit_bytes || 1024 * 1024 * 1024)
+  const usedBytes = items.reduce((sum, item) => sum + Number(item.size_bytes || 0), 0)
+  const usedRatio = Math.min(100, Math.round((usedBytes / Math.max(planStorageLimitBytes, 1)) * 100))
+  const usedTone = usageToneClass(usedRatio)
+  const totalLimitLabel = `${Math.round(planStorageLimitBytes / 1024 / 1024 / 1024)}GB`
+  const dailyVideoLimitLabel = `${Math.round(Number(planInfo?.limits?.daily_video_limit_bytes || 100 * 1024 * 1024) / 1024 / 1024)}MB`
+  const folderCount = vaultSettings.folders.length
   const visibleItems = items.filter(item => {
     const matchesFilter = filter === 'all' ? true : filter === 'favorite' ? item.favorite : item.category === filter
-    const matchesFolder = folderFilter === '전체'
-      ? true
-      : folderFilter === '즐겨찾기'
-        ? item.favorite
-        : item.folder === folderFilter || item.category === folderFilter
+    const matchesFolder = folderFilter === '전체' ? true : item.folder === folderFilter
     return matchesFilter && matchesFolder
   })
-  const currentFolderItems = currentFolder ? items.filter(item => item.folder === currentFolder || item.category === currentFolder) : []
-  const folderCount = new Set(items.map(item => item.folder)).size
+  const currentFolderItems = items.filter(item => item.folder === currentFolder)
+  const folderCards = vaultSettings.folderSlots.map((folder, index) => ({
+    key: `${folder || 'empty'}-${index}`,
+    index,
+    name: folder,
+    count: folder ? items.filter(item => item.folder === folder).length : 0,
+  }))
   const gridClass = vaultSettings.grid === '5x5' ? 'vault-folder-grid five' : vaultSettings.grid === '4x4' ? 'vault-folder-grid four' : 'vault-folder-grid three'
   const previewGridClass = draftLayout.grid === '5x5' ? 'vault-folder-grid five vault-grid-preview' : draftLayout.grid === '4x4' ? 'vault-folder-grid four vault-grid-preview' : 'vault-folder-grid three vault-grid-preview'
+  const profileUsage = profiles.map(profile => ({
+    id: profile.id,
+    name: profile.display_name || profile.title || `프로필 ${profile.id}`,
+    usedBytes: estimateProfileUploadBytes(profile),
+  }))
+  const sharedBytes = Math.max(0, usedBytes - profileUsage.reduce((sum, item) => sum + item.usedBytes, 0))
+  const searchResults = (() => {
+    const q = searchWord.trim().toLowerCase()
+    if (!q) return []
+    const folderMatches = vaultSettings.folders
+      .filter(name => name.toLowerCase().includes(q))
+      .map(name => ({ id: `folder-${name}`, kind: '폴더', title: name, subtitle: `저장함 폴더 · 파일 ${items.filter(item => item.folder === name).length}개`, folder: name }))
+    const fileMatches = items
+      .filter(item => [item.title, item.file_name, item.folder, item.category, ...(item.tags || [])].join(' ').toLowerCase().includes(q))
+      .map(item => ({ id: item.id, kind: '파일', title: item.title, subtitle: `${item.folder} · ${item.file_name || '첨부파일'} · ${bytesLabel(item.size_bytes)}`, item }))
+    const merged = [...folderMatches, ...fileMatches]
+    if (searchFilter === '폴더') return merged.filter(entry => entry.kind === '폴더')
+    if (searchFilter === '파일') return merged.filter(entry => entry.kind === '파일')
+    return merged
+  })()
 
   const settingsMenu = (
     <div className="vault-settings-menu stack gap-8" ref={settingsLayerRef}>
@@ -1109,36 +1142,51 @@ function StorageVaultPage() {
       <div className="split-row responsive-row vault-header-top">
         <div className="stack gap-4">
           <strong>저장함</strong>
-          <div className="muted small-text">계정 1개 기준 전체 저장용량 1GB 범위 안에서 자료와 멀티프로필 데이터를 통합 관리합니다.</div>
+          <div className="muted small-text">폴더형 레이아웃으로 자료를 정리하고, 계정 전체 저장용량 1GB 범위 안에서 멀티프로필과 함께 관리합니다.</div>
         </div>
-        <div className="popup-anchor-group popup-anchor-group-right vault-settings-anchor" ref={settingsAnchorRef}>
-          <button type="button" className="icon-button ghost" onClick={() => setSettingsMenuOpen(current => !current)} aria-label="저장함 설정" title="저장함 설정">
-            <IconGlyph name="settings" label="저장함 설정" />
+        <div className="action-wrap">
+          <button type="button" className="icon-button ghost" onClick={() => setSearchOpen(true)} aria-label="저장함 검색" title="저장함 검색">
+            <IconGlyph name="search" label="저장함 검색" />
           </button>
-          {settingsMenuOpen ? settingsMenu : null}
+          <div className="popup-anchor-group popup-anchor-group-right vault-settings-anchor" ref={settingsAnchorRef}>
+            <button type="button" className="icon-button ghost" onClick={() => setSettingsMenuOpen(current => !current)} aria-label="저장함 설정" title="저장함 설정">
+              <IconGlyph name="settings" label="저장함 설정" />
+            </button>
+            {settingsMenuOpen ? settingsMenu : null}
+          </div>
         </div>
       </div>
 
       <div className="vault-summary-grid">
         <div className="vault-progress-card stack gap-8">
-          <div className="split-row responsive-row"><strong>계정 저장용량</strong><span className="mini-stat">{bytesLabel(usedBytes)} / {totalLimitLabel}</span></div>
-          <div className="vault-progress-track"><span style={{ width: `${usedRatio}%` }} /></div>
-          <div className="split-row responsive-row small-text muted"><span>남은 용량 {bytesLabel(remainingBytes)}</span><span>오늘 영상 {bytesLabel(dailyVideoBytes)} / {bytesLabel(dailyVideoLimitBytes)}</span></div>
+          <button type="button" className="ghost vault-summary-toggle" onClick={() => setUsageOpen(false)}>
+            <span>계정 저장용량</span>
+            <span className="mini-stat">{bytesLabel(usedBytes)} / {totalLimitLabel}</span>
+          </button>
+          <div className={`vault-progress-track ${usedTone}`}><span style={{ width: `${usedRatio}%` }} /></div>
+          <div className="muted small-text">일일 업로드 한도 {dailyVideoLimitLabel}</div>
         </div>
         <div className="vault-progress-card stack gap-8">
-          <div className="split-row responsive-row"><strong>멀티프로필 포함 계정용량 현황</strong><span className="mini-stat">전체 {bytesLabel(usedBytes)}</span></div>
-          <div className="stack compact-list vault-usage-list">
-            {profileUsage.map(item => (
-              <div key={item.id} className="mini-card split-row responsive-row">
-                <strong>{item.name}</strong>
-                <span className="muted small-text">{bytesLabel(item.usedBytes)}</span>
+          <button type="button" className="ghost vault-summary-toggle" onClick={() => setUsageOpen(current => !current)}>
+            <span>멀티프로필 포함 계정용량 현황</span>
+            <span className="mini-stat">전체 {bytesLabel(usedBytes)} · {usageOpen ? '접기' : '열기'}</span>
+          </button>
+          {usageOpen ? (
+            <div className="stack compact-list vault-usage-list">
+              {profileUsage.map(item => (
+                <div key={item.id} className="mini-card split-row responsive-row">
+                  <strong>{item.name}</strong>
+                  <span className="muted small-text">{bytesLabel(item.usedBytes)}</span>
+                </div>
+              ))}
+              <div className="mini-card split-row responsive-row">
+                <strong>공용 저장함 / 미연결 자료</strong>
+                <span className="muted small-text">{bytesLabel(sharedBytes)}</span>
               </div>
-            ))}
-            <div className="mini-card split-row responsive-row">
-              <strong>공용 저장함 / 미연결 자료</strong>
-              <span className="muted small-text">{bytesLabel(sharedBytes)}</span>
             </div>
-          </div>
+          ) : (
+            <div className="muted small-text">멀티프로필별 사용용량은 접힌 상태입니다. 버튼을 누르면 세부 현황이 표시됩니다.</div>
+          )}
         </div>
       </div>
 
@@ -1266,6 +1314,43 @@ function StorageVaultPage() {
         </div>
       </div>
 
+      {searchOpen ? (
+        <ModalFrame title="저장함 검색" onClose={() => setSearchOpen(false)} className="full-screen-modal">
+          <div className="stack gap-12">
+            <div className="split-row responsive-row">
+              <div className="stack gap-4 full-width">
+                <input value={searchWord} onChange={e => setSearchWord(e.target.value)} placeholder="폴더명 또는 파일명을 입력" />
+                <div className="muted small-text">저장함 안에 있는 폴더 및 파일을 검색합니다.</div>
+              </div>
+              <div className="stack gap-6 vault-search-filter-box">
+                <strong className="small-text">필터</strong>
+                <label className="inline-check"><input type="radio" name="vault-search-filter" checked={searchFilter === '전체'} onChange={() => setSearchFilter('전체')} /><span>전체</span></label>
+                <label className="inline-check"><input type="radio" name="vault-search-filter" checked={searchFilter === '폴더'} onChange={() => setSearchFilter('폴더')} /><span>폴더</span></label>
+                <label className="inline-check"><input type="radio" name="vault-search-filter" checked={searchFilter === '파일'} onChange={() => setSearchFilter('파일')} /><span>파일</span></label>
+              </div>
+            </div>
+            <div className="stack compact-list">
+              {searchWord.trim() ? searchResults.length ? searchResults.map(result => (
+                <button key={result.id} type="button" className="ghost vault-search-result" onClick={() => {
+                  if (result.kind === '폴더') openFolder(result.title)
+                  if (result.kind === '파일') {
+                    setFolderFilter(result.item.folder)
+                    setCurrentFolder('')
+                  }
+                  setSearchOpen(false)
+                }}>
+                  <div className="split-row responsive-row">
+                    <strong>{result.title}</strong>
+                    <span className="mini-stat">{result.kind}</span>
+                  </div>
+                  <div className="muted small-text">{result.subtitle}</div>
+                </button>
+              )) : <div className="muted">검색 결과가 없습니다.</div> : <div className="muted">검색어를 입력하면 폴더와 파일을 함께 찾을 수 있습니다.</div>}
+            </div>
+          </div>
+        </ModalFrame>
+      ) : null}
+
       {settingsScreen === 'categories' ? (
         <ModalFrame title="카테고리 편집" onClose={closeSettingsScreen} className="full-screen-modal">
           <div className="stack">
@@ -1324,7 +1409,7 @@ function StorageVaultPage() {
                     onPointerCancel={clearDragState}
                   >
                     <span className="vault-folder-icon"><IconGlyph name="folder" label={folder || '빈칸'} /></span>
-                    <strong>{folder || '빈칸'}</strong>
+                    <strong className="vault-folder-name">{folder || '빈칸'}</strong>
                     <span className="muted small-text">{folder ? '끌어서 이동' : '배치 가능'}</span>
                   </div>
                 ))}
@@ -1505,54 +1590,175 @@ function IntroductionsManagerPage() {
 function ShareLinksManagerPage() {
   const [profiles, setProfiles] = useState([])
   const [items, setItems] = useLocalCollection(LOCAL_STORAGE_KEYS.shareLinks, [])
-  const [form, setForm] = useState({ title: '', type: '채용용', visibility: '링크 전용' })
+  const [categoryStore, setCategoryStore] = useLocalCollection(LOCAL_STORAGE_KEYS.shareLinkCategories, [...DEFAULT_SHARE_LINK_CATEGORIES])
+  const categories = normalizeShareLinkCategories(categoryStore)
+  const [form, setForm] = useState({ title: '', type: '선택', url: '', visibility: '링크 전용' })
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [mode, setMode] = useState('')
+  const [selectedId, setSelectedId] = useState('')
+  const [draftCategories, setDraftCategories] = useState(categories)
+  const settingsAnchorRef = useRef(null)
+  const settingsLayerRef = useDismissLayer(settingsOpen, () => setSettingsOpen(false))
 
   useEffect(() => { api('/api/profiles').then(data => setProfiles(data.items || [])).catch(() => null) }, [])
+  useEffect(() => { setDraftCategories(categories) }, [JSON.stringify(categories)])
   const activeId = getStoredActiveProfileId()
   const profile = profiles.find(item => Number(item.id) === Number(activeId)) || profiles[0] || null
 
-  function createLink(e) {
-    e.preventDefault()
-    if (!profile || !form.title.trim()) { window.alert('프로필과 링크 이름을 확인해주세요.'); return }
-    const mode = form.type === '채용용' ? 'recruit' : form.type === '영업용' ? 'sales' : 'intro'
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const url = `${origin}/p/${profile.slug}?share=${mode}&visibility=${encodeURIComponent(form.visibility)}`
-    const item = { id: makeLocalId('share'), ...form, profile_slug: profile.slug, profile_name: profile.display_name || profile.title, url, created_at: new Date().toISOString() }
-    setItems(current => [item, ...current])
-    setForm({ title: '', type: '채용용', visibility: '링크 전용' })
+  function resetForm() {
+    setForm({ title: '', type: '선택', url: '', visibility: '링크 전용' })
+    setSelectedId('')
+    setMode('')
   }
+
+  function openMode(nextMode) {
+    setSettingsOpen(false)
+    setMode(nextMode)
+    if (nextMode === 'categories') setDraftCategories(categories)
+    if (nextMode === 'add') resetForm()
+    if ((nextMode === 'edit' || nextMode === 'delete') && !selectedId && items[0]) setSelectedId(items[0].id)
+  }
+
+  function saveLink(e) {
+    e.preventDefault()
+    if (!form.title.trim() || !String(form.url || '').trim()) {
+      window.alert('링크별칭과 링크주소를 입력해주세요.')
+      return
+    }
+    const entry = {
+      id: selectedId || makeLocalId('share'),
+      title: form.title.trim(),
+      type: form.type === '선택' ? '선택요망' : form.type,
+      visibility: form.visibility,
+      url: form.url.trim(),
+      profile_slug: profile?.slug || '',
+      profile_name: profile?.display_name || profile?.title || '',
+      created_at: selectedId ? (items.find(item => item.id === selectedId)?.created_at || new Date().toISOString()) : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    setItems(current => current.some(item => item.id === entry.id) ? current.map(item => item.id === entry.id ? entry : item) : [entry, ...current])
+    resetForm()
+  }
+
+  function editSelected() {
+    const selected = items.find(item => item.id === selectedId)
+    if (!selected) { window.alert('편집할 목록을 선택해주세요.'); return }
+    setForm({ title: selected.title || '', type: categories.includes(selected.type) ? selected.type : '선택', url: selected.url || '', visibility: selected.visibility || '링크 전용' })
+    setMode('edit')
+  }
+
+  function deleteSelected() {
+    if (!selectedId) { window.alert('삭제할 목록을 선택해주세요.'); return }
+    setItems(current => current.filter(item => item.id !== selectedId))
+    resetForm()
+  }
+
+  function saveCategories() {
+    const next = Array.from(new Set(draftCategories.map(item => String(item || '').trim()).filter(Boolean)))
+    if (!next.length) { window.alert('구분 카테고리를 1개 이상 입력해주세요.'); return }
+    setCategoryStore(next)
+    setMode('')
+  }
+
+  const settingsMenu = (
+    <div className="vault-settings-menu stack gap-8" ref={settingsLayerRef}>
+      <button type="button" className="dropdown-item ghost" onClick={() => openMode('add')}>목록추가</button>
+      <button type="button" className="dropdown-item ghost" onClick={() => openMode('edit')}>목록편집</button>
+      <button type="button" className="dropdown-item ghost" onClick={() => openMode('delete')}>목록삭제</button>
+      <button type="button" className="dropdown-item ghost" onClick={() => openMode('categories')}>구분설정</button>
+    </div>
+  )
 
   return (
     <section className="page-stack">
       <div className="card stack">
-        <strong>링크공유관리</strong>
-        <div className="muted small-text">채용용, 영업용, 소개용 공개 링크를 별도로 생성하고 관리합니다.</div>
-        <form className="stack" onSubmit={createLink}>
-          <input value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="링크 이름" />
-          <div className="grid-2">
-            <select value={form.type} onChange={e => setForm(prev => ({ ...prev, type: e.target.value }))}><option>채용용</option><option>영업용</option><option>소개용</option></select>
-            <select value={form.visibility} onChange={e => setForm(prev => ({ ...prev, visibility: e.target.value }))}><option>링크 전용</option><option>검색 노출</option><option>비공개</option></select>
+        <div className="split-row responsive-row">
+          <div className="stack gap-4">
+            <strong>저장링크관리목록</strong>
+            <div className="muted small-text">링크구분, 링크별칭, 링크주소를 한 화면에서 관리하고 필요한 링크를 바로 복사할 수 있습니다.</div>
           </div>
-          <div className="muted small-text">현재 선택 프로필: {profile ? (profile.display_name || profile.title) : '프로필 없음'}</div>
-          <button type="submit">링크 생성</button>
-        </form>
-      </div>
-      <div className="card stack">
-        <strong>생성된 링크</strong>
-        <div className="stack compact-list">
+          <div className="popup-anchor-group popup-anchor-group-right vault-settings-anchor" ref={settingsAnchorRef}>
+            <button type="button" className="icon-button ghost" onClick={() => setSettingsOpen(current => !current)} aria-label="링크공유관리 설정" title="링크공유관리 설정">
+              <IconGlyph name="settings" label="링크공유관리 설정" />
+            </button>
+            {settingsOpen ? settingsMenu : null}
+          </div>
+        </div>
+
+        <div className="stack compact-list link-table">
+          <div className="link-table-head">
+            <span>링크구분</span>
+            <span>링크별칭</span>
+            <span>링크주소복사</span>
+          </div>
           {items.length ? items.map(item => (
-            <article key={item.id} className="mini-card stack">
-              <div className="split-row responsive-row"><strong>{item.title}</strong><span className="mini-stat">{item.type}</span></div>
-              <div className="muted small-text">{item.profile_name} · {item.visibility}</div>
-              <a href={item.url} target="_blank" rel="noreferrer" className="inline-link">{item.url}</a>
-              <div className="action-wrap"><button type="button" className="ghost" onClick={() => navigator.clipboard?.writeText(item.url)}>복사</button><button type="button" className="ghost" onClick={() => setItems(current => current.filter(entry => entry.id !== item.id))}>삭제</button></div>
-            </article>
-          )) : <div className="muted">생성된 링크가 없습니다.</div>}
+            <button key={item.id} type="button" className={selectedId === item.id ? 'ghost link-table-row active' : 'ghost link-table-row'} onClick={() => setSelectedId(item.id)}>
+              <span className="link-type-chip">{item.type || '선택요망'}</span>
+              <span className="link-title-text">{item.title || '-'}</span>
+              <span className="action-wrap justify-end">
+                <button type="button" className="ghost small-button" onClick={e => { e.stopPropagation(); copyToClipboard(item.url) }}>링크주소복사</button>
+              </span>
+            </button>
+          )) : <div className="muted">등록된 링크가 없습니다.</div>}
         </div>
       </div>
+
+      {mode === 'add' || mode === 'edit' ? (
+        <div className="card stack">
+          <strong>{mode === 'add' ? '목록추가' : '목록편집'}</strong>
+          <form className="stack" onSubmit={saveLink}>
+            <div className="grid-2">
+              <select value={form.type} onChange={e => setForm(prev => ({ ...prev, type: e.target.value }))}>
+                <option>선택</option>
+                {categories.map(item => <option key={item}>{item}</option>)}
+              </select>
+              <input value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="링크별칭" />
+            </div>
+            <input value={form.url} onChange={e => setForm(prev => ({ ...prev, url: e.target.value }))} placeholder="링크주소" />
+            <select value={form.visibility} onChange={e => setForm(prev => ({ ...prev, visibility: e.target.value }))}><option>링크 전용</option><option>검색 노출</option><option>비공개</option></select>
+            <div className="muted small-text">현재 선택 프로필: {profile ? (profile.display_name || profile.title) : '프로필 없음'}</div>
+            <div className="action-wrap">
+              {mode === 'edit' ? <button type="button" className="ghost" onClick={editSelected}>선택 목록 불러오기</button> : null}
+              <button type="submit">저장</button>
+              <button type="button" className="ghost" onClick={resetForm}>닫기</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {mode === 'delete' ? (
+        <div className="card stack">
+          <strong>목록삭제</strong>
+          <div className="muted small-text">삭제할 링크 목록을 선택한 뒤 아래 버튼을 눌러 삭제합니다.</div>
+          <div className="action-wrap">
+            <button type="button" className="ghost" onClick={() => setMode('')}>닫기</button>
+            <button type="button" onClick={deleteSelected}>선택 목록 삭제</button>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === 'categories' ? (
+        <div className="card stack">
+          <strong>구분설정</strong>
+          <div className="muted small-text">기본 구분은 소개, 채용, 영업, 기타이며 필요에 따라 추가/수정/삭제할 수 있습니다.</div>
+          <div className="stack compact-list">
+            {draftCategories.map((item, index) => (
+              <div key={`share-category-${index}`} className="vault-setting-row">
+                <input value={item} onChange={e => setDraftCategories(current => current.map((entry, idx) => idx === index ? e.target.value : entry))} placeholder={`구분 ${index + 1}`} />
+                <button type="button" className="ghost" onClick={() => setDraftCategories(current => current.length <= 1 ? current : current.filter((_, idx) => idx !== index))}>삭제</button>
+              </div>
+            ))}
+          </div>
+          <div className="action-wrap">
+            <button type="button" className="ghost" onClick={() => setDraftCategories(current => [...current, ''])}>목록추가</button>
+            <button type="button" onClick={saveCategories}>저장</button>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
+
 
 function WorkspacePage() {
   const vault = readLocalItems(LOCAL_STORAGE_KEYS.vault, [])
