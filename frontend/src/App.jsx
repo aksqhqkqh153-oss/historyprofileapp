@@ -2390,7 +2390,9 @@ function HomePage({ user }) {
   const [loading, setLoading] = useState(false)
   const [nextOffset, setNextOffset] = useState(0)
   const [hasMore, setHasMore] = useState(true)
+  const [storyBarVisible, setStoryBarVisible] = useState(true)
   const loadMoreRef = useRef(null)
+  const lastScrollTopRef = useRef(0)
   const composeParam = new URLSearchParams(location.search).get('compose')
   const composeOpen = composeParam === '1' || composeParam === 'feed' || composeParam === 'story'
   const pickerOpen = composeParam === '1'
