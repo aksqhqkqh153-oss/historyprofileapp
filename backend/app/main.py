@@ -1693,8 +1693,6 @@ def upload_file(
     user=Depends(current_user),
 ):
     content_type = (file.content_type or "").lower()
-    if not (content_type.startswith("image/") or content_type.startswith("video/")):
-        raise HTTPException(status_code=400, detail="이미지 또는 영상 파일만 업로드할 수 있습니다.")
     media_kind = media_kind_from_content_type(content_type)
     max_bytes = MAX_VIDEO_UPLOAD_BYTES if media_kind == "video" else MAX_IMAGE_UPLOAD_BYTES
     with get_conn() as conn:
@@ -1717,12 +1715,14 @@ def upload_file(
         except StorageError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         now = utcnow()
+        moderation_status = "approved" if media_kind in {"image", "file"} else "pending"
+        moderation_note = "자동 승인: 이미지" if media_kind == "image" else ("자동 승인: 문서/일반 파일" if media_kind == "file" else "자동 검수 대기: 영상")
         conn.execute(
             """
             INSERT INTO app_uploads(user_id, profile_id, category, media_kind, key, url, preview_key, preview_url, content_type, name, size_bytes, moderation_status, moderation_note, created_at, report_count)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (user["id"], profile_id, category, media_kind, uploaded["key"], uploaded["url"], uploaded.get("preview_key", ""), uploaded.get("preview_url", ""), uploaded["content_type"], uploaded["name"], uploaded["size"], "approved" if media_kind == "image" else "pending", ("자동 승인: 이미지" if media_kind == "image" else "자동 검수 대기: 영상"), now, 0),
+            (user["id"], profile_id, category, media_kind, uploaded["key"], uploaded["url"], uploaded.get("preview_key", ""), uploaded.get("preview_url", ""), uploaded["content_type"], uploaded["name"], uploaded["size"], moderation_status, moderation_note, now, 0),
         )
         usage_after = get_user_storage_usage(conn, user["id"])
         chat_usage = get_user_chat_media_usage(conn, user["id"])

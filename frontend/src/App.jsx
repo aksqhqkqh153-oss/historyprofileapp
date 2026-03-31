@@ -15,7 +15,11 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/questions')) return '질문'
   if (pathname.startsWith('/community')) return '대화'
   if (pathname.startsWith('/profile')) return '프로필'
-  if (pathname.startsWith('/more')) return '기타'
+  if (pathname.startsWith('/vault')) return '저장함'
+  if (pathname.startsWith('/workspace')) return '종합관리'
+  if (pathname.startsWith('/introductions-manager')) return '자기소개서관리'
+  if (pathname.startsWith('/share-links-manager')) return '링크공유관리'
+  if (pathname.startsWith('/more')) return '더보기'
   if (pathname.startsWith('/schedule')) return '일정'
   if (pathname.startsWith('/admin')) return '관리자'
   if (pathname.startsWith('/url-shortener')) return 'URLs단축'
@@ -99,6 +103,10 @@ function IconGlyph({ name, label }) {
     trash: <svg {...common}><path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 13h10l1-13" /><path d="M9 7V4h6v3" /></svg>,
     more: <svg {...common}><circle cx="6" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="18" cy="12" r="1.5" /></svg>,
     chatMini: <svg {...common}><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4.5 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z" /></svg>,
+    folder: <svg {...common}><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z" /></svg>,
+    briefcase: <svg {...common}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M3 12h18" /></svg>,
+    document: <svg {...common}><path d="M8 3h6l5 5v13a1 1 0 0 1-1 1H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M14 3v5h5" /><path d="M10 13h6" /><path d="M10 17h6" /><path d="M10 9h2" /></svg>,
+    star: <svg {...common}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9Z" /></svg>,
   }
   return <span className="icon-symbol" aria-label={label}>{icons[name] || icons.home}</span>
 }
@@ -283,6 +291,7 @@ function AppShell({ user, setUser }) {
   const [multiProfiles, setMultiProfiles] = useState([])
   const [multiProfileManagerOpen, setMultiProfileManagerOpen] = useState(false)
   const [multiProfileManagerBusy, setMultiProfileManagerBusy] = useState(false)
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false)
   const activeProfileId = getStoredActiveProfileId()
   const activeProfile = useMemo(() => multiProfiles.find(item => Number(item.id) === Number(activeProfileId)) || multiProfiles[0] || null, [multiProfiles, activeProfileId])
   const activeProfileLabel = activeProfile?.display_name || activeProfile?.title || user?.nickname || user?.name || '내 계정'
@@ -290,6 +299,7 @@ function AppShell({ user, setUser }) {
 
   useEffect(() => {
     setActivePopup('')
+    setMoreSheetOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
@@ -308,7 +318,13 @@ function AppShell({ user, setUser }) {
 
   function closePopupAndNavigate(path) {
     setActivePopup('')
+    setMoreSheetOpen(false)
     navigate(path)
+  }
+
+  function openMoreSheet() {
+    setActivePopup('')
+    setMoreSheetOpen(true)
   }
 
   function logout() {
@@ -490,7 +506,11 @@ function AppShell({ user, setUser }) {
           <Route path="/questions/:profileId" element={<QuestionProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/more" element={<MorePage />} />
+          <Route path="/more" element={<MorePage onOpenSheet={openMoreSheet} />} />
+          <Route path="/vault" element={<StorageVaultPage />} />
+          <Route path="/workspace" element={<WorkspacePage />} />
+          <Route path="/introductions-manager" element={<IntroductionsManagerPage />} />
+          <Route path="/share-links-manager" element={<ShareLinksManagerPage />} />
           <Route path="/schedule" element={<SchedulePage />} />
           <Route path="/url-shortener" element={<UrlShortenerPage />} />
           <Route path="/qr-generator" element={<QrGeneratorPage />} />
@@ -498,6 +518,8 @@ function AppShell({ user, setUser }) {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      <MoreBottomSheet open={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} onSelect={closePopupAndNavigate} />
 
       <nav className="bottom-nav">
         {NAV_ITEMS.map(item => {
@@ -508,8 +530,16 @@ function AppShell({ user, setUser }) {
               : item.path === '/friends'
                 ? formatBadgeCount(counts.friends, 999)
                 : ''
+          const className = (location.pathname === item.path || (item.path === '/more' && moreSheetOpen)) ? 'nav-item active nav-item-with-badge' : 'nav-item nav-item-with-badge'
+          if (item.path === '/more') {
+            return (
+              <button key={item.path} type="button" className={className} onClick={openMoreSheet}>
+                <span className="nav-item-label"><span className="nav-item-icon"><IconGlyph name={NAV_META[item.path]?.icon || 'home'} label={item.label} /></span><span className="nav-item-text">{item.label}</span></span>
+              </button>
+            )
+          }
           return (
-            <Link key={item.path} to={item.path} className={location.pathname === item.path ? 'nav-item active nav-item-with-badge' : 'nav-item nav-item-with-badge'}>
+            <Link key={item.path} to={item.path} className={className}>
               <span className="nav-item-label"><span className="nav-item-icon"><IconGlyph name={NAV_META[item.path]?.icon || 'home'} label={item.label} /></span><span className="nav-item-text">{item.label}</span></span>
               {badgeValue ? <span className="count-badge nav-badge">{badgeValue}</span> : null}
             </Link>
@@ -520,13 +550,14 @@ function AppShell({ user, setUser }) {
   )
 }
 
-function MorePage() {
+function MorePage({ onOpenSheet }) {
   return (
     <section className="page-stack">
       <div className="card stack more-page-card">
         <div className="stack gap-8">
-          <strong>기타</strong>
-          <div className="muted">준비 중인 부가 기능 화면입니다.</div>
+          <strong>더보기</strong>
+          <div className="muted">하단 버튼을 누르면 저장함, 종합관리, 자기소개서관리, 링크공유관리 화면으로 빠르게 이동할 수 있습니다.</div>
+          <button type="button" onClick={onOpenSheet}>더보기 열기</button>
         </div>
       </div>
     </section>
@@ -540,6 +571,353 @@ function SchedulePage() {
         <div className="stack gap-8">
           <strong>일정</strong>
           <div className="muted">일정 기능을 연결하기 위한 기본 화면입니다.</div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+
+const LOCAL_STORAGE_KEYS = {
+  vault: 'historyprofile_local_vault_items',
+  introManager: 'historyprofile_local_intro_manager_items',
+  introHistory: 'historyprofile_local_intro_manager_history',
+  shareLinks: 'historyprofile_local_share_links_items',
+}
+
+function safeJsonParse(raw, fallback) {
+  try {
+    return raw ? JSON.parse(raw) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function readLocalItems(key, fallback = []) {
+  if (typeof window === 'undefined') return fallback
+  return safeJsonParse(window.localStorage.getItem(key), fallback)
+}
+
+function writeLocalItems(key, value) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(key, JSON.stringify(value))
+}
+
+function makeLocalId(prefix = 'local') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function splitTags(value) {
+  return String(value || '').split(',').map(item => item.trim()).filter(Boolean)
+}
+
+function bytesLabel(value) {
+  const size = Number(value || 0)
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)}MB`
+  if (size >= 1024) return `${Math.round(size / 1024)}KB`
+  return `${size}B`
+}
+
+function useLocalCollection(key, fallback = []) {
+  const [items, setItems] = useState(() => readLocalItems(key, fallback))
+  useEffect(() => { writeLocalItems(key, items) }, [key, items])
+  return [items, setItems]
+}
+
+function MoreBottomSheet({ open, onClose, onSelect }) {
+  const sheetRef = useDismissLayer(open, onClose)
+  if (!open) return null
+  const items = [
+    { path: '/vault', label: '저장함', desc: '이력서 · 포트폴리오 · 증빙자료 태그/폴더/즐겨찾기 관리', icon: 'folder' },
+    { path: '/workspace', label: '종합관리', desc: '저장함 · 자기소개서 · 링크 데이터를 한 번에 정리', icon: 'briefcase' },
+    { path: '/introductions-manager', label: '자기소개서관리', desc: '회사/직무별 문항 세트 저장 · 비교 · 복원', icon: 'document' },
+    { path: '/share-links-manager', label: '링크공유관리', desc: '채용용 · 영업용 · 소개용 공개 링크 생성', icon: 'link' },
+    { path: '/more', label: '기타기능', desc: '업데이트 예정', icon: 'more', disabled: true },
+  ]
+  return createPortal(
+    <div className="bottom-sheet-backdrop" role="presentation">
+      <div className="bottom-sheet" ref={sheetRef} role="dialog" aria-modal="true" aria-label="더보기">
+        <div className="bottom-sheet-handle" />
+        <div className="split-row responsive-row bottom-sheet-head">
+          <strong>더보기</strong>
+          <button type="button" className="ghost" onClick={onClose}>닫기</button>
+        </div>
+        <div className="bottom-sheet-list">
+          {items.map(item => (
+            <button key={item.label} type="button" className={item.disabled ? 'bottom-sheet-item ghost disabled' : 'bottom-sheet-item ghost'} onClick={() => !item.disabled && onSelect(item.path)} disabled={item.disabled}>
+              <span className="bottom-sheet-item-icon"><IconGlyph name={item.icon} label={item.label} /></span>
+              <span className="stack gap-4 bottom-sheet-item-copy">
+                <strong>{item.label}</strong>
+                <span className="muted small-text">{item.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function StorageVaultPage() {
+  const [items, setItems] = useLocalCollection(LOCAL_STORAGE_KEYS.vault, [])
+  const [uploading, setUploading] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const [form, setForm] = useState({ category: '이력서', title: '', folder: '기본', tags: '', favorite: false })
+  const [selectedFile, setSelectedFile] = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.title.trim() || !selectedFile) { window.alert('제목과 파일을 입력해주세요.'); return }
+    setUploading(true)
+    try {
+      const uploaded = await uploadFile(selectedFile, 'vault')
+      const item = {
+        id: makeLocalId('vault'),
+        category: form.category,
+        title: form.title.trim(),
+        folder: form.folder.trim() || '기본',
+        tags: splitTags(form.tags),
+        favorite: Boolean(form.favorite),
+        file_name: uploaded?.item?.name || selectedFile.name,
+        file_url: uploaded?.item?.url || uploaded?.url || '',
+        content_type: uploaded?.item?.content_type || selectedFile.type || '',
+        size_bytes: uploaded?.item?.size_bytes || uploaded?.size || selectedFile.size || 0,
+        created_at: new Date().toISOString(),
+      }
+      setItems(current => [item, ...current])
+      setForm({ category: '이력서', title: '', folder: '기본', tags: '', favorite: false })
+      setSelectedFile(null)
+      const input = document.getElementById('vault-file-input')
+      if (input) input.value = ''
+    } catch (err) {
+      window.alert(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const visibleItems = items.filter(item => filter === 'all' ? true : filter === 'favorite' ? item.favorite : item.category === filter)
+  const folderCount = new Set(items.map(item => item.folder)).size
+
+  return (
+    <section className="page-stack">
+      <div className="card stack">
+        <div className="split-row responsive-row">
+          <div className="stack gap-4">
+            <strong>저장함</strong>
+            <div className="muted small-text">이력서, 포트폴리오, 증빙자료를 태그 · 폴더 · 즐겨찾기로 관리합니다.</div>
+          </div>
+          <div className="mini-stats">
+            <span className="mini-stat">자료 {items.length}</span>
+            <span className="mini-stat">폴더 {folderCount}</span>
+            <span className="mini-stat">즐겨찾기 {items.filter(item => item.favorite).length}</span>
+          </div>
+        </div>
+        <form className="stack" onSubmit={handleSubmit}>
+          <div className="grid-2">
+            <select value={form.category} onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}>
+              <option>이력서</option><option>포트폴리오</option><option>증빙자료</option>
+            </select>
+            <input value={form.folder} onChange={e => setForm(prev => ({ ...prev, folder: e.target.value }))} placeholder="폴더명" />
+          </div>
+          <input value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="자료 제목" />
+          <input value={form.tags} onChange={e => setForm(prev => ({ ...prev, tags: e.target.value }))} placeholder="태그를 쉼표로 구분해 입력" />
+          <label className="inline-check"><input type="checkbox" checked={form.favorite} onChange={e => setForm(prev => ({ ...prev, favorite: e.target.checked }))} /><span>즐겨찾기 등록</span></label>
+          <input id="vault-file-input" type="file" onChange={e => setSelectedFile(e.target.files?.[0] || null)} />
+          <div className="split-row responsive-row">
+            <div className="muted small-text">현재 버전은 업로드한 파일 메타데이터를 앱 안에서 정리해 보여줍니다.</div>
+            <button type="submit" disabled={uploading}>{uploading ? '업로드 중...' : '저장하기'}</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="card stack">
+        <div className="tab-row responsive-row">
+          {['all', 'favorite', '이력서', '포트폴리오', '증빙자료'].map(name => <button key={name} type="button" className={filter === name ? 'tab active' : 'tab'} onClick={() => setFilter(name)}>{name === 'all' ? '전체' : name === 'favorite' ? '즐겨찾기' : name}</button>)}
+        </div>
+        <div className="stack vault-list">
+          {visibleItems.length ? visibleItems.map(item => (
+            <article key={item.id} className="vault-item">
+              <div className="split-row responsive-row">
+                <div className="stack gap-4">
+                  <strong>{item.title}</strong>
+                  <div className="muted small-text">{item.category} · 폴더 {item.folder} · {bytesLabel(item.size_bytes)}</div>
+                  <div className="tag-row">{item.tags.map(tag => <span key={`${item.id}-${tag}`} className="mini-stat">#{tag}</span>)}</div>
+                </div>
+                <div className="action-wrap">
+                  {item.favorite ? <span className="mini-stat favorite">즐겨찾기</span> : null}
+                  {item.file_url ? <a className="button-link" href={item.file_url} target="_blank" rel="noreferrer">열기</a> : null}
+                  <button type="button" className="ghost" onClick={() => setItems(current => current.filter(entry => entry.id !== item.id))}>삭제</button>
+                </div>
+              </div>
+            </article>
+          )) : <div className="muted">표시할 저장 자료가 없습니다.</div>}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function IntroductionsManagerPage() {
+  const [items, setItems] = useLocalCollection(LOCAL_STORAGE_KEYS.introManager, [])
+  const [history, setHistory] = useLocalCollection(LOCAL_STORAGE_KEYS.introHistory, [])
+  const [selectedId, setSelectedId] = useState('')
+  const [form, setForm] = useState({ company: '', job: '', question: '', answer: '' })
+
+  useEffect(() => {
+    const selected = items.find(item => item.id === selectedId)
+    if (selected) setForm({ company: selected.company, job: selected.job, question: selected.question, answer: selected.answer })
+  }, [selectedId])
+
+  function saveSet(e) {
+    e.preventDefault()
+    if (!form.company.trim() || !form.job.trim() || !form.question.trim()) { window.alert('회사, 직무, 문항을 입력해주세요.'); return }
+    const payload = { id: selectedId || makeLocalId('intro'), ...form, updated_at: new Date().toISOString() }
+    setItems(current => {
+      const next = current.some(item => item.id === payload.id) ? current.map(item => item.id === payload.id ? payload : item) : [payload, ...current]
+      return next
+    })
+    setHistory(current => [{ ...payload, history_id: makeLocalId('history') }, ...current].slice(0, 30))
+    setSelectedId(payload.id)
+  }
+
+  const selected = items.find(item => item.id === selectedId)
+
+  return (
+    <section className="page-stack">
+      <div className="card stack">
+        <strong>자기소개서관리</strong>
+        <div className="muted small-text">회사/직무별 자기소개서 문항 세트를 저장하고, 다른 버전과 비교하거나 이전 버전으로 복원할 수 있습니다.</div>
+        <form className="stack" onSubmit={saveSet}>
+          <div className="grid-2">
+            <input value={form.company} onChange={e => setForm(prev => ({ ...prev, company: e.target.value }))} placeholder="회사명" />
+            <input value={form.job} onChange={e => setForm(prev => ({ ...prev, job: e.target.value }))} placeholder="직무명" />
+          </div>
+          <input value={form.question} onChange={e => setForm(prev => ({ ...prev, question: e.target.value }))} placeholder="문항" />
+          <textarea value={form.answer} onChange={e => setForm(prev => ({ ...prev, answer: e.target.value }))} placeholder="답변" rows={8} />
+          <div className="action-wrap">
+            <button type="submit">저장</button>
+            <button type="button" className="ghost" onClick={() => { setSelectedId(''); setForm({ company: '', job: '', question: '', answer: '' }) }}>새로 작성</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="grid-2">
+        <div className="card stack">
+          <strong>문항 세트 목록</strong>
+          <div className="stack compact-list">
+            {items.length ? items.map(item => (
+              <button key={item.id} type="button" className={selectedId === item.id ? 'ghost intro-list-item active' : 'ghost intro-list-item'} onClick={() => setSelectedId(item.id)}>
+                <strong>{item.company} · {item.job}</strong>
+                <span className="muted small-text">{item.question}</span>
+              </button>
+            )) : <div className="muted">저장된 세트가 없습니다.</div>}
+          </div>
+        </div>
+        <div className="card stack">
+          <strong>비교 / 복원</strong>
+          {selected ? <div className="stack gap-8"><div className="muted small-text">선택 문항 최신본</div><div className="pre-wrap bordered-box">{selected.answer || '답변이 없습니다.'}</div></div> : <div className="muted">문항을 선택하면 최신본을 볼 수 있습니다.</div>}
+          <div className="stack compact-list">
+            {history.filter(item => !selected || (item.company === selected.company && item.job === selected.job && item.question === selected.question)).slice(0, 5).map(item => (
+              <article key={item.history_id} className="mini-card stack">
+                <strong>{item.company} · {item.job}</strong>
+                <div className="muted small-text">{formatDateLabel(item.updated_at)}</div>
+                <div className="pre-wrap small-text">{item.answer || '답변 없음'}</div>
+                <button type="button" className="ghost" onClick={() => { setSelectedId(item.id); setForm({ company: item.company, job: item.job, question: item.question, answer: item.answer }) }}>이 버전 복원</button>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ShareLinksManagerPage() {
+  const [profiles, setProfiles] = useState([])
+  const [items, setItems] = useLocalCollection(LOCAL_STORAGE_KEYS.shareLinks, [])
+  const [form, setForm] = useState({ title: '', type: '채용용', visibility: '링크 전용' })
+
+  useEffect(() => { api('/api/profiles').then(data => setProfiles(data.items || [])).catch(() => null) }, [])
+  const activeId = getStoredActiveProfileId()
+  const profile = profiles.find(item => Number(item.id) === Number(activeId)) || profiles[0] || null
+
+  function createLink(e) {
+    e.preventDefault()
+    if (!profile || !form.title.trim()) { window.alert('프로필과 링크 이름을 확인해주세요.'); return }
+    const mode = form.type === '채용용' ? 'recruit' : form.type === '영업용' ? 'sales' : 'intro'
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const url = `${origin}/p/${profile.slug}?share=${mode}&visibility=${encodeURIComponent(form.visibility)}`
+    const item = { id: makeLocalId('share'), ...form, profile_slug: profile.slug, profile_name: profile.display_name || profile.title, url, created_at: new Date().toISOString() }
+    setItems(current => [item, ...current])
+    setForm({ title: '', type: '채용용', visibility: '링크 전용' })
+  }
+
+  return (
+    <section className="page-stack">
+      <div className="card stack">
+        <strong>링크공유관리</strong>
+        <div className="muted small-text">채용용, 영업용, 소개용 공개 링크를 별도로 생성하고 관리합니다.</div>
+        <form className="stack" onSubmit={createLink}>
+          <input value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="링크 이름" />
+          <div className="grid-2">
+            <select value={form.type} onChange={e => setForm(prev => ({ ...prev, type: e.target.value }))}><option>채용용</option><option>영업용</option><option>소개용</option></select>
+            <select value={form.visibility} onChange={e => setForm(prev => ({ ...prev, visibility: e.target.value }))}><option>링크 전용</option><option>검색 노출</option><option>비공개</option></select>
+          </div>
+          <div className="muted small-text">현재 선택 프로필: {profile ? (profile.display_name || profile.title) : '프로필 없음'}</div>
+          <button type="submit">링크 생성</button>
+        </form>
+      </div>
+      <div className="card stack">
+        <strong>생성된 링크</strong>
+        <div className="stack compact-list">
+          {items.length ? items.map(item => (
+            <article key={item.id} className="mini-card stack">
+              <div className="split-row responsive-row"><strong>{item.title}</strong><span className="mini-stat">{item.type}</span></div>
+              <div className="muted small-text">{item.profile_name} · {item.visibility}</div>
+              <a href={item.url} target="_blank" rel="noreferrer" className="inline-link">{item.url}</a>
+              <div className="action-wrap"><button type="button" className="ghost" onClick={() => navigator.clipboard?.writeText(item.url)}>복사</button><button type="button" className="ghost" onClick={() => setItems(current => current.filter(entry => entry.id !== item.id))}>삭제</button></div>
+            </article>
+          )) : <div className="muted">생성된 링크가 없습니다.</div>}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function WorkspacePage() {
+  const vault = readLocalItems(LOCAL_STORAGE_KEYS.vault, [])
+  const intro = readLocalItems(LOCAL_STORAGE_KEYS.introManager, [])
+  const links = readLocalItems(LOCAL_STORAGE_KEYS.shareLinks, [])
+  const recentVault = vault.slice(0, 5)
+
+  return (
+    <section className="page-stack">
+      <div className="card stack">
+        <strong>종합관리</strong>
+        <div className="muted small-text">저장함 파일, 자기소개서 데이터, 링크공유관리 데이터를 한 화면에서 정리합니다.</div>
+        <div className="grid-4">
+          <Metric label="저장 자료" value={vault.length} />
+          <Metric label="자기소개서 세트" value={intro.length} />
+          <Metric label="공유 링크" value={links.length} />
+          <Metric label="즐겨찾기" value={vault.filter(item => item.favorite).length} />
+        </div>
+      </div>
+      <div className="grid-2">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>최근 저장 자료</strong><Link className="button-link" to="/vault">저장함 이동</Link></div>
+          <div className="stack compact-list">
+            {recentVault.length ? recentVault.map(item => <div key={item.id} className="mini-card"><strong>{item.title}</strong><div className="muted small-text">{item.category} · {item.folder}</div></div>) : <div className="muted">저장 자료가 없습니다.</div>}
+          </div>
+        </div>
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>자기소개서 / 링크 요약</strong><div className="action-wrap"><Link className="button-link" to="/introductions-manager">자기소개서관리</Link><Link className="button-link" to="/share-links-manager">링크공유관리</Link></div></div>
+          <div className="stack compact-list">
+            {intro.slice(0, 3).map(item => <div key={item.id} className="mini-card"><strong>{item.company} · {item.job}</strong><div className="muted small-text">{item.question}</div></div>)}
+            {links.slice(0, 3).map(item => <div key={item.id} className="mini-card"><strong>{item.title}</strong><div className="muted small-text">{item.type} · {item.visibility}</div></div>)}
+            {!intro.length && !links.length ? <div className="muted">관리 데이터가 없습니다.</div> : null}
+          </div>
         </div>
       </div>
     </section>
@@ -1186,6 +1564,24 @@ function HomePage({ user }) {
     return () => observer.disconnect()
   }, [hasMore, loading, loadFeed, items.length])
 
+  useEffect(() => {
+    function handleScroll() {
+      const current = window.scrollY || window.pageYOffset || 0
+      const previous = lastScrollTopRef.current
+      const delta = current - previous
+      if (current <= 120) {
+        setStoryBarVisible(true)
+      } else if (delta > 10) {
+        setStoryBarVisible(false)
+      } else if (delta < -8) {
+        setStoryBarVisible(true)
+      }
+      lastScrollTopRef.current = current
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   async function handleFriendRequest(item) {
     try {
       await api(`/api/friends/requests/${item.owner.id}`, { method: 'POST' })
@@ -1226,7 +1622,7 @@ function HomePage({ user }) {
       <FeedEntryPickerModal open={pickerOpen} onClose={closeComposer} onSelect={handleSelectCompose} />
       <FeedComposerModal open={composerOpen} mode={composerMode} onClose={closeComposer} onCreated={handleCreated} />
       <StoryViewerModal item={selectedStory} open={Boolean(selectedStory)} onClose={() => setSelectedStory(null)} />
-      <section className="card stack home-story-card">
+      <section className={`card stack home-story-card ${storyBarVisible ? 'visible' : 'hidden'}`}>
         <div className="story-strip" role="list" aria-label="스토리 목록">
           <button type="button" className="story-chip story-chip-compose" onClick={openCreatePicker} role="listitem">
             <span className="story-chip-ring">
@@ -1326,15 +1722,22 @@ function FriendsPage() {
   return (
     <div className="stack page-stack friends-page kakao-friends-page">
       <section className="card stack friends-kakao-card">
-        <article className="friend-kakao-row friend-kakao-row-me">
-          <button type="button" className="friend-kakao-main friend-kakao-main-static">
+        <div className="friends-section-label">내 프로필</div>
+        <article className="friend-kakao-row friend-kakao-row-me friend-kakao-row-me-emphasis">
+          <button type="button" className="friend-kakao-main friend-kakao-main-static" onClick={() => navigate('/profile')}>
             <span className="friend-kakao-avatar">{myAvatar ? <img src={myAvatar} alt={myDisplayName} /> : <span>{myDisplayName.slice(0, 1)}</span>}</span>
             <span className="friend-kakao-copy">
               <strong>{myDisplayName}</strong>
               <span className="muted small-text">{myIntro}</span>
             </span>
+            <span className="friend-kakao-tag">프로필 편집</span>
           </button>
         </article>
+
+        <div className="friends-section-meta split-row responsive-row">
+          <div className="muted small-text">친구 {friends.length}명 · 받은 요청 {requests.incoming.length}건</div>
+          <button type="button" className="ghost small-action-button" onClick={() => navigate('/profile')}>내 프로필 관리</button>
+        </div>
 
         <div className="tab-row friends-tab-row kakao-friends-tabs">
           <button type="button" className={tab === 'list' ? 'tab active badge-tab-button' : 'tab badge-tab-button'} onClick={() => setTab('list')}>
@@ -1347,7 +1750,9 @@ function FriendsPage() {
         </div>
 
         {tab === 'list' ? (
-          <div className="friends-kakao-list">
+          <>
+            <div className="friends-section-label">친구 목록</div>
+            <div className="friends-kakao-list">
             {friends.length ? friends.map(item => {
               const displayName = item.nickname || item.name || '사용자'
               const intro = item.one_liner || item.email || '한 줄 소개가 없습니다.'
@@ -1378,7 +1783,8 @@ function FriendsPage() {
                 </article>
               )
             }) : <div className="muted">친구 목록이 없습니다.</div>}
-          </div>
+            </div>
+          </>
         ) : (
           <div className="friends-request-board stack">
             {requests.incoming.length ? requests.incoming.map(item => (

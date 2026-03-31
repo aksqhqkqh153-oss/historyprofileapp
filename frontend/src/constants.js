@@ -4,7 +4,7 @@ export const NAV_ITEMS = [
   { path: '/chats', label: '채팅' },
   { path: '/community', label: '대화' },
   { path: '/questions', label: '질문' },
-  { path: '/more', label: '기타' },
+  { path: '/more', label: '더보기' },
 ]
 
 export const MENU_ITEMS = [
