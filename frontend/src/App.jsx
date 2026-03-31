@@ -583,6 +583,96 @@ const LOCAL_STORAGE_KEYS = {
   introManager: 'historyprofile_local_intro_manager_items',
   introHistory: 'historyprofile_local_intro_manager_history',
   shareLinks: 'historyprofile_local_share_links_items',
+  vaultSettings: 'historyprofile_local_vault_settings',
+}
+
+
+const DEFAULT_VAULT_FOLDERS = ['자료', '이력서', '즐겨찾기', '포트폴리오', '증빙자료', '자기소개서']
+const DEFAULT_VAULT_CATEGORIES = ['자료', '이력서', '포트폴리오', '증빙자료', '자기소개서']
+
+function normalizeVaultSettings(value) {
+  const source = value && typeof value === 'object' ? value : {}
+  const grid = ['3x3', '4x4', '5x5'].includes(source.grid) ? source.grid : '3x3'
+  const headerPosition = ['top', 'bottom'].includes(source.headerPosition) ? source.headerPosition : 'top'
+  const folders = Array.isArray(source.folders)
+    ? source.folders.map(item => String(item || '').trim()).filter(Boolean)
+    : []
+  const categories = Array.isArray(source.categories)
+    ? source.categories.map(item => String(item || '').trim()).filter(Boolean)
+    : []
+  return {
+    grid,
+    headerPosition,
+    folders: folders.length ? folders : [...DEFAULT_VAULT_FOLDERS],
+    categories: categories.length ? categories : [...DEFAULT_VAULT_CATEGORIES],
+  }
+}
+
+function parseLineList(value, fallback = []) {
+  const items = String(value || '').split(/\n|,/).map(item => item.trim()).filter(Boolean)
+  return items.length ? items : fallback
+}
+
+function estimateProfileUploadBytes(profile) {
+  const uploads = Array.isArray(profile?.uploads) ? profile.uploads : []
+  const direct = uploads.reduce((sum, item) => sum + Number(item?.size_bytes || 0), 0)
+  const careerMedia = (profile?.careers || []).reduce((sum, item) => {
+    const mediaItems = Array.isArray(item?.media_items) ? item.media_items : []
+    return sum + mediaItems.reduce((sub, media) => sub + Number(media?.size_bytes || 0), 0)
+  }, 0)
+  return direct + careerMedia
+}
+
+function buildPlanTier(plan) {
+  const usedStorageMb = Number(plan?.used_storage_mb || 0)
+  const hasExtraProfiles = Number(plan?.allowed_profile_count || 0) > Number(plan?.free_profile_limit || 0)
+  const hasLargeChat = Number(plan?.chat_media_limit_mb || 0) > 100
+  if (hasExtraProfiles || hasLargeChat || usedStorageMb > 512) {
+    return {
+      current: {
+        grade: '프로',
+        title: '현재플랜(프로 등급)',
+        profileLimit: Number(plan?.allowed_profile_count || 5),
+        storageGb: Number(plan?.storage_limit_gb || 1),
+        dailyVideoMb: Number(plan?.daily_video_limit_mb || 100),
+        chatMediaMb: Number(plan?.chat_media_limit_mb || 100),
+        visibility: '링크 전용 + 검색 노출',
+        moderation: '신고 / 차단 / 검수 / 멀티프로필 확장',
+      },
+      next: {
+        grade: '비즈니스',
+        title: '다음플랜(비즈니스 등급)',
+        profileLimit: Math.max(Number(plan?.allowed_profile_count || 5) + 5, 10),
+        storageGb: Math.max(Number(plan?.storage_limit_gb || 1) + 1, 2),
+        dailyVideoMb: Math.max(Number(plan?.daily_video_limit_mb || 100) + 100, 200),
+        chatMediaMb: Math.max(Number(plan?.chat_media_limit_mb || 100) + 200, 300),
+        visibility: '링크 전용 + 검색 노출 + 공개 링크 세분화',
+        moderation: '신고 / 차단 / 검수 / 팀형 관리',
+      },
+    }
+  }
+  return {
+    current: {
+      grade: '무료',
+      title: '현재플랜(무료 등급)',
+      profileLimit: Number(plan?.allowed_profile_count || 5),
+      storageGb: Number(plan?.storage_limit_gb || 1),
+      dailyVideoMb: Number(plan?.daily_video_limit_mb || 100),
+      chatMediaMb: Number(plan?.chat_media_limit_mb || 100),
+      visibility: '링크 전용 공개',
+      moderation: '신고 / 차단 / 검수',
+    },
+    next: {
+      grade: '프로',
+      title: '다음플랜(프로 등급)',
+      profileLimit: Math.max(Number(plan?.allowed_profile_count || 5) + 3, 8),
+      storageGb: Math.max(Number(plan?.storage_limit_gb || 1) + 1, 2),
+      dailyVideoMb: Math.max(Number(plan?.daily_video_limit_mb || 100), 200),
+      chatMediaMb: Math.max(Number(plan?.chat_media_limit_mb || 100) + 100, 200),
+      visibility: '링크 전용 + 검색 노출',
+      moderation: '신고 / 차단 / 검수 / 멀티프로필 확장',
+    },
+  }
 }
 
 function safeJsonParse(raw, fallback) {
@@ -661,10 +751,63 @@ function MoreBottomSheet({ open, onClose, onSelect }) {
 
 function StorageVaultPage() {
   const [items, setItems] = useLocalCollection(LOCAL_STORAGE_KEYS.vault, [])
+  const [storedSettings, setStoredSettings] = useLocalCollection(LOCAL_STORAGE_KEYS.vaultSettings, normalizeVaultSettings())
+  const vaultSettings = normalizeVaultSettings(storedSettings)
   const [uploading, setUploading] = useState(false)
   const [filter, setFilter] = useState('all')
-  const [form, setForm] = useState({ category: '이력서', title: '', folder: '기본', tags: '', favorite: false })
+  const [folderFilter, setFolderFilter] = useState('전체')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [planInfo, setPlanInfo] = useState(null)
+  const [profiles, setProfiles] = useState([])
+  const [form, setForm] = useState({ category: vaultSettings.categories[0] || '자료', title: '', folder: vaultSettings.folders[0] || '자료', tags: '', favorite: false })
   const [selectedFile, setSelectedFile] = useState(null)
+  const [draftSettings, setDraftSettings] = useState({
+    grid: vaultSettings.grid,
+    headerPosition: vaultSettings.headerPosition,
+    foldersText: vaultSettings.folders.join('\n'),
+    categoriesText: vaultSettings.categories.join('\n'),
+  })
+
+  useEffect(() => {
+    if (!vaultSettings.categories.includes(form.category) || !vaultSettings.folders.includes(form.folder)) {
+      setForm(prev => ({
+        ...prev,
+        category: vaultSettings.categories.includes(prev.category) ? prev.category : (vaultSettings.categories[0] || '자료'),
+        folder: vaultSettings.folders.includes(prev.folder) ? prev.folder : (vaultSettings.folders[0] || '자료'),
+      }))
+    }
+  }, [vaultSettings.categories, vaultSettings.folders])
+
+  useEffect(() => {
+    api('/api/plan').then(setPlanInfo).catch(() => null)
+    api('/api/profiles').then(data => setProfiles(data.items || [])).catch(() => null)
+  }, [])
+
+  function openSettings() {
+    setDraftSettings({
+      grid: vaultSettings.grid,
+      headerPosition: vaultSettings.headerPosition,
+      foldersText: vaultSettings.folders.join('\n'),
+      categoriesText: vaultSettings.categories.join('\n'),
+    })
+    setSettingsOpen(true)
+  }
+
+  function saveVaultSettings() {
+    const next = normalizeVaultSettings({
+      grid: draftSettings.grid,
+      headerPosition: draftSettings.headerPosition,
+      folders: parseLineList(draftSettings.foldersText, DEFAULT_VAULT_FOLDERS),
+      categories: parseLineList(draftSettings.categoriesText, DEFAULT_VAULT_CATEGORIES),
+    })
+    setStoredSettings(next)
+    setForm(prev => ({
+      ...prev,
+      category: next.categories.includes(prev.category) ? prev.category : next.categories[0],
+      folder: next.folders.includes(prev.folder) ? prev.folder : next.folders[0],
+    }))
+    setSettingsOpen(false)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -676,7 +819,7 @@ function StorageVaultPage() {
         id: makeLocalId('vault'),
         category: form.category,
         title: form.title.trim(),
-        folder: form.folder.trim() || '기본',
+        folder: form.folder.trim() || vaultSettings.folders[0] || '자료',
         tags: splitTags(form.tags),
         favorite: Boolean(form.favorite),
         file_name: uploaded?.item?.name || selectedFile.name,
@@ -686,7 +829,8 @@ function StorageVaultPage() {
         created_at: new Date().toISOString(),
       }
       setItems(current => [item, ...current])
-      setForm({ category: '이력서', title: '', folder: '기본', tags: '', favorite: false })
+      setPlanInfo(prev => prev ? { ...prev, usage: { ...(prev.usage || {}), total_storage_bytes: Number(prev.usage?.total_storage_bytes || 0) + Number(item.size_bytes || 0) } } : prev)
+      setForm({ category: vaultSettings.categories[0] || '자료', title: '', folder: vaultSettings.folders[0] || '자료', tags: '', favorite: false })
       setSelectedFile(null)
       const input = document.getElementById('vault-file-input')
       if (input) input.value = ''
@@ -697,44 +841,102 @@ function StorageVaultPage() {
     }
   }
 
-  const visibleItems = items.filter(item => filter === 'all' ? true : filter === 'favorite' ? item.favorite : item.category === filter)
+  const totalLimitBytes = Number(planInfo?.plan?.storage_limit_bytes || (1024 * 1024 * 1024))
+  const totalLimitLabel = `${(totalLimitBytes / 1024 / 1024 / 1024).toFixed(totalLimitBytes >= 2 * 1024 * 1024 * 1024 ? 0 : 1)}GB`
+  const usedBytes = Number(planInfo?.usage?.total_storage_bytes || items.reduce((sum, item) => sum + Number(item.size_bytes || 0), 0))
+  const usedRatio = Math.max(0, Math.min(100, totalLimitBytes ? (usedBytes / totalLimitBytes) * 100 : 0))
+  const remainingBytes = Math.max(totalLimitBytes - usedBytes, 0)
+  const dailyVideoLimitBytes = Number(planInfo?.plan?.daily_video_limit_bytes || (100 * 1024 * 1024))
+  const dailyVideoBytes = Number(planInfo?.usage?.daily_video_bytes || 0)
+  const folderCards = vaultSettings.folders.map(folder => {
+    const count = folder === '즐겨찾기'
+      ? items.filter(item => item.favorite).length
+      : items.filter(item => item.folder === folder || item.category === folder).length
+    return { name: folder, count }
+  })
+  const profileUsage = profiles.map(profile => ({
+    id: profile.id,
+    name: profile.display_name || profile.title,
+    usedBytes: estimateProfileUploadBytes(profile),
+  }))
+  const sharedBytes = Math.max(usedBytes - profileUsage.reduce((sum, item) => sum + item.usedBytes, 0), 0)
+
+  const visibleItems = items.filter(item => {
+    const matchesFilter = filter === 'all' ? true : filter === 'favorite' ? item.favorite : item.category === filter
+    const matchesFolder = folderFilter === '전체'
+      ? true
+      : folderFilter === '즐겨찾기'
+        ? item.favorite
+        : item.folder === folderFilter || item.category === folderFilter
+    return matchesFilter && matchesFolder
+  })
   const folderCount = new Set(items.map(item => item.folder)).size
+  const gridClass = vaultSettings.grid === '5x5' ? 'vault-folder-grid five' : vaultSettings.grid === '4x4' ? 'vault-folder-grid four' : 'vault-folder-grid three'
+
+  const headerBlock = (
+    <div className="card stack vault-header-card">
+      <div className="split-row responsive-row">
+        <div className="stack gap-4">
+          <strong>저장함</strong>
+          <div className="muted small-text">계정 1개 기준 전체 저장용량 1GB 범위 안에서 자료와 멀티프로필 데이터를 통합 관리합니다.</div>
+        </div>
+        <button type="button" className="icon-button ghost" onClick={openSettings} aria-label="저장함 설정" title="저장함 설정">
+          <IconGlyph name="settings" label="저장함 설정" />
+        </button>
+      </div>
+      <div className="vault-progress-card stack gap-8">
+        <div className="split-row responsive-row"><strong>계정 저장용량</strong><span className="mini-stat">{bytesLabel(usedBytes)} / {totalLimitLabel}</span></div>
+        <div className="vault-progress-track"><span style={{ width: `${usedRatio}%` }} /></div>
+        <div className="split-row responsive-row small-text muted"><span>남은 용량 {bytesLabel(remainingBytes)}</span><span>오늘 영상 {bytesLabel(dailyVideoBytes)} / {bytesLabel(dailyVideoLimitBytes)}</span></div>
+      </div>
+      <div className="mini-stats">
+        <span className="mini-stat">자료 {items.length}</span>
+        <span className="mini-stat">폴더 {folderCount}</span>
+        <span className="mini-stat">즐겨찾기 {items.filter(item => item.favorite).length}</span>
+      </div>
+      <div className={gridClass}>
+        {folderCards.map(folder => (
+          <button key={folder.name} type="button" className={folderFilter === folder.name ? 'vault-folder-tile active' : 'vault-folder-tile'} onClick={() => setFolderFilter(current => current === folder.name ? '전체' : folder.name)}>
+            <span className="vault-folder-icon"><IconGlyph name="folder" label={folder.name} /></span>
+            <strong>{folder.name}</strong>
+            <span className="muted small-text">{folder.count}개</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 
   return (
     <section className="page-stack">
+      {vaultSettings.headerPosition === 'top' ? headerBlock : null}
+
       <div className="card stack">
-        <div className="split-row responsive-row">
-          <div className="stack gap-4">
-            <strong>저장함</strong>
-            <div className="muted small-text">이력서, 포트폴리오, 증빙자료를 태그 · 폴더 · 즐겨찾기로 관리합니다.</div>
-          </div>
-          <div className="mini-stats">
-            <span className="mini-stat">자료 {items.length}</span>
-            <span className="mini-stat">폴더 {folderCount}</span>
-            <span className="mini-stat">즐겨찾기 {items.filter(item => item.favorite).length}</span>
-          </div>
-        </div>
         <form className="stack" onSubmit={handleSubmit}>
           <div className="grid-2">
             <select value={form.category} onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}>
-              <option>이력서</option><option>포트폴리오</option><option>증빙자료</option>
+              {vaultSettings.categories.map(name => <option key={name}>{name}</option>)}
             </select>
-            <input value={form.folder} onChange={e => setForm(prev => ({ ...prev, folder: e.target.value }))} placeholder="폴더명" />
+            <select value={form.folder} onChange={e => setForm(prev => ({ ...prev, folder: e.target.value }))}>
+              {vaultSettings.folders.map(name => <option key={name}>{name}</option>)}
+            </select>
           </div>
           <input value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="자료 제목" />
           <input value={form.tags} onChange={e => setForm(prev => ({ ...prev, tags: e.target.value }))} placeholder="태그를 쉼표로 구분해 입력" />
           <label className="inline-check"><input type="checkbox" checked={form.favorite} onChange={e => setForm(prev => ({ ...prev, favorite: e.target.checked }))} /><span>즐겨찾기 등록</span></label>
           <input id="vault-file-input" type="file" onChange={e => setSelectedFile(e.target.files?.[0] || null)} />
           <div className="split-row responsive-row">
-            <div className="muted small-text">현재 버전은 업로드한 파일 메타데이터를 앱 안에서 정리해 보여줍니다.</div>
+            <div className="muted small-text">일반 파일과 문서도 업로드할 수 있으며, 멀티프로필을 포함한 로그인 계정 전체 저장용량 1GB를 함께 사용합니다.</div>
             <button type="submit" disabled={uploading}>{uploading ? '업로드 중...' : '저장하기'}</button>
           </div>
         </form>
       </div>
 
+      {vaultSettings.headerPosition === 'bottom' ? headerBlock : null}
+
       <div className="card stack">
-        <div className="tab-row responsive-row">
-          {['all', 'favorite', '이력서', '포트폴리오', '증빙자료'].map(name => <button key={name} type="button" className={filter === name ? 'tab active' : 'tab'} onClick={() => setFilter(name)}>{name === 'all' ? '전체' : name === 'favorite' ? '즐겨찾기' : name}</button>)}
+        <div className="tab-row responsive-row wrap-row">
+          {['all', 'favorite', ...vaultSettings.categories].map(name => <button key={name} type="button" className={filter === name ? 'tab active' : 'tab'} onClick={() => setFilter(name)}>{name === 'all' ? '전체' : name === 'favorite' ? '즐겨찾기' : name}</button>)}
+          <button type="button" className={folderFilter === '전체' ? 'tab active subtle' : 'tab subtle'} onClick={() => setFolderFilter('전체')}>폴더 전체</button>
         </div>
         <div className="stack vault-list">
           {visibleItems.length ? visibleItems.map(item => (
@@ -755,6 +957,63 @@ function StorageVaultPage() {
           )) : <div className="muted">표시할 저장 자료가 없습니다.</div>}
         </div>
       </div>
+
+      <div className="card stack">
+        <div className="split-row responsive-row">
+          <strong>멀티프로필 포함 계정 용량 현황</strong>
+          <span className="mini-stat">전체 {bytesLabel(usedBytes)}</span>
+        </div>
+        <div className="stack compact-list">
+          {profileUsage.map(item => (
+            <div key={item.id} className="mini-card split-row responsive-row">
+              <strong>{item.name}</strong>
+              <span className="muted small-text">{bytesLabel(item.usedBytes)}</span>
+            </div>
+          ))}
+          <div className="mini-card split-row responsive-row">
+            <strong>공용 저장함 / 미연결 자료</strong>
+            <span className="muted small-text">{bytesLabel(sharedBytes)}</span>
+          </div>
+        </div>
+      </div>
+
+      {settingsOpen ? (
+        <ModalFrame title="저장함 설정" onClose={() => setSettingsOpen(false)} className="full-screen-modal">
+          <div className="stack">
+            <div className="bordered-box stack">
+              <strong>카테고리 편집</strong>
+              <textarea rows={6} value={draftSettings.categoriesText} onChange={e => setDraftSettings(prev => ({ ...prev, categoriesText: e.target.value }))} placeholder="카테고리를 줄바꿈으로 입력" />
+              <div className="muted small-text">저장함 내 카테고리를 자유롭게 추가 · 수정할 수 있습니다.</div>
+            </div>
+            <div className="bordered-box stack">
+              <strong>저장함 구조변경</strong>
+              <div className="grid-2">
+                <div className="stack">
+                  <label>상단 폴더 아이콘 구조</label>
+                  <select value={draftSettings.grid} onChange={e => setDraftSettings(prev => ({ ...prev, grid: e.target.value }))}>
+                    <option value="3x3">3x3</option>
+                    <option value="4x4">4x4</option>
+                    <option value="5x5">5x5</option>
+                  </select>
+                </div>
+                <div className="stack">
+                  <label>상단/하단 배치</label>
+                  <select value={draftSettings.headerPosition} onChange={e => setDraftSettings(prev => ({ ...prev, headerPosition: e.target.value }))}>
+                    <option value="top">상단 먼저</option>
+                    <option value="bottom">업로드 입력창 아래</option>
+                  </select>
+                </div>
+              </div>
+              <textarea rows={8} value={draftSettings.foldersText} onChange={e => setDraftSettings(prev => ({ ...prev, foldersText: e.target.value }))} placeholder="폴더 이름을 줄바꿈으로 입력" />
+              <div className="muted small-text">예: 자료, 이력서, 즐겨찾기, 포트폴리오, 증빙자료, 자기소개서</div>
+            </div>
+            <div className="action-wrap">
+              <button type="button" className="ghost" onClick={() => setSettingsOpen(false)}>닫기</button>
+              <button type="button" onClick={saveVaultSettings}>저장</button>
+            </div>
+          </div>
+        </ModalFrame>
+      ) : null}
     </section>
   )
 }
@@ -2345,10 +2604,15 @@ function ProfilePage() {
           </ModalFrame>
         ) : null}
         {plan ? (
-          <div className="plan-box">
-            <div>무료 기본 프로필 {plan.free_profile_limit}개 / 현재 허용 {plan.allowed_profile_count}개</div>
+          <div className="plan-box stack gap-8">
+            <div className="split-row responsive-row">
+              <div className="muted">무료 기본 프로필 {plan.free_profile_limit}개 / 현재 허용 {plan.allowed_profile_count}개</div>
+              <div className="action-wrap">
+                <button type="button" className="ghost small-action-button" onClick={() => window.dispatchEvent(new CustomEvent('historyprofile:open-account-storage'))}>내계정용량</button>
+                <button type="button" className="ghost small-action-button" onClick={() => window.dispatchEvent(new CustomEvent('historyprofile:open-plan-compare'))}>현재플랜({buildPlanTier(plan).current.grade} 등급)</button>
+              </div>
+            </div>
             <div>추가 슬롯 권장가: 1개당 월 {Number(plan.recommended_extra_profile_price_krw).toLocaleString()}원, 3개 번들 월 {Number(plan.recommended_extra_profile_bundle_price_krw).toLocaleString()}원</div>
-            <div>저장용량: {plan.used_storage_mb}MB / {plan.storage_limit_gb}GB · 오늘 영상 사용: {usage ? Math.round((usage.daily_video_bytes || 0) / 1024 / 1024 * 100) / 100 : 0}MB / {plan.daily_video_limit_mb}MB</div>
           </div>
         ) : null}
         <div className="tab-row wrap-row">
@@ -2357,7 +2621,7 @@ function ProfilePage() {
       </section>
 
       {selected && plan ? <ProfileOverviewCard profile={selected} expanded /> : null}
-      {selected && plan ? <ProfileManagementSummary profile={selected} plan={plan} usage={usage} /> : null}
+      {selected && plan ? <ProfileManagementSummary profile={selected} plan={plan} usage={usage} profiles={profiles} /> : null}
 
       <section className="card stack">
         <h3>프로필 기본 정보</h3>
@@ -2723,29 +2987,117 @@ function PublicProfilePage() {
 }
 
 
-function ProfileManagementSummary({ profile, plan, usage }) {
+function PlanComparisonModal({ open, onClose, plan }) {
+  if (!open || !plan) return null
+  const tier = buildPlanTier(plan)
+  const rows = [
+    ['프로필 수', `${tier.current.profileLimit}개`, `${tier.next.profileLimit}개`],
+    ['저장용량', `${tier.current.storageGb}GB`, `${tier.next.storageGb}GB`],
+    ['일일 영상 업로드', `${tier.current.dailyVideoMb}MB`, `${tier.next.dailyVideoMb}MB`],
+    ['채팅 미디어 한도', `${tier.current.chatMediaMb}MB`, `${tier.next.chatMediaMb}MB`],
+    ['공개 범위', tier.current.visibility, tier.next.visibility],
+    ['운영/검수', tier.current.moderation, tier.next.moderation],
+  ]
   return (
-    <section className="grid-2">
-      <div className="card stack">
-        <h3>현재 플랜 요약</h3>
-        <div className="muted">무료 프로필 {plan.free_profile_limit}개 / 현재 허용 {plan.allowed_profile_count}개</div>
-        <div className="muted">저장용량 {plan.used_storage_mb}MB / {plan.storage_limit_gb}GB</div>
-        <div className="muted">일일 영상 업로드 제한 {plan.daily_video_limit_mb}MB</div>
-        <div className="muted">채팅 미디어 한도 {plan.chat_media_used_mb}MB / {plan.chat_media_limit_mb}MB</div>
-        <div className="muted">계정 상태 {plan.account_status} · 경고 {plan.warning_count}회 · 휴대폰 인증 {plan.phone_verified ? '완료' : '미완료'}</div>
-        <div className="chip-row">
-          <span className="chip">링크 전용 공개</span>
-          <span className="chip">검색엔진 노출 가능</span>
-          <span className="chip">질문 허용 방식 선택</span>
-          <span className="chip">신고 / 차단 / 검수</span>
+    <ModalFrame title={tier.current.title} onClose={onClose} className="full-screen-modal">
+      <div className="stack">
+        <div className="split-row responsive-row plan-compare-head">
+          <strong>{tier.current.title}</strong>
+          <strong>{tier.next.title}</strong>
+        </div>
+        <div className="plan-compare-table">
+          {rows.map(([label, current, next]) => (
+            <div key={label} className="plan-compare-row">
+              <div className="muted small-text">{label}</div>
+              <div>{current}</div>
+              <div>{next}</div>
+            </div>
+          ))}
         </div>
       </div>
-      <div className="card stack">
-        <h3>대표 한줄 경력</h3>
-        {profile.careers?.length ? profile.careers.map(item => <CareerCard key={item.id} item={item} />) : <div className="muted">등록된 경력이 없습니다.</div>}
-        <div className="muted small-text">저장용량 사용량: {usage ? Math.round((usage.total_storage_bytes || 0) / 1024 / 1024 * 100) / 100 : 0}MB · 오늘 영상 사용량: {usage ? Math.round((usage.daily_video_bytes || 0) / 1024 / 1024 * 100) / 100 : 0}MB</div>
+    </ModalFrame>
+  )
+}
+
+function AccountStorageModal({ open, onClose, plan, usage, profiles }) {
+  if (!open || !plan) return null
+  const profileItems = (profiles || []).map(profile => ({
+    id: profile.id,
+    name: profile.display_name || profile.title,
+    usedBytes: estimateProfileUploadBytes(profile),
+  }))
+  const totalBytes = Number(usage?.total_storage_bytes || 0)
+  const profileTotal = profileItems.reduce((sum, item) => sum + item.usedBytes, 0)
+  const sharedBytes = Math.max(totalBytes - profileTotal, 0)
+  return (
+    <ModalFrame title="내계정용량" onClose={onClose} className="full-screen-modal">
+      <div className="stack">
+        <div className="bordered-box stack">
+          <strong>전체 사용량</strong>
+          <div className="muted">총 {bytesLabel(totalBytes)} / {plan.storage_limit_gb}GB</div>
+          <div className="muted">오늘 영상 사용 {bytesLabel(Number(usage?.daily_video_bytes || 0))} / {bytesLabel(Number(plan.daily_video_limit_bytes || 0))}</div>
+        </div>
+        <div className="stack compact-list">
+          {profileItems.map(item => (
+            <div key={item.id} className="mini-card split-row responsive-row">
+              <strong>{item.name}</strong>
+              <span className="muted small-text">{bytesLabel(item.usedBytes)}</span>
+            </div>
+          ))}
+          <div className="mini-card split-row responsive-row">
+            <strong>공용 저장함 / 공유 데이터</strong>
+            <span className="muted small-text">{bytesLabel(sharedBytes)}</span>
+          </div>
+        </div>
       </div>
-    </section>
+    </ModalFrame>
+  )
+}
+
+function ProfileManagementSummary({ profile, plan, usage, profiles }) {
+  const [storageOpen, setStorageOpen] = useState(false)
+  const [planOpen, setPlanOpen] = useState(false)
+
+  useEffect(() => {
+    function openStorage() { setStorageOpen(true) }
+    function openPlan() { setPlanOpen(true) }
+    window.addEventListener('historyprofile:open-account-storage', openStorage)
+    window.addEventListener('historyprofile:open-plan-compare', openPlan)
+    return () => {
+      window.removeEventListener('historyprofile:open-account-storage', openStorage)
+      window.removeEventListener('historyprofile:open-plan-compare', openPlan)
+    }
+  }, [])
+
+  const tier = buildPlanTier(plan)
+  return (
+    <>
+      <section className="grid-2">
+        <div className="card stack">
+          <div className="action-wrap wrap-row">
+            <button type="button" className="ghost" onClick={() => setStorageOpen(true)}>내계정용량</button>
+            <button type="button" className="ghost" onClick={() => setPlanOpen(true)}>{tier.current.title}</button>
+          </div>
+          <div className="muted">총 저장용량 {plan.used_storage_mb}MB / {plan.storage_limit_gb}GB</div>
+          <div className="muted">일일 영상 업로드 제한 {plan.daily_video_limit_mb}MB</div>
+          <div className="muted">채팅 미디어 한도 {plan.chat_media_used_mb}MB / {plan.chat_media_limit_mb}MB</div>
+          <div className="muted">계정 상태 {plan.account_status} · 경고 {plan.warning_count}회 · 휴대폰 인증 {plan.phone_verified ? '완료' : '미완료'}</div>
+          <div className="chip-row">
+            <span className="chip">링크 전용 공개</span>
+            <span className="chip">검색엔진 노출 가능</span>
+            <span className="chip">질문 허용 방식 선택</span>
+            <span className="chip">신고 / 차단 / 검수</span>
+          </div>
+        </div>
+        <div className="card stack">
+          <h3>대표 한줄 경력</h3>
+          {profile.careers?.length ? profile.careers.map(item => <CareerCard key={item.id} item={item} />) : <div className="muted">등록된 경력이 없습니다.</div>}
+          <div className="muted small-text">저장용량 사용량: {usage ? Math.round((usage.total_storage_bytes || 0) / 1024 / 1024 * 100) / 100 : 0}MB · 오늘 영상 사용량: {usage ? Math.round((usage.daily_video_bytes || 0) / 1024 / 1024 * 100) / 100 : 0}MB</div>
+        </div>
+      </section>
+      <AccountStorageModal open={storageOpen} onClose={() => setStorageOpen(false)} plan={plan} usage={usage} profiles={profiles} />
+      <PlanComparisonModal open={planOpen} onClose={() => setPlanOpen(false)} plan={plan} />
+    </>
   )
 }
 

@@ -1265,7 +1265,7 @@ def user_plan_dict(user: dict, used_storage_bytes: int = 0, chat_media_used_byte
         "used_storage_mb": round(used_storage_bytes / 1024 / 1024, 2),
         "daily_video_limit_bytes": DAILY_VIDEO_LIMIT_BYTES,
         "daily_video_limit_mb": round(DAILY_VIDEO_LIMIT_BYTES / 1024 / 1024, 2),
-        "media_strategy": "텍스트 중심 프로필 + 사진 보조 + 50MB/일 영상 제한",
+        "media_strategy": "텍스트 중심 프로필 + 사진 보조 + 100MB/일 영상 제한",
         "chat_media_limit_bytes": chat_media_limit,
         "chat_media_limit_mb": round(chat_media_limit / 1024 / 1024, 2),
         "chat_media_used_bytes": chat_media_used_bytes,
@@ -1709,7 +1709,7 @@ def upload_file(
         if usage["total_bytes"] + size > get_storage_limit_bytes(user_row):
             raise HTTPException(status_code=400, detail="계정 전체 업로드 한도 1GB를 초과합니다. 추가 용량 플랜이 필요합니다.")
         if media_kind == "video" and usage["daily_video_bytes"] + size > DAILY_VIDEO_LIMIT_BYTES:
-            raise HTTPException(status_code=400, detail="영상 업로드는 계정당 하루 총 50MB까지 가능합니다.")
+            raise HTTPException(status_code=400, detail="영상 업로드는 계정당 하루 총 100MB까지 가능합니다.")
         try:
             uploaded = save_upload(file, category=category, max_bytes=max_bytes)
         except StorageError as exc:

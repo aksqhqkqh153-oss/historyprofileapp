@@ -1149,3 +1149,89 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .bottom-sheet { padding: 12px 14px 20px; }
   .friend-kakao-tag { margin-left: 0; margin-top: 8px; }
 }
+
+.vault-header-card {
+  gap: 14px;
+}
+.vault-progress-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #f8fbff;
+}
+.vault-progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #e6edf7;
+  overflow: hidden;
+}
+.vault-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+}
+.vault-folder-grid {
+  display: grid;
+  gap: 12px;
+}
+.vault-folder-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.vault-folder-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.vault-folder-grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.vault-folder-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 104px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: left;
+}
+.vault-folder-tile.active {
+  border-color: #bcd0ff;
+  background: #f5f9ff;
+  box-shadow: 0 10px 20px rgba(59, 130, 246, .08);
+}
+.vault-folder-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #eef4ff;
+  color: #2563eb;
+}
+.plan-compare-head,
+.plan-compare-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.plan-compare-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.plan-compare-row {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+@media (max-width: 820px) {
+  .vault-folder-grid.three,
+  .vault-folder-grid.four,
+  .vault-folder-grid.five {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .plan-compare-head,
+  .plan-compare-row {
+    grid-template-columns: 1fr;
+  }
+}
