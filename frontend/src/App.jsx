@@ -589,6 +589,28 @@ const LOCAL_STORAGE_KEYS = {
 
 const DEFAULT_VAULT_FOLDERS = ['자료', '이력서', '즐겨찾기', '포트폴리오', '증빙자료', '자기소개서']
 const DEFAULT_VAULT_CATEGORIES = ['자료', '이력서', '포트폴리오', '증빙자료', '자기소개서']
+const VAULT_GRID_LIMITS = { '3x3': 9, '4x4': 16, '5x5': 25 }
+
+function ensureFolderSlots(grid, folders, slots) {
+  const limit = VAULT_GRID_LIMITS[grid] || 9
+  const cleanFolders = Array.from(new Set((folders || []).map(item => String(item || '').trim()).filter(Boolean)))
+  const base = Array.isArray(slots) ? slots.map(item => String(item || '').trim()) : []
+  const next = []
+  for (const name of base) {
+    if (next.length >= limit) break
+    if (!name || next.includes(name) || !cleanFolders.includes(name)) {
+      next.push('')
+    } else {
+      next.push(name)
+    }
+  }
+  for (const folder of cleanFolders) {
+    if (next.length >= limit) break
+    if (!next.includes(folder)) next.push(folder)
+  }
+  while (next.length < limit) next.push('')
+  return next.slice(0, limit)
+}
 
 function normalizeVaultSettings(value) {
   const source = value && typeof value === 'object' ? value : {}
@@ -600,17 +622,37 @@ function normalizeVaultSettings(value) {
   const categories = Array.isArray(source.categories)
     ? source.categories.map(item => String(item || '').trim()).filter(Boolean)
     : []
+  const normalizedFolders = folders.length ? Array.from(new Set(folders)) : [...DEFAULT_VAULT_FOLDERS]
+  const normalizedCategories = categories.length ? Array.from(new Set(categories)) : [...DEFAULT_VAULT_CATEGORIES]
   return {
     grid,
     headerPosition,
-    folders: folders.length ? folders : [...DEFAULT_VAULT_FOLDERS],
-    categories: categories.length ? categories : [...DEFAULT_VAULT_CATEGORIES],
+    folders: normalizedFolders,
+    categories: normalizedCategories,
+    folderSlots: ensureFolderSlots(grid, normalizedFolders, source.folderSlots),
   }
 }
 
 function parseLineList(value, fallback = []) {
   const items = String(value || '').split(/\n|,/).map(item => item.trim()).filter(Boolean)
   return items.length ? items : fallback
+}
+
+function reorderByMove(list, fromIndex, toIndex) {
+  if (fromIndex === toIndex) return [...list]
+  const next = [...list]
+  const [moved] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, moved)
+  return next
+}
+
+function moveFolderSlot(slots, fromIndex, toIndex) {
+  if (fromIndex === toIndex) return [...slots]
+  const next = [...slots]
+  const moving = next[fromIndex]
+  next[fromIndex] = next[toIndex] || ''
+  next[toIndex] = moving || ''
+  return next
 }
 
 function estimateProfileUploadBytes(profile) {
@@ -756,17 +798,26 @@ function StorageVaultPage() {
   const [uploading, setUploading] = useState(false)
   const [filter, setFilter] = useState('all')
   const [folderFilter, setFolderFilter] = useState('전체')
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [currentFolder, setCurrentFolder] = useState('')
+  const [selectedDownloads, setSelectedDownloads] = useState([])
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
+  const [settingsScreen, setSettingsScreen] = useState('')
   const [planInfo, setPlanInfo] = useState(null)
   const [profiles, setProfiles] = useState([])
   const [form, setForm] = useState({ category: vaultSettings.categories[0] || '자료', title: '', folder: vaultSettings.folders[0] || '자료', tags: '', favorite: false })
   const [selectedFile, setSelectedFile] = useState(null)
-  const [draftSettings, setDraftSettings] = useState({
-    grid: vaultSettings.grid,
-    headerPosition: vaultSettings.headerPosition,
-    foldersText: vaultSettings.folders.join('\n'),
-    categoriesText: vaultSettings.categories.join('\n'),
-  })
+  const [draftCategories, setDraftCategories] = useState(vaultSettings.categories.length ? vaultSettings.categories : [...DEFAULT_VAULT_CATEGORIES])
+  const [draftLayout, setDraftLayout] = useState({ grid: vaultSettings.grid, headerPosition: vaultSettings.headerPosition, folderSlots: vaultSettings.folderSlots })
+  const [draggingFolderName, setDraggingFolderName] = useState('')
+  const settingsAnchorRef = useRef(null)
+  const settingsLayerRef = useDismissLayer(settingsMenuOpen, () => setSettingsMenuOpen(false))
+  const folderFileInputRef = useRef(null)
+  const dragTouchTimerRef = useRef(null)
+
+  useEffect(() => {
+    setDraftCategories(vaultSettings.categories.length ? vaultSettings.categories : [...DEFAULT_VAULT_CATEGORIES])
+    setDraftLayout({ grid: vaultSettings.grid, headerPosition: vaultSettings.headerPosition, folderSlots: vaultSettings.folderSlots })
+  }, [vaultSettings.grid, vaultSettings.headerPosition, JSON.stringify(vaultSettings.categories), JSON.stringify(vaultSettings.folderSlots)])
 
   useEffect(() => {
     if (!vaultSettings.categories.includes(form.category) || !vaultSettings.folders.includes(form.folder)) {
@@ -776,42 +827,163 @@ function StorageVaultPage() {
         folder: vaultSettings.folders.includes(prev.folder) ? prev.folder : (vaultSettings.folders[0] || '자료'),
       }))
     }
-  }, [vaultSettings.categories, vaultSettings.folders])
+    if (currentFolder && !vaultSettings.folders.includes(currentFolder)) {
+      setCurrentFolder('')
+      setFolderFilter('전체')
+    }
+  }, [vaultSettings.categories, vaultSettings.folders, currentFolder])
 
   useEffect(() => {
     api('/api/plan').then(setPlanInfo).catch(() => null)
     api('/api/profiles').then(data => setProfiles(data.items || [])).catch(() => null)
   }, [])
 
-  function openSettings() {
-    setDraftSettings({
-      grid: vaultSettings.grid,
-      headerPosition: vaultSettings.headerPosition,
-      foldersText: vaultSettings.folders.join('\n'),
-      categoriesText: vaultSettings.categories.join('\n'),
-    })
-    setSettingsOpen(true)
+  useEffect(() => {
+    setSelectedDownloads(current => current.filter(id => items.some(item => item.id === id)))
+  }, [items])
+
+  useEffect(() => () => {
+    if (dragTouchTimerRef.current) window.clearTimeout(dragTouchTimerRef.current)
+  }, [])
+
+  function syncPlanInfoStorage(sizeBytes, mode = 'add') {
+    setPlanInfo(prev => prev ? {
+      ...prev,
+      usage: {
+        ...(prev.usage || {}),
+        total_storage_bytes: Math.max(0, Number(prev.usage?.total_storage_bytes || 0) + (mode === 'remove' ? -Number(sizeBytes || 0) : Number(sizeBytes || 0))),
+      },
+    } : prev)
   }
 
-  function saveVaultSettings() {
+  function openSettingsScreen(name) {
+    setSettingsMenuOpen(false)
+    setSettingsScreen(name)
+  }
+
+  function closeSettingsScreen() {
+    setSettingsScreen('')
+    setDraggingFolderName('')
+  }
+
+  function saveCategorySettings() {
+    const categories = Array.from(new Set(draftCategories.map(item => String(item || '').trim()).filter(Boolean)))
+    if (!categories.length) {
+      window.alert('카테고리를 1개 이상 입력해주세요.')
+      return
+    }
+    const next = normalizeVaultSettings({ ...vaultSettings, categories })
+    setStoredSettings(next)
+    setForm(prev => ({ ...prev, category: next.categories.includes(prev.category) ? prev.category : next.categories[0] }))
+    closeSettingsScreen()
+  }
+
+  function saveLayoutSettings() {
+    const folderNames = Array.from(new Set(draftLayout.folderSlots.map(item => String(item || '').trim()).filter(Boolean)))
+    if (!folderNames.length) {
+      window.alert('폴더를 1개 이상 배치해주세요.')
+      return
+    }
     const next = normalizeVaultSettings({
-      grid: draftSettings.grid,
-      headerPosition: draftSettings.headerPosition,
-      folders: parseLineList(draftSettings.foldersText, DEFAULT_VAULT_FOLDERS),
-      categories: parseLineList(draftSettings.categoriesText, DEFAULT_VAULT_CATEGORIES),
+      ...vaultSettings,
+      grid: draftLayout.grid,
+      headerPosition: draftLayout.headerPosition,
+      folders: folderNames,
+      folderSlots: draftLayout.folderSlots,
     })
     setStoredSettings(next)
     setForm(prev => ({
       ...prev,
-      category: next.categories.includes(prev.category) ? prev.category : next.categories[0],
       folder: next.folders.includes(prev.folder) ? prev.folder : next.folders[0],
+      category: next.categories.includes(prev.category) ? prev.category : next.categories[0],
     }))
-    setSettingsOpen(false)
+    if (currentFolder && !next.folders.includes(currentFolder)) setCurrentFolder('')
+    closeSettingsScreen()
+  }
+
+  function updateCategoryRow(index, value) {
+    setDraftCategories(current => current.map((item, idx) => idx === index ? value : item))
+  }
+
+  function addCategoryRow() {
+    setDraftCategories(current => [...current, ''])
+  }
+
+  function removeCategoryRow(index) {
+    setDraftCategories(current => current.length <= 1 ? current : current.filter((_, idx) => idx !== index))
+  }
+
+  function changeLayoutGrid(nextGrid) {
+    setDraftLayout(current => {
+      const nextFolders = current.folderSlots.filter(Boolean)
+      return { ...current, grid: nextGrid, folderSlots: ensureFolderSlots(nextGrid, nextFolders, current.folderSlots) }
+    })
+  }
+
+  function updateLayoutSlot(index, value) {
+    const nextValue = String(value || '').trim()
+    setDraftLayout(current => {
+      const nextSlots = [...current.folderSlots]
+      if (nextValue) {
+        const duplicateIndex = nextSlots.findIndex((item, idx) => idx !== index && item === nextValue)
+        if (duplicateIndex >= 0) nextSlots[duplicateIndex] = ''
+      }
+      nextSlots[index] = nextValue
+      return { ...current, folderSlots: nextSlots }
+    })
+  }
+
+  function startDragForIndex(index, isTouch = false) {
+    const name = draftLayout.folderSlots[index]
+    if (!name) return
+    if (dragTouchTimerRef.current) window.clearTimeout(dragTouchTimerRef.current)
+    if (isTouch) {
+      dragTouchTimerRef.current = window.setTimeout(() => setDraggingFolderName(name), 220)
+    } else {
+      setDraggingFolderName(name)
+    }
+  }
+
+  function clearDragState() {
+    if (dragTouchTimerRef.current) {
+      window.clearTimeout(dragTouchTimerRef.current)
+      dragTouchTimerRef.current = null
+    }
+    setDraggingFolderName('')
+  }
+
+  function moveDraggedFolder(toIndex) {
+    if (!draggingFolderName) return
+    setDraftLayout(current => {
+      const fromIndex = current.folderSlots.findIndex(item => item === draggingFolderName)
+      if (fromIndex < 0 || fromIndex === toIndex) return current
+      return { ...current, folderSlots: moveFolderSlot(current.folderSlots, fromIndex, toIndex) }
+    })
+  }
+
+  function openFolder(name) {
+    setCurrentFolder(name)
+    setFolderFilter(name)
+    setSelectedDownloads([])
+    setForm(prev => ({ ...prev, folder: name, category: vaultSettings.categories.includes(name) ? name : prev.category }))
+  }
+
+  function closeFolderView() {
+    setCurrentFolder('')
+    setFolderFilter('전체')
+    setSelectedDownloads([])
+  }
+
+  function toggleDownloadItem(id) {
+    setSelectedDownloads(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.title.trim() || !selectedFile) { window.alert('제목과 파일을 입력해주세요.'); return }
+    if (!form.title.trim() || !selectedFile) {
+      window.alert('제목과 파일을 입력해주세요.')
+      return
+    }
     setUploading(true)
     try {
       const uploaded = await uploadFile(selectedFile, 'vault')
@@ -819,7 +991,7 @@ function StorageVaultPage() {
         id: makeLocalId('vault'),
         category: form.category,
         title: form.title.trim(),
-        folder: form.folder.trim() || vaultSettings.folders[0] || '자료',
+        folder: (currentFolder || form.folder || vaultSettings.folders[0] || '자료').trim(),
         tags: splitTags(form.tags),
         favorite: Boolean(form.favorite),
         file_name: uploaded?.item?.name || selectedFile.name,
@@ -829,16 +1001,32 @@ function StorageVaultPage() {
         created_at: new Date().toISOString(),
       }
       setItems(current => [item, ...current])
-      setPlanInfo(prev => prev ? { ...prev, usage: { ...(prev.usage || {}), total_storage_bytes: Number(prev.usage?.total_storage_bytes || 0) + Number(item.size_bytes || 0) } } : prev)
-      setForm({ category: vaultSettings.categories[0] || '자료', title: '', folder: vaultSettings.folders[0] || '자료', tags: '', favorite: false })
+      syncPlanInfoStorage(item.size_bytes, 'add')
+      setForm({ category: vaultSettings.categories[0] || '자료', title: '', folder: currentFolder || vaultSettings.folders[0] || '자료', tags: '', favorite: false })
       setSelectedFile(null)
       const input = document.getElementById('vault-file-input')
       if (input) input.value = ''
+      if (folderFileInputRef.current) folderFileInputRef.current.value = ''
     } catch (err) {
       window.alert(err.message)
     } finally {
       setUploading(false)
     }
+  }
+
+  function removeItem(itemId) {
+    const target = items.find(entry => entry.id === itemId)
+    setItems(current => current.filter(entry => entry.id !== itemId))
+    if (target) syncPlanInfoStorage(target.size_bytes, 'remove')
+  }
+
+  function downloadSelectedFiles() {
+    const targets = currentFolderItems.filter(item => selectedDownloads.includes(item.id) && item.file_url)
+    if (!targets.length) {
+      window.alert('다운로드할 파일을 선택해주세요.')
+      return
+    }
+    targets.forEach(item => window.open(item.file_url, '_blank', 'noopener,noreferrer'))
   }
 
   const totalLimitBytes = Number(planInfo?.plan?.storage_limit_bytes || (1024 * 1024 * 1024))
@@ -848,12 +1036,14 @@ function StorageVaultPage() {
   const remainingBytes = Math.max(totalLimitBytes - usedBytes, 0)
   const dailyVideoLimitBytes = Number(planInfo?.plan?.daily_video_limit_bytes || (100 * 1024 * 1024))
   const dailyVideoBytes = Number(planInfo?.usage?.daily_video_bytes || 0)
-  const folderCards = vaultSettings.folders.map(folder => {
-    const count = folder === '즐겨찾기'
+
+  const folderCards = vaultSettings.folderSlots.map((folder, index) => {
+    const count = !folder ? 0 : folder === '즐겨찾기'
       ? items.filter(item => item.favorite).length
       : items.filter(item => item.folder === folder || item.category === folder).length
-    return { name: folder, count }
+    return { key: `${folder || 'empty'}-${index}`, name: folder, count, index }
   })
+
   const profileUsage = profiles.map(profile => ({
     id: profile.id,
     name: profile.display_name || profile.title,
@@ -870,38 +1060,81 @@ function StorageVaultPage() {
         : item.folder === folderFilter || item.category === folderFilter
     return matchesFilter && matchesFolder
   })
+  const currentFolderItems = currentFolder ? items.filter(item => item.folder === currentFolder || item.category === currentFolder) : []
   const folderCount = new Set(items.map(item => item.folder)).size
   const gridClass = vaultSettings.grid === '5x5' ? 'vault-folder-grid five' : vaultSettings.grid === '4x4' ? 'vault-folder-grid four' : 'vault-folder-grid three'
+  const previewGridClass = draftLayout.grid === '5x5' ? 'vault-folder-grid five vault-grid-preview' : draftLayout.grid === '4x4' ? 'vault-folder-grid four vault-grid-preview' : 'vault-folder-grid three vault-grid-preview'
+
+  const settingsMenu = (
+    <div className="vault-settings-menu stack gap-8" ref={settingsLayerRef}>
+      <button type="button" className="dropdown-item ghost" onClick={() => openSettingsScreen('categories')}>카테고리 편집</button>
+      <button type="button" className="dropdown-item ghost" onClick={() => openSettingsScreen('layout')}>저장함 구조변경</button>
+    </div>
+  )
 
   const headerBlock = (
     <div className="card stack vault-header-card">
-      <div className="split-row responsive-row">
+      <div className="split-row responsive-row vault-header-top">
         <div className="stack gap-4">
           <strong>저장함</strong>
           <div className="muted small-text">계정 1개 기준 전체 저장용량 1GB 범위 안에서 자료와 멀티프로필 데이터를 통합 관리합니다.</div>
         </div>
-        <button type="button" className="icon-button ghost" onClick={openSettings} aria-label="저장함 설정" title="저장함 설정">
-          <IconGlyph name="settings" label="저장함 설정" />
-        </button>
+        <div className="popup-anchor-group popup-anchor-group-right vault-settings-anchor" ref={settingsAnchorRef}>
+          <button type="button" className="icon-button ghost" onClick={() => setSettingsMenuOpen(current => !current)} aria-label="저장함 설정" title="저장함 설정">
+            <IconGlyph name="settings" label="저장함 설정" />
+          </button>
+          {settingsMenuOpen ? settingsMenu : null}
+        </div>
       </div>
-      <div className="vault-progress-card stack gap-8">
-        <div className="split-row responsive-row"><strong>계정 저장용량</strong><span className="mini-stat">{bytesLabel(usedBytes)} / {totalLimitLabel}</span></div>
-        <div className="vault-progress-track"><span style={{ width: `${usedRatio}%` }} /></div>
-        <div className="split-row responsive-row small-text muted"><span>남은 용량 {bytesLabel(remainingBytes)}</span><span>오늘 영상 {bytesLabel(dailyVideoBytes)} / {bytesLabel(dailyVideoLimitBytes)}</span></div>
+
+      <div className="vault-summary-grid">
+        <div className="vault-progress-card stack gap-8">
+          <div className="split-row responsive-row"><strong>계정 저장용량</strong><span className="mini-stat">{bytesLabel(usedBytes)} / {totalLimitLabel}</span></div>
+          <div className="vault-progress-track"><span style={{ width: `${usedRatio}%` }} /></div>
+          <div className="split-row responsive-row small-text muted"><span>남은 용량 {bytesLabel(remainingBytes)}</span><span>오늘 영상 {bytesLabel(dailyVideoBytes)} / {bytesLabel(dailyVideoLimitBytes)}</span></div>
+        </div>
+        <div className="vault-progress-card stack gap-8">
+          <div className="split-row responsive-row"><strong>멀티프로필 포함 계정용량 현황</strong><span className="mini-stat">전체 {bytesLabel(usedBytes)}</span></div>
+          <div className="stack compact-list vault-usage-list">
+            {profileUsage.map(item => (
+              <div key={item.id} className="mini-card split-row responsive-row">
+                <strong>{item.name}</strong>
+                <span className="muted small-text">{bytesLabel(item.usedBytes)}</span>
+              </div>
+            ))}
+            <div className="mini-card split-row responsive-row">
+              <strong>공용 저장함 / 미연결 자료</strong>
+              <span className="muted small-text">{bytesLabel(sharedBytes)}</span>
+            </div>
+          </div>
+        </div>
       </div>
+
       <div className="mini-stats">
         <span className="mini-stat">자료 {items.length}</span>
         <span className="mini-stat">폴더 {folderCount}</span>
         <span className="mini-stat">즐겨찾기 {items.filter(item => item.favorite).length}</span>
       </div>
+
       <div className={gridClass}>
-        {folderCards.map(folder => (
-          <button key={folder.name} type="button" className={folderFilter === folder.name ? 'vault-folder-tile active' : 'vault-folder-tile'} onClick={() => setFolderFilter(current => current === folder.name ? '전체' : folder.name)}>
+        {folderCards.map(folder => folder.name ? (
+          <button key={folder.key} type="button" className={currentFolder === folder.name ? 'vault-folder-tile active' : 'vault-folder-tile'} onClick={() => openFolder(folder.name)}>
             <span className="vault-folder-icon"><IconGlyph name="folder" label={folder.name} /></span>
             <strong>{folder.name}</strong>
             <span className="muted small-text">{folder.count}개</span>
           </button>
+        ) : (
+          <div key={folder.key} className="vault-folder-tile empty" aria-hidden="true">
+            <span className="vault-folder-icon"><IconGlyph name="folder" label="빈칸" /></span>
+            <strong>빈칸</strong>
+            <span className="muted small-text">배치 가능</span>
+          </div>
         ))}
+      </div>
+
+      <div className="tab-row responsive-row wrap-row vault-filter-row">
+        {['all', 'favorite', ...vaultSettings.categories].map(name => <button key={name} type="button" className={filter === name ? 'tab active' : 'tab'} onClick={() => setFilter(name)}>{name === 'all' ? '전체' : name === 'favorite' ? '즐겨찾기' : name}</button>)}
+        <button type="button" className={folderFilter === '전체' ? 'tab active subtle' : 'tab subtle'} onClick={() => { setFolderFilter('전체'); setCurrentFolder('') }}>폴더 전체</button>
       </div>
     </div>
   )
@@ -910,20 +1143,57 @@ function StorageVaultPage() {
     <section className="page-stack">
       {vaultSettings.headerPosition === 'top' ? headerBlock : null}
 
+      {currentFolder ? (
+        <div className="card stack vault-folder-detail-card">
+          <div className="split-row responsive-row">
+            <div className="stack gap-4">
+              <div className="small-text muted">선택 폴더</div>
+              <strong>{currentFolder}</strong>
+              <div className="muted small-text">이 폴더 안에서 바로 파일을 첨부하고, 선택한 파일을 다운로드할 수 있습니다.</div>
+            </div>
+            <div className="action-wrap">
+              <button type="button" className="ghost" onClick={() => folderFileInputRef.current?.click()}>파일첨부</button>
+              <button type="button" onClick={downloadSelectedFiles}>다운로드</button>
+            </div>
+          </div>
+          <input ref={folderFileInputRef} id="vault-file-input" type="file" onChange={e => { setSelectedFile(e.target.files?.[0] || null); setForm(prev => ({ ...prev, folder: currentFolder })) }} />
+          {selectedFile ? <div className="mini-card">선택 파일: <strong>{selectedFile.name}</strong> · {bytesLabel(selectedFile.size)}</div> : null}
+          <div className="stack vault-list compact-list">
+            {currentFolderItems.length ? currentFolderItems.map(item => (
+              <label key={item.id} className="vault-item vault-item-selectable">
+                <div className="split-row responsive-row">
+                  <span className="stack gap-4">
+                    <strong>{item.title}</strong>
+                    <span className="muted small-text">{item.file_name || '첨부파일'} · {bytesLabel(item.size_bytes)}</span>
+                  </span>
+                  <span className="action-wrap">
+                    <input type="checkbox" checked={selectedDownloads.includes(item.id)} onChange={() => toggleDownloadItem(item.id)} />
+                    <button type="button" className="ghost" onClick={() => removeItem(item.id)}>삭제</button>
+                  </span>
+                </div>
+              </label>
+            )) : <div className="muted">이 폴더에는 아직 파일이 없습니다.</div>}
+          </div>
+          <div className="action-wrap">
+            <button type="button" className="ghost" onClick={closeFolderView}>폴더 목록으로</button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="card stack">
         <form className="stack" onSubmit={handleSubmit}>
           <div className="grid-2">
             <select value={form.category} onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}>
               {vaultSettings.categories.map(name => <option key={name}>{name}</option>)}
             </select>
-            <select value={form.folder} onChange={e => setForm(prev => ({ ...prev, folder: e.target.value }))}>
+            <select value={currentFolder || form.folder} onChange={e => setForm(prev => ({ ...prev, folder: e.target.value }))} disabled={Boolean(currentFolder)}>
               {vaultSettings.folders.map(name => <option key={name}>{name}</option>)}
             </select>
           </div>
           <input value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="자료 제목" />
           <input value={form.tags} onChange={e => setForm(prev => ({ ...prev, tags: e.target.value }))} placeholder="태그를 쉼표로 구분해 입력" />
           <label className="inline-check"><input type="checkbox" checked={form.favorite} onChange={e => setForm(prev => ({ ...prev, favorite: e.target.checked }))} /><span>즐겨찾기 등록</span></label>
-          <input id="vault-file-input" type="file" onChange={e => setSelectedFile(e.target.files?.[0] || null)} />
+          {!currentFolder ? <input id="vault-file-input" type="file" onChange={e => setSelectedFile(e.target.files?.[0] || null)} /> : null}
           <div className="split-row responsive-row">
             <div className="muted small-text">일반 파일과 문서도 업로드할 수 있으며, 멀티프로필을 포함한 로그인 계정 전체 저장용량 1GB를 함께 사용합니다.</div>
             <button type="submit" disabled={uploading}>{uploading ? '업로드 중...' : '저장하기'}</button>
@@ -934,10 +1204,6 @@ function StorageVaultPage() {
       {vaultSettings.headerPosition === 'bottom' ? headerBlock : null}
 
       <div className="card stack">
-        <div className="tab-row responsive-row wrap-row">
-          {['all', 'favorite', ...vaultSettings.categories].map(name => <button key={name} type="button" className={filter === name ? 'tab active' : 'tab'} onClick={() => setFilter(name)}>{name === 'all' ? '전체' : name === 'favorite' ? '즐겨찾기' : name}</button>)}
-          <button type="button" className={folderFilter === '전체' ? 'tab active subtle' : 'tab subtle'} onClick={() => setFolderFilter('전체')}>폴더 전체</button>
-        </div>
         <div className="stack vault-list">
           {visibleItems.length ? visibleItems.map(item => (
             <article key={item.id} className="vault-item">
@@ -950,7 +1216,7 @@ function StorageVaultPage() {
                 <div className="action-wrap">
                   {item.favorite ? <span className="mini-stat favorite">즐겨찾기</span> : null}
                   {item.file_url ? <a className="button-link" href={item.file_url} target="_blank" rel="noreferrer">열기</a> : null}
-                  <button type="button" className="ghost" onClick={() => setItems(current => current.filter(entry => entry.id !== item.id))}>삭제</button>
+                  <button type="button" className="ghost" onClick={() => removeItem(item.id)}>삭제</button>
                 </div>
               </div>
             </article>
@@ -958,58 +1224,85 @@ function StorageVaultPage() {
         </div>
       </div>
 
-      <div className="card stack">
-        <div className="split-row responsive-row">
-          <strong>멀티프로필 포함 계정 용량 현황</strong>
-          <span className="mini-stat">전체 {bytesLabel(usedBytes)}</span>
-        </div>
-        <div className="stack compact-list">
-          {profileUsage.map(item => (
-            <div key={item.id} className="mini-card split-row responsive-row">
-              <strong>{item.name}</strong>
-              <span className="muted small-text">{bytesLabel(item.usedBytes)}</span>
-            </div>
-          ))}
-          <div className="mini-card split-row responsive-row">
-            <strong>공용 저장함 / 미연결 자료</strong>
-            <span className="muted small-text">{bytesLabel(sharedBytes)}</span>
-          </div>
-        </div>
-      </div>
-
-      {settingsOpen ? (
-        <ModalFrame title="저장함 설정" onClose={() => setSettingsOpen(false)} className="full-screen-modal">
+      {settingsScreen === 'categories' ? (
+        <ModalFrame title="카테고리 편집" onClose={closeSettingsScreen} className="full-screen-modal">
           <div className="stack">
-            <div className="bordered-box stack">
-              <strong>카테고리 편집</strong>
-              <textarea rows={6} value={draftSettings.categoriesText} onChange={e => setDraftSettings(prev => ({ ...prev, categoriesText: e.target.value }))} placeholder="카테고리를 줄바꿈으로 입력" />
-              <div className="muted small-text">저장함 내 카테고리를 자유롭게 추가 · 수정할 수 있습니다.</div>
-            </div>
-            <div className="bordered-box stack">
-              <strong>저장함 구조변경</strong>
-              <div className="grid-2">
-                <div className="stack">
-                  <label>상단 폴더 아이콘 구조</label>
-                  <select value={draftSettings.grid} onChange={e => setDraftSettings(prev => ({ ...prev, grid: e.target.value }))}>
-                    <option value="3x3">3x3</option>
-                    <option value="4x4">4x4</option>
-                    <option value="5x5">5x5</option>
-                  </select>
+            <div className="muted small-text">추가 버튼을 눌러 카테고리 칸을 늘리고, 각 칸을 눌러 이름을 수정할 수 있습니다.</div>
+            <div className="stack compact-list">
+              {draftCategories.map((item, index) => (
+                <div key={`category-${index}`} className="vault-setting-row">
+                  <input value={item} onChange={e => updateCategoryRow(index, e.target.value)} placeholder={`카테고리 ${index + 1}`} />
+                  <button type="button" className="ghost" onClick={() => removeCategoryRow(index)}>삭제</button>
                 </div>
-                <div className="stack">
-                  <label>상단/하단 배치</label>
-                  <select value={draftSettings.headerPosition} onChange={e => setDraftSettings(prev => ({ ...prev, headerPosition: e.target.value }))}>
-                    <option value="top">상단 먼저</option>
-                    <option value="bottom">업로드 입력창 아래</option>
-                  </select>
-                </div>
-              </div>
-              <textarea rows={8} value={draftSettings.foldersText} onChange={e => setDraftSettings(prev => ({ ...prev, foldersText: e.target.value }))} placeholder="폴더 이름을 줄바꿈으로 입력" />
-              <div className="muted small-text">예: 자료, 이력서, 즐겨찾기, 포트폴리오, 증빙자료, 자기소개서</div>
+              ))}
             </div>
             <div className="action-wrap">
-              <button type="button" className="ghost" onClick={() => setSettingsOpen(false)}>닫기</button>
-              <button type="button" onClick={saveVaultSettings}>저장</button>
+              <button type="button" className="ghost" onClick={addCategoryRow}>추가</button>
+              <button type="button" onClick={saveCategorySettings}>저장</button>
+            </div>
+          </div>
+        </ModalFrame>
+      ) : null}
+
+      {settingsScreen === 'layout' ? (
+        <ModalFrame title="저장함 구조변경" onClose={closeSettingsScreen} className="full-screen-modal">
+          <div className="stack">
+            <div className="grid-2">
+              <div className="stack">
+                <label>상단 폴더 아이콘 구조</label>
+                <select value={draftLayout.grid} onChange={e => changeLayoutGrid(e.target.value)}>
+                  <option value="3x3">3x3</option>
+                  <option value="4x4">4x4</option>
+                  <option value="5x5">5x5</option>
+                </select>
+              </div>
+              <div className="stack">
+                <label>상단/하단 배치</label>
+                <select value={draftLayout.headerPosition} onChange={e => setDraftLayout(prev => ({ ...prev, headerPosition: e.target.value }))}>
+                  <option value="top">상단 먼저</option>
+                  <option value="bottom">업로드 입력창 아래</option>
+                </select>
+              </div>
+            </div>
+            <div className="stack gap-8">
+              <strong>미리보기</strong>
+              <div className={previewGridClass}>
+                {draftLayout.folderSlots.map((folder, index) => (
+                  <div
+                    key={`slot-${index}`}
+                    className={draggingFolderName === folder && folder ? 'vault-folder-tile vault-preview-tile dragging' : 'vault-folder-tile vault-preview-tile'}
+                    draggable={Boolean(folder)}
+                    onDragStart={() => setDraggingFolderName(folder || '')}
+                    onDragOver={e => { if (draggingFolderName) e.preventDefault() }}
+                    onDrop={e => { e.preventDefault(); moveDraggedFolder(index); clearDragState() }}
+                    onDragEnd={clearDragState}
+                    onPointerDown={e => startDragForIndex(index, e.pointerType === 'touch')}
+                    onPointerEnter={() => { if (draggingFolderName) moveDraggedFolder(index) }}
+                    onPointerUp={clearDragState}
+                    onPointerCancel={clearDragState}
+                  >
+                    <span className="vault-folder-icon"><IconGlyph name="folder" label={folder || '빈칸'} /></span>
+                    <strong>{folder || '빈칸'}</strong>
+                    <span className="muted small-text">{folder ? '끌어서 이동' : '배치 가능'}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="muted small-text">PC에서는 마우스로 끌어 이동하고, 모바일에서는 폴더를 길게 눌러 잡은 뒤 원하는 위치로 옮긴 후 손을 떼면 순서가 바뀝니다.</div>
+            </div>
+            <div className="stack compact-list">
+              <strong>텍스트 위치 지정</strong>
+              <div className="vault-slot-list">
+                {draftLayout.folderSlots.map((folder, index) => (
+                  <div key={`slot-input-${index}`} className="vault-setting-row">
+                    <span className="mini-stat">{index + 1}</span>
+                    <input value={folder} onChange={e => updateLayoutSlot(index, e.target.value)} placeholder={`슬롯 ${index + 1}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="action-wrap">
+              <button type="button" className="ghost" onClick={closeSettingsScreen}>닫기</button>
+              <button type="button" onClick={saveLayoutSettings}>저장</button>
             </div>
           </div>
         </ModalFrame>
@@ -1017,6 +1310,7 @@ function StorageVaultPage() {
     </section>
   )
 }
+
 
 function IntroductionsManagerPage() {
   const [items, setItems] = useLocalCollection(LOCAL_STORAGE_KEYS.introManager, [])
