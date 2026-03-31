@@ -809,6 +809,8 @@ function StorageVaultPage() {
   const [draftCategories, setDraftCategories] = useState(vaultSettings.categories.length ? vaultSettings.categories : [...DEFAULT_VAULT_CATEGORIES])
   const [draftLayout, setDraftLayout] = useState({ grid: vaultSettings.grid, headerPosition: vaultSettings.headerPosition, folderSlots: vaultSettings.folderSlots })
   const [draggingFolderName, setDraggingFolderName] = useState('')
+  const [emptySlotAction, setEmptySlotAction] = useState({ index: -1, mode: '' })
+  const [newFolderName, setNewFolderName] = useState('')
   const settingsAnchorRef = useRef(null)
   const settingsLayerRef = useDismissLayer(settingsMenuOpen, () => setSettingsMenuOpen(false))
   const folderFileInputRef = useRef(null)
@@ -978,6 +980,36 @@ function StorageVaultPage() {
     setSelectedDownloads(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
   }
 
+  function startEmptySlotCreate(index) {
+    if (emptySlotAction.index !== index) {
+      setEmptySlotAction({ index, mode: 'hint' })
+      setNewFolderName('')
+      return
+    }
+    if (emptySlotAction.mode === 'hint') {
+      setEmptySlotAction({ index, mode: 'edit' })
+      return
+    }
+  }
+
+  function createFolderFromEmptySlot(index) {
+    const name = String(newFolderName || '').trim()
+    if (!name) {
+      window.alert('폴더명을 입력해주세요.')
+      return
+    }
+    if (vaultSettings.folders.includes(name)) {
+      window.alert('이미 있는 폴더명입니다.')
+      return
+    }
+    const nextSlots = [...vaultSettings.folderSlots]
+    nextSlots[index] = name
+    const next = normalizeVaultSettings({ ...vaultSettings, folders: [...vaultSettings.folders, name], folderSlots: nextSlots })
+    setStoredSettings(next)
+    setEmptySlotAction({ index: -1, mode: '' })
+    setNewFolderName('')
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.title.trim() || !selectedFile) {
@@ -1120,15 +1152,25 @@ function StorageVaultPage() {
         {folderCards.map(folder => folder.name ? (
           <button key={folder.key} type="button" className={currentFolder === folder.name ? 'vault-folder-tile active' : 'vault-folder-tile'} onClick={() => openFolder(folder.name)}>
             <span className="vault-folder-icon"><IconGlyph name="folder" label={folder.name} /></span>
-            <strong>{folder.name}</strong>
-            <span className="muted small-text">{folder.count}개</span>
+            <strong className="vault-folder-name">{folder.name}</strong>
+            <span className="vault-folder-count">{folder.count}개</span>
           </button>
         ) : (
-          <div key={folder.key} className="vault-folder-tile empty" aria-hidden="true">
+          <button key={folder.key} type="button" className={emptySlotAction.index === folder.index ? 'vault-folder-tile empty active empty-action' : 'vault-folder-tile empty'} onClick={() => startEmptySlotCreate(folder.index)}>
             <span className="vault-folder-icon"><IconGlyph name="folder" label="빈칸" /></span>
-            <strong>빈칸</strong>
-            <span className="muted small-text">배치 가능</span>
-          </div>
+            {emptySlotAction.index === folder.index && emptySlotAction.mode === 'edit' ? (
+              <span className="stack gap-8 full-width" onClick={e => e.stopPropagation()}>
+                <strong className="vault-folder-name">추가생성</strong>
+                <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="폴더명 입력" />
+                <button type="button" className="ghost small-button" onClick={e => { e.stopPropagation(); createFolderFromEmptySlot(folder.index) }}>생성</button>
+              </span>
+            ) : (
+              <>
+                <strong className="vault-folder-name">{emptySlotAction.index === folder.index ? '추가생성' : '빈칸'}</strong>
+                <span className="vault-folder-count">{emptySlotAction.index === folder.index ? '한 번 더 누르면 이름 입력' : '배치 가능'}</span>
+              </>
+            )}
+          </button>
         ))}
       </div>
 
@@ -1317,6 +1359,10 @@ function IntroductionsManagerPage() {
   const [history, setHistory] = useLocalCollection(LOCAL_STORAGE_KEYS.introHistory, [])
   const [selectedId, setSelectedId] = useState('')
   const [form, setForm] = useState({ company: '', job: '', question: '', answer: '' })
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [sortBy, setSortBy] = useState('최신등록')
+  const settingsAnchorRef = useRef(null)
+  const settingsLayerRef = useDismissLayer(settingsOpen, () => setSettingsOpen(false))
 
   useEffect(() => {
     const selected = items.find(item => item.id === selectedId)
@@ -1326,7 +1372,16 @@ function IntroductionsManagerPage() {
   function saveSet(e) {
     e.preventDefault()
     if (!form.company.trim() || !form.job.trim() || !form.question.trim()) { window.alert('회사, 직무, 문항을 입력해주세요.'); return }
-    const payload = { id: selectedId || makeLocalId('intro'), ...form, updated_at: new Date().toISOString() }
+    const existing = items.find(item => item.id === selectedId)
+    const createdAt = existing?.created_at || new Date().toISOString()
+    const payload = {
+      id: selectedId || makeLocalId('intro'),
+      ...form,
+      alias: existing?.alias || '',
+      favorite: Boolean(existing?.favorite),
+      created_at: createdAt,
+      updated_at: new Date().toISOString(),
+    }
     setItems(current => {
       const next = current.some(item => item.id === payload.id) ? current.map(item => item.id === payload.id ? payload : item) : [payload, ...current]
       return next
@@ -1335,12 +1390,71 @@ function IntroductionsManagerPage() {
     setSelectedId(payload.id)
   }
 
+  function toggleFavorite(itemId) {
+    setItems(current => current.map(item => item.id === itemId ? { ...item, favorite: !item.favorite } : item))
+  }
+
+  function editAlias() {
+    if (!selectedId) {
+      window.alert('별칭을 입력할 파일을 먼저 선택해주세요.')
+      return
+    }
+    const currentItem = items.find(item => item.id === selectedId)
+    const alias = window.prompt('파일별 별칭을 입력해주세요.', currentItem?.alias || '')
+    if (alias === null) return
+    setItems(current => current.map(item => item.id === selectedId ? { ...item, alias: alias.trim() } : item))
+    setSettingsOpen(false)
+  }
+
   const selected = items.find(item => item.id === selectedId)
+  const sortedItems = [...items].sort((a, b) => {
+    if (sortBy === '즐겨찾기') return Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || new Date(b.created_at || b.updated_at || 0) - new Date(a.created_at || a.updated_at || 0)
+    if (sortBy === '등록일') return new Date(a.created_at || a.updated_at || 0) - new Date(b.created_at || b.updated_at || 0)
+    if (sortBy === '파일명') return `${a.company} ${a.job} ${a.question}`.localeCompare(`${b.company} ${b.job} ${b.question}`, 'ko')
+    if (sortBy === '별칭') return String(a.alias || '').localeCompare(String(b.alias || ''), 'ko')
+    if (sortBy === '폴더') return String(a.job || '').localeCompare(String(b.job || ''), 'ko')
+    return new Date(b.created_at || b.updated_at || 0) - new Date(a.created_at || a.updated_at || 0)
+  })
+
+  const settingsMenu = (
+    <div className="vault-settings-menu stack gap-8" ref={settingsLayerRef}>
+      <button type="button" className="dropdown-item ghost" onClick={editAlias}>파일별 별칭입력</button>
+    </div>
+  )
 
   return (
     <section className="page-stack">
       <div className="card stack">
-        <strong>자기소개서관리</strong>
+        <div className="split-row responsive-row intro-manager-head">
+          <div className="stack gap-4">
+            <strong>자기소개서관리</strong>
+            <div className="muted small-text">등록한 자기소개서 파일을 목록으로 관리하고, 즐겨찾기/별칭/정렬 기준으로 빠르게 찾을 수 있습니다.</div>
+          </div>
+          <div className="action-wrap intro-manager-toolbar">
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="intro-sort-select" aria-label="정렬 기준">
+              <option>즐겨찾기</option><option>등록일</option><option>파일명</option><option>별칭</option><option>최신등록</option><option>폴더</option>
+            </select>
+            <div className="popup-anchor-group popup-anchor-group-right vault-settings-anchor" ref={settingsAnchorRef}>
+              <button type="button" className="icon-button ghost" onClick={() => setSettingsOpen(current => !current)} aria-label="자기소개서관리 설정" title="자기소개서관리 설정">
+                <IconGlyph name="settings" label="자기소개서관리 설정" />
+              </button>
+              {settingsOpen ? settingsMenu : null}
+            </div>
+          </div>
+        </div>
+        <div className="stack compact-list intro-file-table">
+          {sortedItems.length ? sortedItems.map(item => (
+            <button key={item.id} type="button" className={selectedId === item.id ? 'ghost intro-file-row active' : 'ghost intro-file-row'} onClick={() => setSelectedId(item.id)}>
+              <span className={item.favorite ? 'intro-favorite active' : 'intro-favorite'} onClick={e => { e.stopPropagation(); toggleFavorite(item.id) }}>{item.favorite ? '★' : '☆'}</span>
+              <span className="intro-date">[{formatShortDate(item.created_at || item.updated_at)}]</span>
+              <span className="intro-filename">[{item.company}{item.job ? ` ${item.job}` : ''} 자기소개서]</span>
+              <span className="intro-alias">[{item.alias || '-'}]</span>
+            </button>
+          )) : <div className="muted">등록된 자기소개서 파일이 없습니다.</div>}
+        </div>
+      </div>
+
+      <div className="card stack">
         <div className="muted small-text">회사/직무별 자기소개서 문항 세트를 저장하고, 다른 버전과 비교하거나 이전 버전으로 복원할 수 있습니다.</div>
         <form className="stack" onSubmit={saveSet}>
           <div className="grid-2">
@@ -1360,7 +1474,7 @@ function IntroductionsManagerPage() {
         <div className="card stack">
           <strong>문항 세트 목록</strong>
           <div className="stack compact-list">
-            {items.length ? items.map(item => (
+            {sortedItems.length ? sortedItems.map(item => (
               <button key={item.id} type="button" className={selectedId === item.id ? 'ghost intro-list-item active' : 'ghost intro-list-item'} onClick={() => setSelectedId(item.id)}>
                 <strong>{item.company} · {item.job}</strong>
                 <span className="muted small-text">{item.question}</span>
@@ -1386,6 +1500,7 @@ function IntroductionsManagerPage() {
     </section>
   )
 }
+
 
 function ShareLinksManagerPage() {
   const [profiles, setProfiles] = useState([])
@@ -1536,6 +1651,14 @@ function SearchSection({ title, items, render }) {
   )
 }
 
+
+
+function formatShortDate(value) {
+  if (!value) return '--.--.--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return `${String(date.getFullYear()).slice(-2)}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+}
 
 function formatDateLabel(value) {
   if (!value) return '-'
