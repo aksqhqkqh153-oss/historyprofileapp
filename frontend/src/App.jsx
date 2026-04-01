@@ -31,6 +31,7 @@ const PAGE_TITLES = {
   '/menu-permissions': '메뉴권한',
   '/quotes': '견적',
   '/quote-forms': '견적',
+  '/business-card-maker': '명함만들기',
 }
 
 function pageTitle(pathname) {
@@ -186,6 +187,7 @@ const MENU_PERMISSION_SECTIONS = [
       { id: 'warehouse', label: '창고현황', path: '/warehouse' },
       { id: 'materials', label: '자재구매/현황', path: '/materials' },
       { id: 'quotes', label: '견적', path: '/quotes' },
+      { id: 'business-card-maker', label: '명함만들기', path: '/business-card-maker' },
       { id: 'workday-history', label: '일시작종료', path: '/workday-history' },
     ],
   },
@@ -10609,6 +10611,7 @@ function App() {
         <Route path="/materials" element={<MaterialsPage user={user} />} />
         <Route path="/quotes" element={<QuoteFormsPage user={user} />} />
         <Route path="/quote-forms" element={<Navigate to="/quotes" replace />} />
+        <Route path="/business-card-maker" element={<PlaceholderFeaturePage title="명함만들기" description="명함만들기 기능은 다음 업데이트에서 연결할 예정입니다." />} />
         <Route path="/storage-status" element={<PlaceholderFeaturePage title="짐보관현황" description="짐보관현황 기능은 다음 업데이트에서 연결할 예정입니다." />} />
         <Route path="/settlements" element={<SettlementPage />} />
         <Route path="/soomgo-review-finder" element={<SoomgoReviewFinderPage />} />
