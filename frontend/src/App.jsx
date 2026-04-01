@@ -12,6 +12,7 @@ import { useTurnstileConfig } from './hooks/useTurnstileConfig'
 function pageTitle(pathname) {
   if (pathname.startsWith('/chats')) return '채팅'
   if (pathname.startsWith('/friends')) return '친구'
+  if (pathname.startsWith('/community')) return '대화'
   if (pathname.startsWith('/questions')) return '질문'
   if (pathname.startsWith('/profile')) return '프로필'
   if (pathname.startsWith('/vault')) return '저장함'
@@ -21,7 +22,7 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/more')) return '더보기'
   if (pathname.startsWith('/schedule')) return '일정'
   if (pathname.startsWith('/admin')) return '관리자'
-  if (pathname.startsWith('/url-shortener')) return 'URLs단축'
+  if (pathname.startsWith('/url-shortener')) return 'URL단축'
   if (pathname.startsWith('/qr-generator')) return 'QR생성'
   if (pathname.startsWith('/p/')) return '공개 프로필'
   return '홈'
@@ -176,6 +177,7 @@ const NAV_META = {
   '/': { icon: 'home' },
   '/chats': { icon: 'chats' },
   '/friends': { icon: 'friends' },
+  '/community': { icon: 'conversation' },
   '/questions': { icon: 'questions' },
   '/more': { icon: 'more' },
 }
@@ -285,13 +287,19 @@ function AnchoredPopup({ anchorRef, open, align = 'left', className = '', childr
 
     function updatePosition() {
       const rect = anchorRef.current.getBoundingClientRect()
-      const gap = 8
+      const gap = 10
       const viewportWidth = window.innerWidth
       const viewportHeight = window.innerHeight
-      const popupWidth = Math.min(420, viewportWidth - 16)
-      const baseLeft = align === 'right' ? rect.right - popupWidth : rect.left
+      const popupWidth = Math.min(360, viewportWidth - 16)
+      const preferSide = viewportWidth > 820
+      const sideLeft = align === 'right' ? rect.left - popupWidth - gap : rect.right + gap
+      const fallbackLeft = align === 'right' ? rect.right - popupWidth : rect.left
+      const baseLeft = preferSide ? sideLeft : fallbackLeft
+      const sideTop = rect.top
+      const fallbackTop = rect.bottom + gap
+      const baseTop = preferSide ? sideTop : fallbackTop
       const nextLeft = Math.max(8, Math.min(baseLeft, viewportWidth - popupWidth - 8))
-      const nextTop = Math.min(rect.bottom + gap, viewportHeight - 80)
+      const nextTop = Math.max(8, Math.min(baseTop, viewportHeight - 80))
       setStyle({
         position: 'fixed',
         top: `${Math.round(nextTop)}px`,
@@ -553,8 +561,8 @@ function AppShell({ user, setUser }) {
           <Route path="/" element={<HomePage user={user} />} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/questions" element={<QuestionsPage />} />
-          <Route path="/community" element={<Navigate to="/" replace />} />
-          <Route path="/community/new" element={<Navigate to="/" replace />} />
+          <Route path="/community" element={<CommunityPage user={user} />} />
+          <Route path="/community/new" element={<CommunityComposerPage />} />
           <Route path="/questions/:profileId" element={<QuestionProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
@@ -2295,7 +2303,7 @@ function FeedComposerModal({ open, mode = 'feed', onClose, onCreated }) {
           {imagePreview ? <div className="feed-compose-preview"><img src={imagePreview} alt="미리보기" /></div> : null}
           {error ? <div className="error card">{error}</div> : null}
           <div className="split-row responsive-row">
-            <div className="muted small-text">{isStory ? '숏토리는 24시간 동안 스토리 영역에 노출됩니다. 텍스트 없이 이미지만 올려도 됩니다.' : '사진은 선택사항입니다. 제목 또는 내용 중 하나는 반드시 입력되어야 합니다.'}</div>
+            <div className="muted small-text">{isStory ? '24시간 동안 숏토리가 노출됩니다.' : '사진은 선택사항입니다. 제목 또는 내용 중 하나는 반드시 입력되어야 합니다.'}</div>
             <button type="submit" disabled={submitting}>{submitting ? '등록 중...' : isStory ? '숏토리 올리기' : '피드 올리기'}</button>
           </div>
         </form>
@@ -3929,8 +3937,24 @@ function ProfileManagementSummary({ profile, plan, usage, profiles }) {
   )
 }
 
+function buildShareLinkEntryFromShortUrl(item) {
+  const link = item && typeof item === 'object' ? item : {}
+  return {
+    id: makeLocalId('share'),
+    title: (link.title || '단축 URL').trim(),
+    type: '기타',
+    visibility: '링크 전용',
+    url: link.full_short_url || link.short_url || link.original_url || '',
+    profile_slug: link.profile_slug || '',
+    profile_name: link.profile_name || '',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+}
+
 function UrlShortenerPage() {
   const [profiles, setProfiles] = useState([])
+  const [savedLinks, setSavedLinks] = useLocalCollection(LOCAL_STORAGE_KEYS.shareLinks, [])
   const [selectedId, setSelectedId] = useState(() => getStoredActiveProfileId())
   const [title, setTitle] = useState('')
   const [originalUrl, setOriginalUrl] = useState('')
@@ -3978,10 +4002,25 @@ function UrlShortenerPage() {
     window.alert('단축 URL이 복사되었습니다.')
   }
 
+  function saveToShareLinks(item) {
+    const nextEntry = buildShareLinkEntryFromShortUrl(item)
+    if (!nextEntry.url) {
+      window.alert('보관할 URL이 없습니다.')
+      return
+    }
+    const exists = savedLinks.some(saved => String(saved.url || '').trim() === nextEntry.url)
+    if (exists) {
+      window.alert('이미 링크공유관리 보관함에 저장된 URL입니다.')
+      return
+    }
+    setSavedLinks(current => [nextEntry, ...current])
+    window.alert('링크공유관리로 보관했습니다.')
+  }
+
   return (
     <div className="stack page-stack">
       <section className="card stack">
-        <h3>URLs단축</h3>
+        <h3>URL단축</h3>
         <div className="muted small-text">생성한 단축 URL은 계속 사용할 수 있으며, 1년 이상 접속 기록이 없으면 정리됩니다.</div>
         <div className="grid-2">
           <div className="stack">
@@ -3999,16 +4038,21 @@ function UrlShortenerPage() {
       </section>
       <section className="card stack">
         <h3>생성된 단축 URL</h3>
-        <div className="list">
+        <div className="stack url-shortener-list">
           {items.length ? items.map(item => (
-            <button key={item.id} type="button" className="list-row split-row" onClick={() => copyShort(item.full_short_url)}>
-              <div>
+            <article key={item.id} className="url-shortener-item-card">
+              <div className="url-shortener-item-head">
                 <strong>{item.title || '단축 링크'}</strong>
-                <div className="muted small-text">{item.full_short_url}</div>
-                <div className="muted small-text">클릭 {item.click_count || 0}회 · 마지막 접속 {formatLastAccess(item.last_accessed_at)}</div>
+                <button type="button" className="ghost small-button" onClick={() => saveToShareLinks(item)}>내 링크공유함 보관</button>
               </div>
-              <span className="chip">복사</span>
-            </button>
+              <button type="button" className="ghost url-shortener-copy-button" onClick={() => copyShort(item.full_short_url)}>
+                <div className="url-shortener-copy-main">
+                  <div className="muted small-text">{item.full_short_url}</div>
+                  <div className="muted small-text">클릭 {item.click_count || 0}회 · 마지막 접속 {formatLastAccess(item.last_accessed_at)}</div>
+                </div>
+                <span className="chip">복사</span>
+              </button>
+            </article>
           )) : <div className="muted">생성된 단축 URL이 없습니다.</div>}
         </div>
       </section>
