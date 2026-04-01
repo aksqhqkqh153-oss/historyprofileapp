@@ -2,14 +2,13 @@ export const NAV_ITEMS = [
   { path: '/', label: '홈' },
   { path: '/friends', label: '친구' },
   { path: '/chats', label: '채팅' },
-  { path: '/community', label: '대화' },
   { path: '/questions', label: '질문' },
   { path: '/more', label: '더보기' },
 ]
 
 export const MENU_ITEMS = [
   { path: '/schedule', label: '일정' },
-  { path: '/url-shortener', label: 'URL단축' },
+  { path: '/url-shortener', label: 'URLs단축' },
   { path: '/qr-generator', label: 'QR생성' },
 ]
 

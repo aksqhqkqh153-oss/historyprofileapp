@@ -96,7 +96,10 @@ class CompatConnection:
         return CompatCursor(cur, self._backend)
 
     def executescript(self, sql_script: str):
-        statements = [stmt.strip() for stmt in sql_script.split(';') if stmt.strip()]
+        script = sql_script
+        if self._backend == 'postgresql':
+            script = _sqlite_schema_to_postgres(script)
+        statements = [stmt.strip() for stmt in script.split(';') if stmt.strip()]
         for stmt in statements:
             self.execute(stmt)
 
@@ -176,8 +179,25 @@ def _transform_sql(sql: str, backend: str) -> str:
     if backend != 'postgresql':
         return sql
     transformed = sql.strip()
+    upper_sql = transformed.upper()
     if re.fullmatch(r'SELECT\s+last_insert_rowid\(\)\s*;?', transformed, flags=re.IGNORECASE):
         return 'SELECT lastval() AS last_insert_rowid'
+    if upper_sql.startswith('PRAGMA '):
+        pragma_match = re.match(r'PRAGMA\s+table_info\(([^)]+)\)', transformed, flags=re.IGNORECASE)
+        if pragma_match:
+            table = pragma_match.group(1).strip().strip('"').strip("'")
+            return (
+                "SELECT ordinal_position - 1 AS cid, column_name AS name, data_type AS type, "
+                "CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END AS notnull, "
+                "column_default AS dflt_value, 0 AS pk "
+                "FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '%s' "
+                "ORDER BY ordinal_position" % table
+            )
+    if upper_sql.startswith('CREATE TABLE'):
+        transformed = _sqlite_schema_to_postgres(transformed)
+    elif upper_sql.startswith('ALTER TABLE'):
+        transformed = re.sub(r'\bINTEGER\b', 'BIGINT', transformed, flags=re.IGNORECASE)
+        transformed = re.sub(r'\bAUTOINCREMENT\b', '', transformed, flags=re.IGNORECASE)
     if re.search(r'INSERT\s+OR\s+IGNORE\s+INTO', transformed, flags=re.IGNORECASE):
         transformed = re.sub(r'INSERT\s+OR\s+IGNORE\s+INTO', 'INSERT INTO', transformed, flags=re.IGNORECASE)
         transformed = _append_sql_clause(transformed, ' ON CONFLICT DO NOTHING')
@@ -253,10 +273,7 @@ CREATE TABLE IF NOT EXISTS users (
     google_email TEXT DEFAULT '',
     resident_id TEXT DEFAULT '',
     position_title TEXT DEFAULT '',
-    vehicle_available INTEGER NOT NULL DEFAULT 1,
     account_unique_id TEXT DEFAULT '',
-    group_number INTEGER NOT NULL DEFAULT 0,
-    archived_in_branch_status INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 
@@ -328,9 +345,21 @@ CREATE TABLE IF NOT EXISTS verification_codes (
 CREATE TABLE IF NOT EXISTS feed_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
+    title TEXT DEFAULT '',
     content TEXT NOT NULL,
     image_url TEXT DEFAULT '',
     created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS feed_stories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT DEFAULT '',
+    content TEXT DEFAULT '',
+    image_url TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -588,7 +617,6 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     platform TEXT DEFAULT '',
     customer_name TEXT DEFAULT '',
     department_info TEXT DEFAULT '',
-    schedule_type TEXT DEFAULT 'A',
     status_a_count INTEGER NOT NULL DEFAULT 0,
     status_b_count INTEGER NOT NULL DEFAULT 0,
     status_c_count INTEGER NOT NULL DEFAULT 0,
@@ -641,21 +669,6 @@ CREATE TABLE IF NOT EXISTS work_schedule_day_notes (
     updated_at TEXT NOT NULL,
     UNIQUE(user_id, schedule_date),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS quote_form_submissions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    form_type TEXT NOT NULL DEFAULT 'same_day',
-    requester_user_id INTEGER,
-    requester_name TEXT NOT NULL DEFAULT '',
-    contact_phone TEXT NOT NULL DEFAULT '',
-    desired_date TEXT NOT NULL DEFAULT '',
-    summary_title TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'received',
-    payload_json TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    FOREIGN KEY (requester_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS inquiries (
@@ -1147,7 +1160,7 @@ IMPORTED_ACCOUNTS = [
         "photo_url": "",
         "latitude": 37.5665,
         "longitude": 126.978,
-        "phone": "010-5610-5855",
+        "phone": "",
         "recovery_email": "aksqhqkqh3@naver.com",
         "vehicle_number": "없음",
         "branch_no": None,
@@ -1610,29 +1623,6 @@ IMPORTED_EMPLOYEE_ACCOUNTS = [{'email': 'staff004',
   'position_title': '직원'}]
 SEEDED_ACCOUNT_EMAILS = {account['email'] for account in (IMPORTED_ACCOUNTS + IMPORTED_EMPLOYEE_ACCOUNTS)}
 
-FORCE_REMOVED_SEED_ACCOUNT_EMAILS = {
-    '1ghwja',
-    '2ghwja',
-    '3ghwja',
-    '4ghwja',
-    '5ghwja',
-    '6ghwja',
-    '7ghwja',
-    '8ghwja',
-    '9ghwja',
-    'qhswja',
-    'staff023',
-    'staff024',
-    'staff025',
-    'staff026',
-    'staff027',
-    'staff028',
-    'staff031',
-    'staff032',
-    'staff034',
-}
-
-
 LEGACY_DEMO_ACCOUNT_IDS = (
     'admin@example.com',
     'mina@example.com',
@@ -1648,12 +1638,7 @@ def seed_imported_accounts(conn) -> None:
     all_seed_accounts = IMPORTED_ACCOUNTS + IMPORTED_EMPLOYEE_ACCOUNTS
     for legacy_id in LEGACY_DEMO_ACCOUNT_IDS:
         conn.execute("DELETE FROM users WHERE email = ?", (legacy_id,))
-    for removed_email in FORCE_REMOVED_SEED_ACCOUNT_EMAILS:
-        conn.execute("DELETE FROM deleted_imported_accounts WHERE email = ?", (removed_email,))
-        conn.execute("DELETE FROM users WHERE email = ?", (removed_email,))
     for account in all_seed_accounts:
-        if account['email'] in FORCE_REMOVED_SEED_ACCOUNT_EMAILS:
-            continue
         if account['email'] in deleted_emails:
             continue
         exists = conn.execute("SELECT id, account_unique_id FROM users WHERE email = ?", (account['email'],)).fetchone()
@@ -1770,6 +1755,15 @@ def seed_if_empty(conn: sqlite3.Connection) -> None:
     ]
     for user_id, content, image_url in posts:
         conn.execute("INSERT INTO feed_posts(user_id, content, image_url, created_at) VALUES (?, ?, ?, ?)", (user_id, content, image_url, utcnow()))
+
+    story_items = [
+        (2, "오늘 출근 전 체크", "강남권 오전 일정 가능합니다. 상담은 DM 주세요.", ""),
+        (3, "현장 점검 완료", "사무실 이전 동선 체크를 마쳤습니다. 오후 상담 가능합니다.", ""),
+    ]
+    for user_id, title, content, image_url in story_items:
+        created_at = utcnow()
+        expires_at = (datetime.utcnow() + timedelta(hours=24)).replace(microsecond=0).isoformat()
+        conn.execute("INSERT INTO feed_stories(user_id, title, content, image_url, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)", (user_id, title, content, image_url, created_at, expires_at))
 
     conn.execute("INSERT INTO feed_likes(post_id, user_id, created_at) VALUES (1, 3, ?)", (utcnow(),))
     conn.execute("INSERT INTO feed_likes(post_id, user_id, created_at) VALUES (1, 4, ?)", (utcnow(),))
@@ -1924,7 +1918,6 @@ def init_db() -> None:
             'platform': "TEXT DEFAULT ''",
             'customer_name': "TEXT DEFAULT ''",
             'department_info': "TEXT DEFAULT ''",
-            'schedule_type': "TEXT DEFAULT 'A'",
             'status_a_count': 'INTEGER NOT NULL DEFAULT 0',
             'status_b_count': 'INTEGER NOT NULL DEFAULT 0',
             'status_c_count': 'INTEGER NOT NULL DEFAULT 0',
@@ -1963,14 +1956,8 @@ def init_db() -> None:
             'google_email': "TEXT DEFAULT ''",
             'resident_id': "TEXT DEFAULT ''",
             'position_title': "TEXT DEFAULT ''",
-            'vehicle_available': 'INTEGER NOT NULL DEFAULT 1',
-            'show_in_branch_status': 'INTEGER',
-            'show_in_employee_status': 'INTEGER',
             'name': "TEXT DEFAULT ''",
             'account_unique_id': "TEXT DEFAULT ''",
-            'group_number': 'INTEGER NOT NULL DEFAULT 0',
-            'group_number_text': "TEXT DEFAULT '0'",
-            'archived_in_branch_status': 'INTEGER NOT NULL DEFAULT 0',
         })
         default_admin_settings = {
             'total_vehicle_count': '',
@@ -1999,24 +1986,19 @@ def init_db() -> None:
             'day_memo': "TEXT NOT NULL DEFAULT ''",
             'is_handless_day': 'INTEGER NOT NULL DEFAULT 0',
         })
-        vehicle_exclusions_sql = "CREATE TABLE IF NOT EXISTS vehicle_exclusions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)"
-        conn.execute(_sqlite_schema_to_postgres(vehicle_exclusions_sql) if DB_ENGINE == 'postgresql' else vehicle_exclusions_sql)
-        _ensure_unique_index(conn, 'vehicle_exclusions', 'idx_vehicle_exclusions_user_dates', ['user_id', 'start_date', 'end_date'])
+        _ensure_columns(conn, 'feed_posts', {
+            'title': "TEXT DEFAULT ''",
+        })
+        _ensure_columns(conn, 'feed_stories', {
+            'title': "TEXT DEFAULT ''",
+            'content': "TEXT DEFAULT ''",
+            'image_url': "TEXT DEFAULT ''",
+            'expires_at': "TEXT NOT NULL DEFAULT ''",
+        })
         _ensure_columns(conn, 'dm_messages', {
             'reply_to_id': 'INTEGER',
             'mention_user_id': 'INTEGER',
             'reactions': "TEXT DEFAULT '[]'",
-        })
-        workday_logs_sql = "CREATE TABLE IF NOT EXISTS workday_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, work_date TEXT NOT NULL, start_time TEXT NOT NULL DEFAULT '', end_time TEXT NOT NULL DEFAULT '', started_at TEXT NOT NULL DEFAULT '', ended_at TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)"
-        conn.execute(_sqlite_schema_to_postgres(workday_logs_sql) if DB_ENGINE == 'postgresql' else workday_logs_sql)
-        _ensure_unique_index(conn, 'workday_logs', 'idx_workday_logs_user_date', ['user_id', 'work_date'])
-        _ensure_columns(conn, 'workday_logs', {
-            'start_time': "TEXT NOT NULL DEFAULT ''",
-            'end_time': "TEXT NOT NULL DEFAULT ''",
-            'started_at': "TEXT NOT NULL DEFAULT ''",
-            'ended_at': "TEXT NOT NULL DEFAULT ''",
-            'created_at': 'TEXT NOT NULL',
-            'updated_at': 'TEXT NOT NULL',
         })
         _ensure_columns(conn, 'group_room_messages', {
             'attachment_name': "TEXT DEFAULT ''",
@@ -2053,20 +2035,6 @@ def init_db() -> None:
         _ensure_unique_index(conn, 'settlement_reflections', 'uq_settlement_reflections_date_category', ['settlement_date', 'category'])
         _ensure_columns(conn, 'app_secrets', {
             'secret_value': "TEXT NOT NULL DEFAULT ''",
-            'updated_at': "TEXT NOT NULL DEFAULT ''",
-        })
-        quote_form_submissions_sql = "CREATE TABLE IF NOT EXISTS quote_form_submissions (id INTEGER PRIMARY KEY AUTOINCREMENT, form_type TEXT NOT NULL DEFAULT 'same_day', requester_user_id INTEGER, requester_name TEXT NOT NULL DEFAULT '', contact_phone TEXT NOT NULL DEFAULT '', desired_date TEXT NOT NULL DEFAULT '', summary_title TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'received', payload_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY (requester_user_id) REFERENCES users(id) ON DELETE SET NULL)"
-        conn.execute(_sqlite_schema_to_postgres(quote_form_submissions_sql) if DB_ENGINE == 'postgresql' else quote_form_submissions_sql)
-        _ensure_columns(conn, 'quote_form_submissions', {
-            'form_type': "TEXT NOT NULL DEFAULT 'same_day'",
-            'requester_user_id': 'INTEGER',
-            'requester_name': "TEXT NOT NULL DEFAULT ''",
-            'contact_phone': "TEXT NOT NULL DEFAULT ''",
-            'desired_date': "TEXT NOT NULL DEFAULT ''",
-            'summary_title': "TEXT NOT NULL DEFAULT ''",
-            'status': "TEXT NOT NULL DEFAULT 'received'",
-            'payload_json': "TEXT NOT NULL DEFAULT '{}'",
-            'created_at': "TEXT NOT NULL DEFAULT ''",
             'updated_at': "TEXT NOT NULL DEFAULT ''",
         })
 
@@ -2186,43 +2154,6 @@ CREATE TABLE IF NOT EXISTS material_inventory_daily (
 );
 """
         conn.executescript(material_schema_sql)
-        _ensure_columns(conn, 'material_products', {
-            'short_name': "TEXT NOT NULL DEFAULT ''",
-            'unit_label': "TEXT NOT NULL DEFAULT '개'",
-            'unit_price': 'INTEGER NOT NULL DEFAULT 0',
-            'current_stock': 'INTEGER NOT NULL DEFAULT 0',
-            'display_order': 'INTEGER NOT NULL DEFAULT 0',
-            'is_active': 'INTEGER NOT NULL DEFAULT 1',
-            'created_at': "TEXT NOT NULL DEFAULT ''",
-            'updated_at': "TEXT NOT NULL DEFAULT ''",
-        })
-        _ensure_columns(conn, 'material_purchase_requests', {
-            'requester_name': "TEXT NOT NULL DEFAULT ''",
-            'requester_unique_id': "TEXT NOT NULL DEFAULT ''",
-            'request_note': "TEXT NOT NULL DEFAULT ''",
-            'total_amount': 'INTEGER NOT NULL DEFAULT 0',
-            'status': "TEXT NOT NULL DEFAULT 'pending'",
-            'payment_confirmed': 'INTEGER NOT NULL DEFAULT 0',
-            'created_at': "TEXT NOT NULL DEFAULT ''",
-            'settled_at': "TEXT NOT NULL DEFAULT ''",
-            'settled_by_user_id': 'INTEGER',
-            'share_snapshot_json': "TEXT NOT NULL DEFAULT ''",
-        })
-        _ensure_columns(conn, 'material_purchase_request_items', {
-            'quantity': 'INTEGER NOT NULL DEFAULT 0',
-            'unit_price': 'INTEGER NOT NULL DEFAULT 0',
-            'line_total': 'INTEGER NOT NULL DEFAULT 0',
-            'memo': "TEXT NOT NULL DEFAULT ''",
-        })
-        _ensure_columns(conn, 'material_inventory_daily', {
-            'incoming_qty': 'INTEGER NOT NULL DEFAULT 0',
-            'note': "TEXT NOT NULL DEFAULT ''",
-            'outgoing_qty': 'INTEGER NOT NULL DEFAULT 0',
-            'is_closed': 'INTEGER NOT NULL DEFAULT 0',
-            'closed_at': "TEXT NOT NULL DEFAULT ''",
-            'created_at': "TEXT NOT NULL DEFAULT ''",
-            'updated_at': "TEXT NOT NULL DEFAULT ''",
-        })
         _ensure_unique_index(conn, 'material_inventory_daily', 'uq_material_inventory_daily_date_product', ['inventory_date', 'product_id'])
         for _platform_name in ('숨고', '오늘', '공홈'):
             conn.execute("INSERT OR IGNORE INTO settlement_platform_metrics(platform, metric_key, metric_value, detail_json, sync_status, sync_message, updated_at) VALUES (?, 'platform_send_count', 0, '[]', 'idle', '', ?)", (_platform_name, utcnow()))
@@ -2383,7 +2314,6 @@ def user_public_dict(row: sqlite3.Row) -> dict:
         'name': row['name'] if 'name' in row.keys() else row['nickname'],
         'nickname': row['nickname'],
         'account_unique_id': row['account_unique_id'] if 'account_unique_id' in row.keys() else '',
-        'group_number': str((row['group_number_text'] if 'group_number_text' in row.keys() and row['group_number_text'] not in (None, '') else row['group_number'] if 'group_number' in row.keys() else '0') or '0'),
         'role': row['role'],
         'grade': grade,
         'grade_label': grade_label(grade),
@@ -2417,6 +2347,11 @@ def user_public_dict(row: sqlite3.Row) -> dict:
         'google_email': row['google_email'] if 'google_email' in row.keys() else '',
         'resident_id': row['resident_id'] if 'resident_id' in row.keys() else '',
         'position_title': row['position_title'] if 'position_title' in row.keys() else ('호점대표' if row['branch_no'] is not None else ''),
-        'vehicle_available': bool(row['vehicle_available']) if 'vehicle_available' in row.keys() else True,
+        'phone_verified_at': row['phone_verified_at'] if 'phone_verified_at' in row.keys() else '',
+        'phone_verified': bool(row['phone_verified_at']) if 'phone_verified_at' in row.keys() else False,
+        'account_status': row['account_status'] if 'account_status' in row.keys() else 'active',
+        'warning_count': row['warning_count'] if 'warning_count' in row.keys() else 0,
+        'suspended_reason': row['suspended_reason'] if 'suspended_reason' in row.keys() else '',
+        'chat_media_quota_bytes': row['chat_media_quota_bytes'] if 'chat_media_quota_bytes' in row.keys() else 104857600,
         'created_at': row['created_at'],
     }

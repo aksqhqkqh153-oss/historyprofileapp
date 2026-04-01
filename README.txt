@@ -1,1 +1,0 @@
-Updated project placeholder. Replace with actual project files.
