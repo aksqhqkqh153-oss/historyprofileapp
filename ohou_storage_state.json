@@ -1,0 +1,208 @@
+{
+  "cookies": [
+    {
+      "name": "bp-p-type",
+      "value": "Web",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136533.126201,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-p-ver",
+      "value": "Mozilla/5.0 (Windows NT 10.0, Win64, x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136533.126211,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-cid",
+      "value": "c260327105533-e00794687e73",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136533.126219,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-locale",
+      "value": "ko-KR",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136533.126285,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-tz",
+      "value": "Asia/Seoul",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136533.12625,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "b_visitor_id",
+      "value": "w1774576533302816646",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136548.519315,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-a-name",
+      "value": "o2o-partner-web",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136533.126262,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-a-ver",
+      "value": "26.10.2",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136533.126269,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-s-country",
+      "value": "KR",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1774662933.126276,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "b_session_id",
+      "value": "w1774576533485253735",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1774578357,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ohouse_guest_id",
+      "value": "w1774576533302816646",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136548.519387,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_partner_house_access_token",
+      "value": "eyJraWQiOiJiNDIxZDZjZi03ZDNiLTRmYzctYmY3MS05MjVkNDlmNGU3ODEiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJvYXV0aC5vaG91LnNlIiwiaWF0IjoxNzc0NTc2NTQ3LCJhdWQiOiJwYXJ0bmVyLWhvdXNlLXByb2QucGF1dGguZGFpbHlob3Uuc2UiLCJzdWIiOiJtcDQ5OEBidWNrZXRwbGFjZS5uZXQiLCJzY29wZSI6Im9wZW5pZCIsIm5vbmNlIjoiZWEzOTk3NDYtMTlkMi00OTAwLThkODEtNjZmYzRjMDNlZGVhIiwib2lkIjoicG5rc2ZBUHdSMUtEZ01jbmpheEk4ZyIsInBhaWQiOiI3OTE0IiwicHBpZCI6Ijc1MzciLCJhZHN1aWQiOiIiLCJhZGFpZCI6IiIsImNqayI6InBhaWQgcHBpZCBhZHN1aWQgYWRhaWQiLCJqdGkiOiJlNnJ3RDU2elRyeTQtdU5vdjVjVldBIiwiZXhwIjoxNzc0NTkwOTQ3fQ.BJL7e94x8e-O3snAzdChS4NW9VFhrrY0S2DskTQYIc1kAVnau_FFrbLHz9JGXHR0bOFZ3NuByExNS_qozSwRANItZms1Njoc4yMovRdFzwgKQyzWw-zuqwS7ra4Ft-UxIeWYrLiLanztLUYqnba5Tgept6-Q3eEMuGZ6a5l6uhAbJjyYrODqSfo6uO_3_tYICXD_mV2pq5jjxQt-VVOy3vL9qqIR4PdVzIEPOYeIAQaMi89ymN8LUPoXwtLM82bLd8OjlDmygvSICGRgrYno96FpWpq5Jydygy955e893hbibasu5C0HUrOmWHS5WRQbuprNRsM5CevRdRFTmTA_6g",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1774590947.613163,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_partner_house_refresh_token",
+      "value": "eyJraWQiOiI2ZWQ2N2ZmNS04ODViLTQyYTItYWE5NC01ZjQ5OGJlNTg5MTAiLCJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJvYXV0aC5vaG91LnNlIiwiaWF0IjoxNzc0NTc2NTQ3LCJhdWQiOiJwYXJ0bmVyLWhvdXNlLXByb2QucGF1dGguZGFpbHlob3Uuc2UiLCJzdWIiOiJtcDQ5OEBidWNrZXRwbGFjZS5uZXQiLCJzY29wZSI6Im9wZW5pZCIsIm5vbmNlIjoiZWEzOTk3NDYtMTlkMi00OTAwLThkODEtNjZmYzRjMDNlZGVhIiwib2lkIjoicG5rc2ZBUHdSMUtEZ01jbmpheEk4ZyIsInBhaWQiOiI3OTE0IiwicHBpZCI6Ijc1MzciLCJhZHN1aWQiOiIiLCJhZGFpZCI6IiIsImNqayI6InBhaWQgcHBpZCBhZHN1aWQgYWRhaWQiLCJqdGkiOiJwNTVVNkZaQ1NDU05DRHlNVkltenh3IiwiZXhwIjoxODA2MTEyNTQ3fQ.BMcdRC5XM1B5K8H1GYa7ith4YMYk4fHlzU9qzHJ-w3gOfhNI2ZxFKfHlGzzYb4Enc2ApDwtIIwkNe5JLN5oPKw",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1806112547.613302,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_partner_house_access_token_exp",
+      "value": "1774590947",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1774590947.61336,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ak_bmsc",
+      "value": "E5359AE0287E633D0F3D90568F8A200A~000000000000000000000000000000~YAAQnnkyF6wK+wedAQAA/jcBLR8SUBZz7j5KsVZShyhmvxkNwVubCFF6LSIajMcKwKuPmGFTGcka1oPe2UtzjNsA0/c+AoFhmjv1GPGkHx4zGfBND7Zjw4Xue9sQTQH3bmWEuLBd766890zAx1/B8io183YduoI2Hekgq1Ibholweu/Aguem0fBrjnuBFInWIBkS7IkabUPQLXnTf9BU7I8lpKvrGGEnQze6ioyu5zq+rmCI4II0BfuX+ripa7MHEZLqB2pLGRjt0/bF2VKuoQsz9g7Tn2c0JJNKdlayZa8G8Y3LU0w5acsduIG8Lkykuq1hCXmbkHnob5UDS9dhkiE6uQMC/A6gqCigFkNvqo2RIDLvUTLyxz1cD73tWWpVM8TmiCzl5riyzQ==",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1774583747.61339,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-m-ver",
+      "value": "1.0.2",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136546.821285,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bp-sid",
+      "value": "s260327105533-7c9299bd4d8b:1774662933302:1774578357787",
+      "domain": ".ohou.se",
+      "path": "/",
+      "expires": 1809136557,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_dd_s",
+      "value": "rum=1&id=6f345d9a-b111-4ad3-88ab-5915fac2ea0b&created=1774576548411&expire=1774577458010",
+      "domain": "o2o-partner.ohou.se",
+      "path": "/",
+      "expires": 1774577465,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Strict"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://o2o-partner.ohou.se",
+      "localStorage": [
+        {
+          "name": "bucket-log-debug",
+          "value": "false"
+        },
+        {
+          "name": "O2O_PARTNER_ACTIVATED_SERVICE",
+          "value": "{\"service\":2}"
+        }
+      ]
+    },
+    {
+      "origin": "https://partner.ohou.se",
+      "localStorage": [
+        {
+          "name": "bucket-log-debug",
+          "value": "false"
+        }
+      ]
+    }
+  ]
+}

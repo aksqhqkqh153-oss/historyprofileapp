@@ -1,0 +1,29 @@
+name: manual-db-backup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      - name: Run database backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APP_ENV: production
+          SEED_DEMO_DATA: '0'
+        run: |
+          python backend/scripts/backup_database.py
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: icj2424app-backup
+          path: backend/backups/*.json

@@ -1,6 +1,6 @@
 {
-  "appId": "com.historyprofile.app",
-  "appName": "historyprofile_app",
+  "appId": "com.ichungjal.app",
+  "appName": "이청잘",
   "webDir": "../frontend/dist",
   "server": {
     "androidScheme": "https"

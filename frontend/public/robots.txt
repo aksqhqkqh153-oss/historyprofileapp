@@ -1,7 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /api/auth/
-Disallow: /api/admin/
-Disallow: /api/chats/
 
-Sitemap: https://www.historyprofile.com/sitemap.xml
+Sitemap: https://www.icj2424app.com/sitemap.xml

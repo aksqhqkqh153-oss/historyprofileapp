@@ -1,0 +1,11 @@
+warning: in the working copy of 'backend/app/db.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/app/main.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/static/index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/App.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/styles.css', LF will be replaced by CRLF the next time Git touches it
+ backend/app/db.py         |  11 [32m++++[m
+ backend/app/main.py       |  87 [32m+++++++++++++++++++++++++++[m[31m----[m
+ backend/static/index.html |   4 [32m+[m[31m-[m
+ frontend/src/App.jsx      | 130 [32m+++++++++++++++++++++++++++++++++++[m[31m-----------[m
+ frontend/src/styles.css   |  31 [32m+++++++++++[m
+ 5 files changed, 220 insertions(+), 43 deletions(-)

@@ -771,7 +771,7 @@ class SettlementSyncService:
         now = self._now()
         today_key = f"{now.year}-{now.month:02d}-{now.day:02d}"
         analysis: list[dict[str, Any]] = page.evaluate(
-            """
+            r"""
             ({ sectionXPath, acceptKeyword, todayKey, patterns }) => {
               const snapshot = document.evaluate(
                 sectionXPath,

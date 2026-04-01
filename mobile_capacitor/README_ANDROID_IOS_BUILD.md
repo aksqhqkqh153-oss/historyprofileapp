@@ -18,7 +18,7 @@
 
 예시
 ```
-VITE_API_BASE_URL=https://api.historyprofile.com
+VITE_API_BASE_URL=https://api.example.com
 ```
 
 ### 2) Android 플랫폼 추가
