@@ -2,7 +2,6 @@ export const NAV_ITEMS = [
   { path: '/', label: '홈' },
   { path: '/friends', label: '친구' },
   { path: '/chats', label: '채팅' },
-  { path: '/community', label: '대화' },
   { path: '/questions', label: '질문' },
   { path: '/more', label: '더보기' },
 ]

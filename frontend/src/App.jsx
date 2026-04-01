@@ -13,7 +13,6 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/chats')) return '채팅'
   if (pathname.startsWith('/friends')) return '친구'
   if (pathname.startsWith('/questions')) return '질문'
-  if (pathname.startsWith('/community')) return '대화'
   if (pathname.startsWith('/profile')) return '프로필'
   if (pathname.startsWith('/vault')) return '저장함'
   if (pathname.startsWith('/workspace')) return '종합관리'
@@ -79,6 +78,60 @@ function setStoredChatLastViewedAt(value) {
   }
 }
 
+const CHAT_CATEGORY_STORAGE_KEY = 'historyprofile_chat_categories'
+const CHAT_ROOM_CATEGORY_STORAGE_KEY = 'historyprofile_chat_room_categories'
+
+function getStoredChatCategories() {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(CHAT_CATEGORY_STORAGE_KEY) || '[]')
+    if (!Array.isArray(raw)) return []
+    return Array.from(new Set(raw.map(item => String(item || '').trim()).filter(Boolean))).slice(0, 20)
+  } catch {
+    return []
+  }
+}
+
+function setStoredChatCategories(items) {
+  if (typeof window === 'undefined') return
+  const next = Array.from(new Set((Array.isArray(items) ? items : []).map(item => String(item || '').trim()).filter(Boolean))).slice(0, 20)
+  window.localStorage.setItem(CHAT_CATEGORY_STORAGE_KEY, JSON.stringify(next))
+}
+
+function getStoredChatRoomCategories() {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(CHAT_ROOM_CATEGORY_STORAGE_KEY) || '{}')
+    return raw && typeof raw === 'object' ? raw : {}
+  } catch {
+    return {}
+  }
+}
+
+function setStoredChatRoomCategories(value) {
+  if (typeof window === 'undefined') return
+  const next = value && typeof value === 'object' ? value : {}
+  window.localStorage.setItem(CHAT_ROOM_CATEGORY_STORAGE_KEY, JSON.stringify(next))
+}
+
+function formatChatListTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const sameDay = now.getFullYear() === date.getFullYear() && now.getMonth() === date.getMonth() && now.getDate() === date.getDate()
+  if (sameDay) return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`
+}
+
+function getRoomPreviewLines(room) {
+  const preview = String(room?.last_message || '대화를 시작해보세요.').trim() || '대화를 시작해보세요.'
+  const lines = preview.split(/\n+/).map(item => item.trim()).filter(Boolean)
+  if (lines.length >= 2) return [lines[0], lines[1]]
+  if (lines.length === 1) return [lines[0], lines[0]]
+  return ['대화를 시작해보세요.', '대화를 시작해보세요.']
+}
+
 function IconGlyph({ name, label }) {
   const common = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.9', strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }
   const icons = {
@@ -124,7 +177,6 @@ const NAV_META = {
   '/chats': { icon: 'chats' },
   '/friends': { icon: 'friends' },
   '/questions': { icon: 'questions' },
-  '/community': { icon: 'conversation' },
   '/more': { icon: 'more' },
 }
 
@@ -501,8 +553,8 @@ function AppShell({ user, setUser }) {
           <Route path="/" element={<HomePage user={user} />} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/questions" element={<QuestionsPage />} />
-          <Route path="/community" element={<CommunityPage user={user} />} />
-          <Route path="/community/new" element={<CommunityComposerPage />} />
+          <Route path="/community" element={<Navigate to="/" replace />} />
+          <Route path="/community/new" element={<Navigate to="/" replace />} />
           <Route path="/questions/:profileId" element={<QuestionProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
@@ -2719,13 +2771,25 @@ function ChatsPage() {
   const [messages, setMessages] = useState([])
   const [message, setMessage] = useState('')
   const [chatError, setChatError] = useState('')
+  const [activeCategory, setActiveCategory] = useState('전체')
+  const [customCategories, setCustomCategories] = useState(getStoredChatCategories)
+  const [roomCategories, setRoomCategories] = useState(getStoredChatRoomCategories)
   const wsRef = useRef(null)
   const boardRef = useRef(null)
 
-  async function loadRooms() {
+  async function loadRooms(keepSelectedUserId = null) {
     const data = await api('/api/chats')
-    setRooms(data.items || [])
-    if (!selected && data.items?.[0]) setSelected(data.items[0])
+    const items = data.items || []
+    setRooms(items)
+    const preferredUserId = Number(keepSelectedUserId || selected?.user_id || 0)
+    if (preferredUserId) {
+      const matched = items.find(item => Number(item.user_id) === preferredUserId)
+      if (matched) {
+        setSelected(matched)
+        return
+      }
+    }
+    setSelected(items[0] || null)
   }
 
   async function loadMessages(otherUserId) {
@@ -2734,11 +2798,22 @@ function ChatsPage() {
     setStoredChatLastViewedAt(new Date().toISOString())
   }
 
-  useEffect(() => { setStoredChatLastViewedAt(new Date().toISOString()); loadRooms() }, [])
+  useEffect(() => {
+    setStoredChatLastViewedAt(new Date().toISOString())
+    loadRooms().catch(err => setChatError(err.message || '채팅 목록을 불러오지 못했습니다.'))
+  }, [])
+
+  useEffect(() => {
+    setStoredChatCategories(customCategories)
+  }, [customCategories])
+
+  useEffect(() => {
+    setStoredChatRoomCategories(roomCategories)
+  }, [roomCategories])
 
   useEffect(() => {
     if (!selected) return
-    loadMessages(selected.user_id)
+    loadMessages(selected.user_id).catch(err => setChatError(err.message || '메시지를 불러오지 못했습니다.'))
     if (wsRef.current) wsRef.current.close()
     const base = getApiBase() || window.location.origin
     const wsBase = base.replace(/^http/, 'ws')
@@ -2748,11 +2823,15 @@ function ChatsPage() {
       const data = JSON.parse(event.data)
       if (data.type === 'message') {
         setMessages(prev => [...prev, data.item])
-        loadRooms()
+        loadRooms(selected.user_id).catch(() => null)
       }
     }
     ws.onerror = async () => {
-      await loadMessages(selected.user_id)
+      try {
+        await loadMessages(selected.user_id)
+      } catch (err) {
+        setChatError(err.message || '메시지를 다시 불러오지 못했습니다.')
+      }
     }
     return () => ws.close()
   }, [selected?.user_id])
@@ -2765,49 +2844,173 @@ function ChatsPage() {
   async function send() {
     if (!selected || !message.trim()) return
     setChatError('')
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(message)
-    } else {
-      await api(`/api/chats/direct/${selected.user_id}/messages`, { method: 'POST', body: JSON.stringify({ message }) })
-      await loadMessages(selected.user_id)
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(message)
+      } else {
+        await api(`/api/chats/direct/${selected.user_id}/messages`, { method: 'POST', body: JSON.stringify({ message }) })
+        await loadMessages(selected.user_id)
+      }
+      setMessage('')
+      await loadRooms(selected.user_id)
+    } catch (err) {
+      setChatError(err.message || '메시지 전송에 실패했습니다.')
     }
-    setMessage('')
-    loadRooms()
   }
 
+  function handleAddCategory() {
+    const next = window.prompt('새 채팅 카테고리 이름을 입력하세요.', '')
+    const value = String(next || '').trim()
+    if (!value) return
+    if (['전체', '안읽음'].includes(value)) {
+      window.alert('기본 카테고리 이름은 사용할 수 없습니다.')
+      return
+    }
+    if (customCategories.includes(value)) {
+      setActiveCategory(value)
+      return
+    }
+    setCustomCategories(prev => [...prev, value])
+    setActiveCategory(value)
+  }
+
+  function assignCategory(room) {
+    const current = roomCategories[String(room.user_id)] || ''
+    const optionText = customCategories.length
+      ? customCategories.map((item, index) => `${index + 1}. ${item}`).join('\n')
+      : '생성된 카테고리가 없습니다.'
+    const input = window.prompt(`카테고리 번호를 입력하세요.
+0. 분류 해제
+${optionText}`, current ? String(customCategories.indexOf(current) + 1) : '')
+    if (input === null) return
+    const trimmed = String(input).trim()
+    if (!trimmed || trimmed === '0') {
+      setRoomCategories(prev => {
+        const next = { ...prev }
+        delete next[String(room.user_id)]
+        return next
+      })
+      return
+    }
+    const index = Number(trimmed) - 1
+    if (!Number.isInteger(index) || index < 0 || index >= customCategories.length) {
+      window.alert('올바른 번호를 입력하세요.')
+      return
+    }
+    const selectedCategory = customCategories[index]
+    setRoomCategories(prev => ({ ...prev, [String(room.user_id)]: selectedCategory }))
+    setActiveCategory(selectedCategory)
+  }
+
+  const filteredRooms = rooms.filter(room => {
+    if (activeCategory === '전체') return true
+    const roomCategory = roomCategories[String(room.user_id)] || ''
+    const unreadCount = Number(room.unread_count || 0)
+    if (activeCategory === '안읽음') return unreadCount > 0
+    return roomCategory === activeCategory
+  })
+
+  useEffect(() => {
+    if (!filteredRooms.length) {
+      setSelected(null)
+      return
+    }
+    if (!selected || !filteredRooms.some(item => Number(item.user_id) === Number(selected.user_id))) {
+      setSelected(filteredRooms[0])
+    }
+  }, [activeCategory, rooms.length, selected?.user_id, JSON.stringify(filteredRooms.map(item => item.user_id))])
 
   return (
-    <div className="chat-layout">
-      <section className="card stack">
-        <h3>실시간 채팅 목록</h3>
-        <div className="list">
-          {rooms.map(room => (
-            <button key={room.user_id} type="button" className={selected?.user_id === room.user_id ? 'list-row active-row' : 'list-row'} onClick={() => setSelected(room)}>
-              <div>
-                <strong>{room.nickname}</strong>
-                <div className="muted small-text">{room.last_message || '대화 시작'}</div>
-              </div>
+    <div className="chat-page-stack">
+      <section className="card stack chat-category-card">
+        <div className="chat-category-scroll" role="tablist" aria-label="채팅 카테고리">
+          {['전체', '안읽음', ...customCategories].map(category => (
+            <button
+              key={category}
+              type="button"
+              className={activeCategory === category ? 'chat-category-chip active' : 'chat-category-chip ghost'}
+              onClick={() => setActiveCategory(category)}
+            >
+              {category}
             </button>
           ))}
+          <button type="button" className="chat-category-add-button ghost" onClick={handleAddCategory} aria-label="카테고리 추가" title="카테고리 추가">
+            <IconGlyph name="compose" label="카테고리 추가" />
+          </button>
         </div>
       </section>
-      <section className="card stack">
-        <h3>{selected ? '대화' : '대화상대 선택'}</h3>
-        <div className="message-board" ref={boardRef}>
-          {messages.map(item => (
-            <div key={item.id} className={`message-item ${item.sender_id === selected?.user_id ? 'incoming' : 'outgoing'}`}>
-              {item.has_attachment ? (String(item.message_type || '').startsWith('video') ? <video src={item.attachment_url} poster={item.attachment_preview_url || undefined} controls playsInline preload="metadata" /> : <img src={item.attachment_preview_url || item.attachment_url} alt={item.attachment_name || '첨부'} loading="lazy" />) : null}
-              <div>{item.message}</div>
-              {item.has_attachment ? <div className="muted small-text">첨부 {item.attachment_size_mb}MB</div> : null}
-            </div>
-          ))}
-        </div>
-        {chatError ? <div className="alert error">{chatError}</div> : null}
-        <div className="inline-form">
-          <input value={message} onChange={e => setMessage(e.target.value)} placeholder="메시지 입력" onKeyDown={e => { if (e.key === 'Enter') send() }} />
-          <button type="button" onClick={send}>전송</button>
-        </div>
-      </section>
+
+      <div className="chat-layout-modern">
+        <section className="card stack chat-list-card">
+          <div className="chat-list-header-row">
+            <h3>채팅</h3>
+            <span className="muted small-text">{filteredRooms.length}개</span>
+          </div>
+          <div className="chat-list-modern">
+            {filteredRooms.length ? filteredRooms.map(room => {
+              const previewLines = getRoomPreviewLines(room)
+              const isActive = Number(selected?.user_id) === Number(room.user_id)
+              const roomCategory = roomCategories[String(room.user_id)] || ''
+              const unreadCount = Number(room.unread_count || 0)
+              return (
+                <button key={room.user_id} type="button" className={isActive ? 'chat-list-item active' : 'chat-list-item'} onClick={() => setSelected(room)}>
+                  <div className="chat-list-avatar-wrap">
+                    <div className="avatar chat-list-avatar">{room.photo_url ? <img src={room.photo_url} alt={room.nickname || '프로필'} /> : <span>{String(room.nickname || room.name || '채').slice(0, 1)}</span>}</div>
+                  </div>
+                  <div className="chat-list-main">
+                    <div className="chat-list-row chat-list-row-top">
+                      <strong className="chat-list-name">{room.nickname || room.name || '채팅방'}</strong>
+                      <span className="chat-list-time">{formatChatListTime(room.updated_at || room.last_message_at || room.created_at)}</span>
+                    </div>
+                    <div className="chat-list-row"><span className="chat-list-preview">{previewLines[0]}</span></div>
+                    <div className="chat-list-row"><span className="chat-list-preview muted">{previewLines[1]}</span></div>
+                    <div className="chat-list-meta-row">
+                      {roomCategory ? <span className="chip">{roomCategory}</span> : <span className="muted small-text">미분류</span>}
+                      <span className="chat-list-actions-inline">
+                        {unreadCount > 0 ? <span className="count-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="chat-assign-link"
+                          onClick={event => { event.stopPropagation(); assignCategory(room) }}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              assignCategory(room)
+                            }
+                          }}
+                        >
+                          분류설정
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              )
+            }) : <div className="muted">표시할 채팅이 없습니다.</div>}
+          </div>
+        </section>
+
+        <section className="card stack chat-thread-card">
+          <h3>{selected ? `${selected.nickname || selected.name || '채팅방'} 대화` : '대화상대 선택'}</h3>
+          <div className="message-board" ref={boardRef}>
+            {messages.length ? messages.map(item => (
+              <div key={item.id} className={`message-item ${item.sender_id === selected?.user_id ? 'incoming' : 'outgoing'}`}>
+                {item.has_attachment ? (String(item.message_type || '').startsWith('video') ? <video src={item.attachment_url} poster={item.attachment_preview_url || undefined} controls playsInline preload="metadata" /> : <img src={item.attachment_preview_url || item.attachment_url} alt={item.attachment_name || '첨부'} loading="lazy" />) : null}
+                <div>{item.message}</div>
+                <div className="muted small-text">{formatDateLabel(item.created_at)}</div>
+                {item.has_attachment ? <div className="muted small-text">첨부 {item.attachment_size_mb}MB</div> : null}
+              </div>
+            )) : <div className="muted">선택한 채팅의 메시지가 없습니다.</div>}
+          </div>
+          {chatError ? <div className="alert error">{chatError}</div> : null}
+          <div className="inline-form chat-input-row">
+            <input value={message} onChange={e => setMessage(e.target.value)} placeholder="메시지 입력" onKeyDown={e => { if (e.key === 'Enter') send() }} />
+            <button type="button" onClick={send}>전송</button>
+          </div>
+        </section>
+      </div>
     </div>
   )
 }
