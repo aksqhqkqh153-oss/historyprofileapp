@@ -2766,7 +2766,7 @@ function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow
         <div className="asked-bio-line">{profile?.headline || profile?.bio || '한 줄 소개가 아직 없습니다.'}</div>
       </div>
       <div className="asked-cta-row">
-        <button type="button" className={isFollowing ? 'ghost asked-follow-button active' : 'ghost asked-follow-button'} onClick={onToggleFollow} disabled={followLoading}>{followLoading ? '처리중' : (isFollowing ? '팔로잉' : '팔로잉')}</button>
+        <button type="button" className={isFollowing ? 'ghost asked-follow-button active' : 'ghost asked-follow-button'} onClick={onToggleFollow} disabled={followLoading}>{followLoading ? '처리중' : (isFollowing ? '팔로잉' : '팔로우')}</button>
         <button type="button" className="asked-question-button" onClick={onToggleAsk}>{askOpen ? '질문닫기' : '질문하기'}</button>
         <button type="button" className="ghost asked-share-button" onClick={handleShare}>공유</button>
       </div>
