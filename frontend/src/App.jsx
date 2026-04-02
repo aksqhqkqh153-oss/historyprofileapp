@@ -23,6 +23,7 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/more')) return '더보기'
   if (pathname.startsWith('/schedule')) return '일정'
   if (pathname.startsWith('/admin')) return '관리자'
+  if (pathname.startsWith('/music')) return '음악듣기'
   if (pathname.startsWith('/business-card')) return '명함만들기'
   if (pathname.startsWith('/url-shortener')) return 'URL단축'
   if (pathname.startsWith('/qr-generator')) return 'QR생성'
@@ -164,6 +165,7 @@ function IconGlyph({ name, label }) {
     businessCard: <svg {...common}><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="8" cy="12" r="2" /><path d="M13 10h5" /><path d="M13 13h5" /><path d="M6 16c.8-1.2 1.8-1.8 3-1.8s2.2.6 3 1.8" /></svg>,
     document: <svg {...common}><path d="M8 3h6l5 5v13a1 1 0 0 1-1 1H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M14 3v5h5" /><path d="M10 13h6" /><path d="M10 17h6" /><path d="M10 9h2" /></svg>,
     star: <svg {...common}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9Z" /></svg>,
+    music: <svg {...common}><path d="M9 18V7l10-2v11" /><circle cx="7" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>,
   }
   return <span className="icon-symbol" aria-label={label}>{icons[name] || icons.home}</span>
 }
@@ -568,7 +570,7 @@ function AppShell({ user, setUser }) {
           <Route path="/questions/:profileId" element={<QuestionProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/more" element={<MorePage onOpenSheet={openMoreSheet} />} />
+          <Route path="/more" element={<MorePage onOpenSheet={openMoreSheet} isAdmin={isAdmin} />} />
           <Route path="/vault" element={<StorageVaultPage />} />
           <Route path="/workspace" element={<WorkspacePage />} />
           <Route path="/introductions-manager" element={<IntroductionsManagerPage />} />
@@ -577,12 +579,13 @@ function AppShell({ user, setUser }) {
           <Route path="/business-card" element={<BusinessCardBuilderPage />} />
           <Route path="/url-shortener" element={<UrlShortenerPage />} />
           <Route path="/qr-generator" element={<QrGeneratorPage />} />
+          <Route path="/music" element={isAdmin ? <MusicPage /> : <Navigate to="/" replace />} />
           <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
-      <MoreBottomSheet open={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} onSelect={closePopupAndNavigate} />
+      <MoreBottomSheet open={moreSheetOpen} onClose={() => setMoreSheetOpen(false)} onSelect={closePopupAndNavigate} isAdmin={isAdmin} />
 
       <nav className="bottom-nav">
         {NAV_ITEMS.map(item => {
@@ -614,7 +617,7 @@ function AppShell({ user, setUser }) {
 }
 
 
-function MorePage({ onOpenSheet }) {
+function MorePage({ onOpenSheet, isAdmin }) {
   const businessConfig = readLocalItems(LOCAL_STORAGE_KEYS.businessConfig, buildDefaultBusinessConfig())
   const templateStore = readLocalItems(LOCAL_STORAGE_KEYS.templateStore, buildDefaultTemplateStoreItems())
   const hiringPosts = readLocalItems(LOCAL_STORAGE_KEYS.hiringPosts, buildDefaultHiringPosts())
@@ -632,6 +635,7 @@ function MorePage({ onOpenSheet }) {
     { path: '/share-links-manager', label: '링크공유관리', desc: '영업/채용/소개 링크를 공개 페이지와 연결', icon: 'link' },
     { path: '/introductions-manager', label: 'AI 자기소개서', desc: 'AI 초안 생성 결과를 저장/복원/수정', icon: 'document' },
     { path: '/vault', label: '클라우드 저장함', desc: '요금제별 저장용량 전략과 보관 자산 관리', icon: 'folder' },
+    ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용 플레이어로 청취', icon: 'music' }] : []),
   ]
 
   return (
@@ -679,10 +683,23 @@ function MorePage({ onOpenSheet }) {
             <Link className="button-link" to="/profile?tab=link">공개 링크 추가</Link>
             <Link className="button-link" to="/profile?tab=qr">프로필 QR 연결</Link>
             <Link className="button-link" to="/url-shortener">단축 URL 생성</Link>
+            {isAdmin ? <Link className="button-link" to="/music">음악듣기 열기</Link> : null}
           </div>
           <div className="muted small-text">공개 URL → 링크 클릭 → QR 스캔 → 문의 전환 흐름을 바로 실행할 수 있게 연결했습니다.</div>
         </div>
       </div>
+
+      {isAdmin ? (
+        <div className="card stack admin-music-callout">
+          <div className="split-row responsive-row">
+            <div className="stack gap-6">
+              <strong>관리자 전용 음악듣기</strong>
+              <div className="muted small-text">공개 YouTube 재생목록을 공식 임베드 플레이어로 불러와 플레이리스트처럼 재생합니다.</div>
+            </div>
+            <Link className="button-link" to="/music">바로 열기</Link>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -719,6 +736,7 @@ const LOCAL_STORAGE_KEYS = {
   analyticsEvents: 'historyprofile_local_analytics_events',
   monetizationOrders: 'historyprofile_local_monetization_orders',
   leadInbox: 'historyprofile_local_lead_inbox',
+  musicPlaylists: 'historyprofile_local_music_playlists',
 }
 
 
@@ -985,7 +1003,284 @@ function createOrderRecord(type, item) {
   }
 }
 
-function MoreBottomSheet({ open, onClose, onSelect }) {
+function defaultMusicPlaylists() {
+  return [{
+    id: makeLocalId('playlist'),
+    name: '업무 집중용 플레이리스트',
+    description: '공개 YouTube 재생목록 링크를 붙여넣어 관리자 전용 음악 플레이어로 사용하세요.',
+    playlistUrl: '',
+    playlistId: '',
+    videoUrl: '',
+    videoId: '',
+    videosText: '',
+    sourceLabel: 'YouTube 공개 재생목록',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }]
+}
+
+function extractYoutubePlaylistId(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const directMatch = text.match(/(?:list=)([A-Za-z0-9_-]+)/i)
+  if (directMatch?.[1]) return directMatch[1]
+  if (/^PL[\w-]+$/i.test(text) || /^OLAK5uy_[\w-]+$/i.test(text) || /^RD[\w-]+$/i.test(text) || /^UU[\w-]+$/i.test(text)) return text
+  return ''
+}
+
+function extractYoutubeVideoId(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const patterns = [
+    /(?:v=)([A-Za-z0-9_-]{11})/,
+    /youtu\.be\/([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/embed\/([A-Za-z0-9_-]{11})/,
+    /^([A-Za-z0-9_-]{11})$/,
+  ]
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match?.[1]) return match[1]
+  }
+  return ''
+}
+
+function parseYoutubeVideoList(value) {
+  const raw = String(value || '')
+  const segments = raw.split(/\n|,|\s+/).map(item => item.trim()).filter(Boolean)
+  return Array.from(new Set(segments.map(extractYoutubeVideoId).filter(Boolean))).slice(0, 50)
+}
+
+function buildYoutubeEmbedUrl(item) {
+  const playlistId = extractYoutubePlaylistId(item?.playlistUrl || item?.playlistId)
+  if (playlistId) {
+    return `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(playlistId)}&rel=0&modestbranding=1`
+  }
+  const explicitVideoIds = parseYoutubeVideoList(item?.videosText)
+  const primaryVideoId = extractYoutubeVideoId(item?.videoUrl || item?.videoId || explicitVideoIds[0] || '')
+  const playlistVideoIds = explicitVideoIds.filter(id => id !== primaryVideoId)
+  if (primaryVideoId && playlistVideoIds.length) {
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(primaryVideoId)}?playlist=${encodeURIComponent(playlistVideoIds.join(','))}&rel=0&modestbranding=1`
+  }
+  if (primaryVideoId) {
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(primaryVideoId)}?rel=0&modestbranding=1`
+  }
+  return ''
+}
+
+function MusicPage() {
+  const [playlists, setPlaylists] = useLocalCollection(LOCAL_STORAGE_KEYS.musicPlaylists, defaultMusicPlaylists())
+  const normalizedPlaylists = useMemo(() => {
+    const source = Array.isArray(playlists) && playlists.length ? playlists : defaultMusicPlaylists()
+    return source.map(item => ({ ...item, embedUrl: buildYoutubeEmbedUrl(item) }))
+  }, [playlists])
+  const [selectedId, setSelectedId] = useState(() => normalizedPlaylists[0]?.id || '')
+  const [form, setForm] = useState(() => {
+    const first = normalizedPlaylists[0] || defaultMusicPlaylists()[0]
+    return {
+      name: first.name || '',
+      description: first.description || '',
+      playlistUrl: first.playlistUrl || '',
+      videoUrl: first.videoUrl || '',
+      videosText: first.videosText || '',
+      sourceLabel: first.sourceLabel || 'YouTube 공개 재생목록',
+    }
+  })
+
+  useEffect(() => {
+    if (!normalizedPlaylists.length) return
+    if (!normalizedPlaylists.some(item => item.id === selectedId)) {
+      setSelectedId(normalizedPlaylists[0].id)
+    }
+  }, [normalizedPlaylists, selectedId])
+
+  const activePlaylist = normalizedPlaylists.find(item => item.id === selectedId) || normalizedPlaylists[0] || null
+
+  useEffect(() => {
+    if (!activePlaylist) return
+    setForm({
+      name: activePlaylist.name || '',
+      description: activePlaylist.description || '',
+      playlistUrl: activePlaylist.playlistUrl || '',
+      videoUrl: activePlaylist.videoUrl || '',
+      videosText: activePlaylist.videosText || '',
+      sourceLabel: activePlaylist.sourceLabel || 'YouTube 공개 재생목록',
+    })
+  }, [activePlaylist?.id])
+
+  const previewEmbedUrl = useMemo(() => buildYoutubeEmbedUrl(form), [form])
+
+  function handleSavePlaylist() {
+    if (!activePlaylist) return
+    const nextName = String(form.name || '').trim() || '새 플레이리스트'
+    const nextDescription = String(form.description || '').trim()
+    const nextSourceLabel = String(form.sourceLabel || '').trim() || 'YouTube 공개 재생목록'
+    const nextPlaylistUrl = String(form.playlistUrl || '').trim()
+    const nextVideoUrl = String(form.videoUrl || '').trim()
+    const nextVideosText = String(form.videosText || '').trim()
+    const hasPlayableSource = Boolean(extractYoutubePlaylistId(nextPlaylistUrl) || extractYoutubeVideoId(nextVideoUrl) || parseYoutubeVideoList(nextVideosText).length)
+    if (!hasPlayableSource) {
+      window.alert('공개 YouTube 재생목록 링크 또는 영상 링크를 입력해주세요.')
+      return
+    }
+    setPlaylists(current => current.map(item => item.id === activePlaylist.id ? {
+      ...item,
+      name: nextName,
+      description: nextDescription,
+      playlistUrl: nextPlaylistUrl,
+      playlistId: extractYoutubePlaylistId(nextPlaylistUrl),
+      videoUrl: nextVideoUrl,
+      videoId: extractYoutubeVideoId(nextVideoUrl),
+      videosText: nextVideosText,
+      sourceLabel: nextSourceLabel,
+      updated_at: new Date().toISOString(),
+    } : item))
+  }
+
+  function handleAddPlaylist() {
+    const item = {
+      id: makeLocalId('playlist'),
+      name: `플레이리스트 ${normalizedPlaylists.length + 1}`,
+      description: '공개 YouTube 재생목록',
+      playlistUrl: '',
+      playlistId: '',
+      videoUrl: '',
+      videoId: '',
+      videosText: '',
+      sourceLabel: 'YouTube 공개 재생목록',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    setPlaylists(current => [item, ...current])
+    setSelectedId(item.id)
+    setForm({
+      name: item.name,
+      description: item.description,
+      playlistUrl: '',
+      videoUrl: '',
+      videosText: '',
+      sourceLabel: item.sourceLabel,
+    })
+  }
+
+  function handleDeletePlaylist(id) {
+    if (normalizedPlaylists.length <= 1) {
+      window.alert('최소 1개의 플레이리스트는 유지해주세요.')
+      return
+    }
+    setPlaylists(current => current.filter(item => item.id !== id))
+    if (selectedId === id) {
+      const fallback = normalizedPlaylists.find(item => item.id !== id)
+      if (fallback) setSelectedId(fallback.id)
+    }
+  }
+
+  return (
+    <section className="page-stack music-page-stack">
+      <div className="card stack music-hero-card">
+        <div className="split-row responsive-row">
+          <div className="stack gap-6">
+            <strong>음악듣기</strong>
+            <div className="muted small-text">관리자 계정만 사용할 수 있는 YouTube 공식 임베드 플레이어입니다. 공개 재생목록 또는 공개 영상 링크를 붙여넣어 재생목록처럼 청취할 수 있습니다.</div>
+          </div>
+          <div className="music-hero-actions">
+            <button type="button" className="ghost" onClick={handleAddPlaylist}>플레이리스트 추가</button>
+            <a className="button-link" href="https://www.youtube.com/" target="_blank" rel="noreferrer">YouTube 열기</a>
+          </div>
+        </div>
+        <div className="grid-3 music-metric-grid">
+          <Metric label="등록 재생목록" value={normalizedPlaylists.length} />
+          <Metric label="활성 소스" value={activePlaylist?.sourceLabel || '미설정'} />
+          <Metric label="재생 방식" value={activePlaylist?.playlistUrl ? '공개 재생목록' : activePlaylist?.embedUrl ? '공개 영상 묶음' : '설정 필요'} />
+        </div>
+      </div>
+
+      <div className="music-layout-grid">
+        <div className="card stack music-playlist-list-card">
+          <div className="split-row responsive-row">
+            <strong>재생목록 목록</strong>
+            <div className="muted small-text">관리자 전용</div>
+          </div>
+          <div className="stack compact-list music-playlist-list">
+            {normalizedPlaylists.map(item => {
+              const selected = item.id === activePlaylist?.id
+              return (
+                <div key={item.id} className={selected ? 'music-playlist-item active' : 'music-playlist-item'}>
+                  <button type="button" className="ghost music-playlist-select" onClick={() => setSelectedId(item.id)}>
+                    <span className="stack gap-4">
+                      <strong>{item.name || '이름 없는 플레이리스트'}</strong>
+                      <span className="muted small-text">{item.description || '설명이 없습니다.'}</span>
+                    </span>
+                    <span className="muted small-text">{item.embedUrl ? '재생 가능' : '설정 필요'}</span>
+                  </button>
+                  <button type="button" className="ghost music-delete-button" onClick={() => handleDeletePlaylist(item.id)}>삭제</button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="card stack music-player-card">
+          <div className="split-row responsive-row">
+            <strong>{activePlaylist?.name || '플레이어'}</strong>
+            <div className="muted small-text">공개 YouTube 콘텐츠만 사용</div>
+          </div>
+          <div className="music-player-frame-wrap">
+            {activePlaylist?.embedUrl ? (
+              <iframe
+                key={activePlaylist.embedUrl}
+                className="music-player-frame"
+                src={activePlaylist.embedUrl}
+                title={activePlaylist.name || 'YouTube 음악 플레이어'}
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            ) : (
+              <div className="music-player-empty">
+                <strong>재생 가능한 링크를 입력해주세요.</strong>
+                <div className="muted small-text">공개 YouTube 재생목록 링크를 넣으면 플레이리스트 형태로 바로 재생됩니다.</div>
+              </div>
+            )}
+          </div>
+          <div className="music-source-box">
+            <div className="music-source-row"><strong>소스명</strong><span>{activePlaylist?.sourceLabel || 'YouTube 공개 재생목록'}</span></div>
+            <div className="music-source-row"><strong>플레이리스트 링크</strong><span className="music-source-value">{activePlaylist?.playlistUrl || '-'}</span></div>
+            <div className="music-source-row"><strong>대표 영상 링크</strong><span className="music-source-value">{activePlaylist?.videoUrl || '-'}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-2 music-settings-grid">
+        <div className="card stack music-editor-card">
+          <div className="split-row responsive-row"><strong>플레이리스트 설정</strong><button type="button" className="ghost" onClick={handleSavePlaylist}>저장</button></div>
+          <TextField label="표시 이름" value={form.name} onChange={value => setForm(current => ({ ...current, name: value }))} />
+          <TextField label="설명" value={form.description} onChange={value => setForm(current => ({ ...current, description: value }))} multiline rows={3} />
+          <TextField label="소스명" value={form.sourceLabel} onChange={value => setForm(current => ({ ...current, sourceLabel: value }))} />
+          <TextField label="YouTube 공개 재생목록 링크" value={form.playlistUrl} onChange={value => setForm(current => ({ ...current, playlistUrl: value }))} placeholder="https://www.youtube.com/playlist?list=..." />
+          <TextField label="대표 YouTube 영상 링크" value={form.videoUrl} onChange={value => setForm(current => ({ ...current, videoUrl: value }))} placeholder="https://www.youtube.com/watch?v=..." />
+          <TextField label="추가 영상 링크/ID 목록" value={form.videosText} onChange={value => setForm(current => ({ ...current, videosText: value }))} multiline rows={4} placeholder="영상 링크 또는 11자리 video ID를 줄바꿈으로 여러 개 입력" />
+          <div className="muted small-text">공개 재생목록 링크가 있으면 그 값을 우선 사용하고, 없으면 대표 영상 + 추가 영상 목록으로 순차 재생합니다.</div>
+        </div>
+
+        <div className="card stack music-guide-card">
+          <strong>운영 가이드</strong>
+          <div className="stack compact-list">
+            <div className="mini-card"><strong>권장 방식</strong><div className="muted small-text">공개 YouTube 플레이리스트 링크를 붙여넣는 방식이 가장 간단합니다.</div></div>
+            <div className="mini-card"><strong>대체 방식</strong><div className="muted small-text">대표 영상 1개와 추가 영상 링크를 넣으면 간단한 큐처럼 재생됩니다.</div></div>
+            <div className="mini-card"><strong>주의</strong><div className="muted small-text">다운로드, 백그라운드 음원 추출, 유료 기능 우회는 넣지 않았습니다.</div></div>
+          </div>
+          <div className="music-preview-box">
+            <strong>미리보기 주소</strong>
+            <div className="muted small-text music-preview-url">{previewEmbedUrl || '재생 가능한 주소가 아직 없습니다.'}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
   const sheetRef = useDismissLayer(open, onClose)
   if (!open) return null
   const items = [
@@ -993,6 +1288,7 @@ function MoreBottomSheet({ open, onClose, onSelect }) {
     { path: '/workspace', label: '종합관리', desc: '저장함 · 자기소개서 · 링크 데이터를 한 번에 정리', icon: 'briefcase' },
     { path: '/introductions-manager', label: '자기소개서관리', desc: '회사/직무별 문항 세트 저장 · 비교 · 복원', icon: 'document' },
     { path: '/share-links-manager', label: '링크공유관리', desc: '채용용 · 영업용 · 소개용 공개 링크 생성', icon: 'link' },
+    ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용으로 재생', icon: 'music' }] : []),
     { path: '/more', label: '기타기능', desc: '업데이트 예정', icon: 'more', disabled: true },
   ]
   return createPortal(
