@@ -4494,17 +4494,17 @@ function BusinessCardBuilderPage() {
                 </select>
               </div>
               <div className="stack business-card-field business-card-field-with-shop">
-                <label>명함폼</label>
-                <div className="business-card-shop-inline">
-                  <select value={template} onChange={e => setTemplate(e.target.value)}>
-                    {templateOptions.map(item => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}{isShopPaidTemplate(item.value) ? ' · 유료폼' : item.premium ? ' · 프리미엄' : ''}
-                      </option>
-                    ))}
-                  </select>
+                <div className="business-card-field-label-row">
+                  <label>명함폼</label>
                   <button type="button" className="ghost business-card-shop-button" onClick={() => setShopOpen(true)}>폼상점</button>
                 </div>
+                <select value={template} onChange={e => setTemplate(e.target.value)}>
+                  {templateOptions.map(item => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}{isShopPaidTemplate(item.value) ? ' · 유료폼' : item.premium ? ' · 프리미엄' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="stack business-card-field">
                 <label>명함크기</label>
@@ -4512,6 +4512,9 @@ function BusinessCardBuilderPage() {
                   {sizeOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="business-card-control-grid business-card-control-grid-main">
               <div className="stack business-card-field">
                 <label>명함배경</label>
                 <select value={backgroundMode} onChange={e => setBackgroundMode(e.target.value)}>
@@ -4520,11 +4523,8 @@ function BusinessCardBuilderPage() {
                   <option value="pattern">패턴</option>
                 </select>
               </div>
-            </div>
-
-            <div className="business-card-control-grid business-card-control-grid-main">
               {backgroundMode === 'solid' ? (
-                <div className="stack business-card-field">
+                <div className="stack business-card-field business-card-background-option business-card-background-option-wide">
                   <label>단색선택</label>
                   <select value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)}>
                     {colorOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
@@ -4532,20 +4532,20 @@ function BusinessCardBuilderPage() {
                 </div>
               ) : null}
               {backgroundMode === 'photo' ? (
-                <div className="stack business-card-field">
+                <div className="stack business-card-field business-card-background-option business-card-background-option-wide">
                   <label>사진첨부</label>
                   <input type="file" accept="image/*" onChange={e => readLocalImage(e.target.files?.[0], setUploadedPhoto)} />
                 </div>
               ) : null}
               {backgroundMode === 'pattern' ? (
                 <>
-                  <div className="stack business-card-field">
+                  <div className="stack business-card-field business-card-background-option">
                     <label>기본패턴</label>
                     <select value={patternPreset} onChange={e => setPatternPreset(e.target.value)}>
                       {patternOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
                     </select>
                   </div>
-                  <div className="stack business-card-field">
+                  <div className="stack business-card-field business-card-background-option">
                     <label>패턴첨부</label>
                     <input type="file" accept="image/*" onChange={e => readLocalImage(e.target.files?.[0], setUploadedPattern)} />
                   </div>
