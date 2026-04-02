@@ -2087,3 +2087,77 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .business-tab-chip.active{background:#0f172a;color:#fff;border-color:#0f172a}
 .is-hidden{display:none !important}
 @media (max-width: 900px){.more-launch-grid{grid-template-columns:1fr}}
+
+/* 2026-04-03 asked-style question profile */
+.asked-question-page{gap:0;padding:0 0 24px}
+.asked-page-head{position:sticky;top:74px;z-index:8;background:rgba(255,255,255,.96);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:8px 14px}
+.asked-nav-row{display:flex;align-items:center;gap:12px}
+.asked-page-title{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.asked-board{display:flex;flex-direction:column;gap:0;background:#fff;border:1px solid var(--line);border-radius:0 0 24px 24px;overflow:hidden}
+.asked-profile-shell{padding:18px 16px 16px;background:#fff}
+.asked-topbar-row{display:flex;align-items:center;gap:14px}
+.asked-topbar-avatar{width:72px;height:72px;border-radius:999px;overflow:hidden;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:26px;color:#111827;flex:0 0 auto;border:3px solid #fff;box-shadow:0 10px 28px rgba(15,23,42,.10)}
+.asked-topbar-avatar img{width:100%;height:100%;object-fit:cover}
+.asked-topbar-stats{flex:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.asked-stat-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 4px;border-radius:16px;background:#f8fafc;border:1px solid #edf2f7;text-align:center}
+.asked-stat-item strong{font-size:15px;line-height:1.1}
+.asked-stat-item span{font-size:11px;color:var(--muted);line-height:1.2}
+.asked-profile-copy{padding-top:14px;display:flex;flex-direction:column;gap:4px}
+.asked-display-name{font-size:19px;font-weight:800;line-height:1.2}
+.asked-account-id{font-size:13px;color:var(--muted)}
+.asked-bio-line{font-size:14px;line-height:1.55;color:#111827;padding-top:2px;white-space:pre-wrap}
+.asked-cta-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 56px;gap:10px;padding-top:14px}
+.asked-follow-button,.asked-question-button,.asked-share-button{min-height:44px;border-radius:14px;font-size:14px;font-weight:800;padding:10px 14px;box-shadow:none}
+.asked-follow-button.active{background:#111827;color:#fff;border-color:#111827}
+.asked-question-button{background:#111827;border-color:#111827;color:#fff}
+.asked-share-button{min-width:56px;padding:10px 0}
+.asked-ad-banner{margin-top:14px;height:74px;border-radius:18px;background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);border:1px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;gap:10px;color:#475569}
+.asked-ad-label{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:24px;border-radius:999px;background:#fff;border:1px solid #cbd5e1;font-size:12px;font-weight:800}
+.asked-ad-copy{font-size:14px;font-weight:700}
+.asked-tabs{border-top:8px solid #f8fafc;background:#fff}
+.asked-tabs-inner{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--line)}
+.asked-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:#fff;border:0;border-bottom:2px solid transparent;border-radius:0;padding:14px 8px 12px;color:#64748b;box-shadow:none}
+.asked-tab:hover{transform:none;background:#fafcff}
+.asked-tab.active{color:#111827;border-bottom-color:#111827}
+.asked-tab-count{font-size:12px;color:inherit}
+.asked-ask-card{margin:14px 16px 0;padding:16px;border:1px solid var(--line);border-radius:20px;background:#fff;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 28px rgba(15,23,42,.06)}
+.asked-ask-head{display:flex;flex-direction:column;gap:4px}
+.asked-nickname-row{align-items:flex-end}
+.asked-ask-actions{display:flex;gap:10px;flex-wrap:wrap}
+.asked-feed-list{display:flex;flex-direction:column;gap:12px;padding:14px 16px 18px;background:#f8fafc}
+.asked-feed-card{background:#fff;border:1px solid #e7edf4;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 24px rgba(15,23,42,.05)}
+.asked-feed-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.asked-feed-copy{min-width:0;flex:1}
+.asked-question-body{font-size:15px;line-height:1.65;color:#0f172a;white-space:pre-wrap}
+.asked-answer-box{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:18px;background:#f8fafc;border:1px solid #e7edf4}
+.asked-owner-box{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:#f8fafc;border:1px solid #e7edf4}
+.asked-action-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;border-top:1px solid #eef2f7;padding-top:12px}
+.asked-action-button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 6px;border-radius:16px;background:#fff;border:1px solid #edf2f7;color:#334155;box-shadow:none}
+.asked-action-button:hover{transform:none;background:#f8fafc;border-color:#dbe3ec}
+.asked-action-label{font-size:12px;font-weight:700}
+.asked-action-count{font-size:12px;color:var(--muted)}
+.asked-comments-box{display:flex;flex-direction:column;gap:10px;padding-top:2px}
+.asked-comment-card{padding:12px 14px;border-radius:16px;border:1px solid #e7edf4;background:#f8fafc}
+.asked-comment-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.asked-empty-card,.asked-locked-card{padding:18px;border-radius:20px;background:#fff;border:1px dashed #dbe3ec;color:#64748b;text-align:center}
+@media (max-width:820px){
+  .asked-question-page{padding:0}
+  .asked-page-head{top:48px;padding:7px 12px}
+  .asked-board{border-left:0;border-right:0;border-bottom-left-radius:0;border-bottom-right-radius:0}
+}
+@media (max-width:640px){
+  .asked-topbar-row{align-items:flex-start}
+  .asked-topbar-avatar{width:68px;height:68px}
+  .asked-topbar-stats{gap:6px}
+  .asked-stat-item{padding:8px 2px;border-radius:14px}
+  .asked-stat-item strong{font-size:14px}
+  .asked-stat-item span{font-size:10px}
+  .asked-cta-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 52px}
+  .asked-profile-shell{padding:16px 14px 14px}
+  .asked-feed-list{padding:12px 12px 16px}
+  .asked-feed-card{padding:14px;border-radius:20px}
+  .asked-action-row{gap:6px}
+  .asked-action-button{border-radius:14px;padding:10px 4px}
+  .asked-comment-form{grid-template-columns:1fr}
+  .asked-comment-form button{width:100%}
+}

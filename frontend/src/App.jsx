@@ -2491,11 +2491,20 @@ function statusLabel(value) {
   return { pending: '새질문', answered: '피드', rejected: '거절질문' }[value] || value
 }
 
-function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = true, initialAskOpen = false }) {
+function formatCompactCount(value) {
+  const count = Number(value || 0)
+  if (!Number.isFinite(count) || count <= 0) return '0'
+  if (count >= 10000) return `${(count / 10000).toFixed(count >= 100000 ? 0 : 1).replace(/\.0$/, '')}만`
+  if (count >= 1000) return `${(count / 1000).toFixed(count >= 10000 ? 0 : 1).replace(/\.0$/, '')}천`
+  return String(count)
+}
+
+function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = true, initialAskOpen = false, variant = 'default', headerExtras = null }) {
   const navigate = useNavigate()
   const viewer = getStoredUser()
   const viewerId = Number(viewer?.id || 0)
   const defaultNickname = String(viewer?.nickname || '').trim() || '익명'
+  const isAskedStyle = variant === 'asked'
   const [tab, setTab] = useState('feed')
   const [askOpen, setAskOpen] = useState(Boolean(initialAskOpen))
   const [question, setQuestion] = useState('')
@@ -2583,23 +2592,44 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
     await onRefresh?.(data.item)
   }
 
-  const tabDefs = [
-    { key: 'feed', label: `피드 ${feedItems.length}` },
-    { key: 'new', label: isOwner ? `새질문 ${newItems.length}` : '새질문' },
-    { key: 'rejected', label: isOwner ? `거절질문 ${rejectedItems.length}` : '거절질문' },
-  ]
+  const tabDefs = isAskedStyle
+    ? [
+        { key: 'feed', label: '내피드', count: feedItems.length },
+        { key: 'new', label: '새질문', count: newItems.length },
+        { key: 'rejected', label: '거절질문', count: rejectedItems.length },
+      ]
+    : [
+        { key: 'feed', label: `피드 ${feedItems.length}` },
+        { key: 'new', label: isOwner ? `새질문 ${newItems.length}` : '새질문' },
+        { key: 'rejected', label: isOwner ? `거절질문 ${rejectedItems.length}` : '거절질문' },
+      ]
 
   return (
-    <section className="card stack question-board">
-      <div className="split-row question-board-head">
-        <div className="tab-row question-tabs-row">
-          {tabDefs.map(item => <button key={item.key} type="button" className={tab === item.key ? 'tab active' : 'tab'} onClick={() => setTab(item.key)}>{item.label}</button>)}
+    <section className={isAskedStyle ? 'asked-board' : 'card stack question-board'}>
+      {headerExtras}
+      <div className={isAskedStyle ? 'asked-tabs' : 'split-row question-board-head'}>
+        <div className={isAskedStyle ? 'asked-tabs-inner' : 'tab-row question-tabs-row'}>
+          {tabDefs.map(item => (
+            <button
+              key={item.key}
+              type="button"
+              className={isAskedStyle ? `asked-tab ${tab === item.key ? 'active' : ''}` : (tab === item.key ? 'tab active' : 'tab')}
+              onClick={() => setTab(item.key)}
+            >
+              <span>{item.label}</span>
+              {isAskedStyle ? <span className="asked-tab-count">{formatCompactCount(item.count)}</span> : null}
+            </button>
+          ))}
         </div>
-        {!isOwner && canAsk ? <button type="button" onClick={() => setAskOpen(v => !v)}>질문하기</button> : null}
+        {!isAskedStyle && !isOwner && canAsk ? <button type="button" onClick={() => setAskOpen(v => !v)}>질문하기</button> : null}
       </div>
       {!isOwner && askOpen ? (
-        <div className="bordered-box stack question-ask-box">
-          <div className="inline-form responsive-row question-nickname-row">
+        <div className={isAskedStyle ? 'asked-ask-card' : 'bordered-box stack question-ask-box'}>
+          <div className={isAskedStyle ? 'asked-ask-head' : undefined}>
+            {isAskedStyle ? <strong>질문 남기기</strong> : null}
+            {isAskedStyle ? <span className="muted small-text">상대에게 익명 또는 닉네임으로 질문을 보낼 수 있습니다.</span> : null}
+          </div>
+          <div className={`inline-form responsive-row question-nickname-row${isAskedStyle ? ' asked-nickname-row' : ''}`}>
             <TextField label="닉네임" value={nickname} onChange={setNickname} />
             <label className="question-anon-toggle">
               <input type="checkbox" checked={isAnonymous} onChange={event => {
@@ -2607,29 +2637,29 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
                 setIsAnonymous(checked)
                 setNickname(checked ? '익명' : (String(getStoredUser()?.nickname || '').trim() || '익명'))
               }} />
-              <span>ㅁ 익명전환</span>
+              <span>익명전환</span>
             </label>
           </div>
           <label>질문 내용</label>
           <textarea value={question} onChange={e => setQuestion(e.target.value)} placeholder="상대에게 남길 질문을 입력하세요." />
           <TurnstileWidget enabled={turnstile.turnstile_enabled} siteKey={turnstile.turnstile_site_key} onToken={setCaptchaToken} refreshKey={`question-board-${captchaVersion}`} />
-          <div className="action-wrap">
+          <div className={isAskedStyle ? 'asked-ask-actions' : 'action-wrap'}>
             <button type="button" onClick={askQuestion} disabled={turnstile.turnstile_enabled && !captchaToken}>질문 등록</button>
             <button type="button" className="ghost" onClick={() => setAskOpen(false)}>닫기</button>
           </div>
         </div>
       ) : null}
-      <div className="list question-feed-list">
-        {lockedTab ? <div className="bordered-box muted">이 항목은 프로필 소유자만 확인할 수 있습니다.</div> : null}
+      <div className={isAskedStyle ? 'asked-feed-list' : 'list question-feed-list'}>
+        {lockedTab ? <div className={isAskedStyle ? 'asked-locked-card' : 'bordered-box muted'}>이 항목은 프로필 소유자만 확인할 수 있습니다.</div> : null}
         {!lockedTab && visibleItems.length ? visibleItems.map(item => {
           const comments = commentLists[item.id] || []
           const canDeleteOwnQuestion = !isOwner && viewerId > 0 && Number(item.asker_user_id || 0) === viewerId
           return (
-            <article key={item.id} className="question-feed-card">
-              <div className="question-feed-top">
-                <div>
+            <article key={item.id} className={isAskedStyle ? 'asked-feed-card' : 'question-feed-card'}>
+              <div className={isAskedStyle ? 'asked-feed-top' : 'question-feed-top'}>
+                <div className="asked-feed-copy">
                   <div className="question-user-line"><strong>{item.display_nickname || item.nickname}</strong><span className="muted small-text">질문일 {formatDateLabel(item.created_at)}</span></div>
-                  <div className="question-body">{item.question_text}</div>
+                  <div className={isAskedStyle ? 'asked-question-body' : 'question-body'}>{item.question_text}</div>
                 </div>
                 <div className="question-top-actions">
                   {canDeleteOwnQuestion ? (
@@ -2637,17 +2667,17 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
                       <IconGlyph name="trash" label="삭제" />
                     </button>
                   ) : null}
-                  <span className="chip">{statusLabel(item.status)}</span>
+                  {!isAskedStyle ? <span className="chip">{statusLabel(item.status)}</span> : null}
                 </div>
               </div>
               {item.status === 'answered' ? (
-                <div className="answer-box question-answer-box">
+                <div className={isAskedStyle ? 'asked-answer-box' : 'answer-box question-answer-box'}>
                   <div className="question-user-line"><strong>{ownerNickname || '답변자'}</strong><span className="muted small-text">답변일 {formatDateLabel(item.answered_at)}</span></div>
                   <div className="pre-wrap">{item.answer_text}</div>
                 </div>
               ) : null}
               {item.status === 'pending' && isOwner ? (
-                <div className="stack bordered-box">
+                <div className={isAskedStyle ? 'asked-owner-box' : 'stack bordered-box'}>
                   <label>답변 작성</label>
                   <textarea value={answers[item.id] || ''} onChange={e => setAnswers(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder="답변을 입력하면 피드로 이동합니다." />
                   <div className="action-wrap">
@@ -2657,18 +2687,30 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
                   </div>
                 </div>
               ) : null}
-              <div className="question-footer-actions">
-                <button type="button" className="ghost" onClick={() => loadComments(item)}>댓글 {item.comments_count || 0}</button>
-                <button type="button" className="ghost" onClick={() => engage(item, 'like')}>좋아요 {item.liked_count || 0}</button>
-                <button type="button" className="ghost" onClick={() => engage(item, 'bookmark')}>보관 {item.bookmarked_count || 0}</button>
-                <button type="button" className="ghost" onClick={() => engage(item, 'share')}>공유 {item.shared_count || 0}</button>
+              <div className={isAskedStyle ? 'asked-action-row' : 'question-footer-actions'}>
+                <button type="button" className={isAskedStyle ? 'asked-action-button' : 'ghost'} onClick={() => loadComments(item)}>
+                  <span className="asked-action-label">댓글</span>
+                  <span className="asked-action-count">{formatCompactCount(item.comments_count || 0)}</span>
+                </button>
+                <button type="button" className={isAskedStyle ? 'asked-action-button' : 'ghost'} onClick={() => engage(item, 'like')}>
+                  <span className="asked-action-label">좋아요</span>
+                  <span className="asked-action-count">{formatCompactCount(item.liked_count || 0)}</span>
+                </button>
+                <button type="button" className={isAskedStyle ? 'asked-action-button' : 'ghost'} onClick={() => engage(item, 'bookmark')}>
+                  <span className="asked-action-label">보관</span>
+                  <span className="asked-action-count">{formatCompactCount(item.bookmarked_count || 0)}</span>
+                </button>
+                <button type="button" className={isAskedStyle ? 'asked-action-button' : 'ghost'} onClick={() => engage(item, 'share')}>
+                  <span className="asked-action-label">공유</span>
+                  <span className="asked-action-count">{formatCompactCount(item.shared_count || 0)}</span>
+                </button>
               </div>
               {commentLists[item.id] ? (
-                <div className="stack question-comments-box">
+                <div className={isAskedStyle ? 'asked-comments-box' : 'stack question-comments-box'}>
                   <div className="list compact-list">
-                    {comments.length ? comments.map(comment => <div key={comment.id} className="bordered-box"><strong>{comment.display_nickname}</strong><div className="muted small-text">{formatDateLabel(comment.created_at)}</div><div>{comment.comment_text}</div></div>) : <div className="muted">아직 댓글이 없습니다.</div>}
+                    {comments.length ? comments.map(comment => <div key={comment.id} className={isAskedStyle ? 'asked-comment-card' : 'bordered-box'}><strong>{comment.display_nickname}</strong><div className="muted small-text">{formatDateLabel(comment.created_at)}</div><div>{comment.comment_text}</div></div>) : <div className="muted">아직 댓글이 없습니다.</div>}
                   </div>
-                  <div className="inline-form responsive-row">
+                  <div className={isAskedStyle ? 'asked-comment-form' : 'inline-form responsive-row'}>
                     <input value={commentDrafts[item.id] || ''} onChange={e => setCommentDrafts(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder="댓글 입력" />
                     <button type="button" onClick={() => addComment(item)}>댓글 등록</button>
                   </div>
@@ -2676,12 +2718,149 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
               ) : null}
             </article>
           )
-        }) : <div className="bordered-box muted">표시할 항목이 없습니다.</div>}
+        }) : <div className={isAskedStyle ? 'asked-empty-card' : 'bordered-box muted'}>표시할 항목이 없습니다.</div>}
       </div>
     </section>
   )
 }
 
+function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow, followLoading }) {
+  const profile = data?.profile
+  const owner = data?.owner
+  const stats = profile?.stats || {}
+  const isFollowing = Boolean(data?.viewer?.is_following)
+  const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필 주인'
+  const profileIdLabel = owner?.account_unique_id || owner?.email?.split('@')?.[0] || 'profile'
+  const avatarUrl = profile?.profile_image_url || owner?.photo_url || ''
+  const coverUrl = profile?.cover_image_url || ''
+
+  async function handleShare() {
+    const shareUrl = `${window.location.origin}/questions/${profile?.id}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${profileName} 질문`, url: shareUrl })
+        return
+      }
+    } catch {}
+    try { await navigator.clipboard.writeText(shareUrl) } catch {}
+    window.alert('질문 화면 주소를 복사했습니다.')
+  }
+
+  return (
+    <div className="asked-profile-shell">
+      <div className="asked-topbar-row">
+        <div className="asked-topbar-avatar">
+          {avatarUrl ? <img src={avatarUrl} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}
+        </div>
+        <div className="asked-topbar-stats">
+          <div className="asked-stat-item"><strong>{formatCompactCount(stats.feed_post_count || stats.answered_count || 0)}</strong><span>작성글</span></div>
+          <div className="asked-stat-item"><strong>{formatCompactCount(stats.answered_count || 0)}</strong><span>답변완료</span></div>
+          <div className="asked-stat-item"><strong>{formatCompactCount(stats.follower_count || 0)}</strong><span>팔로워</span></div>
+          <div className="asked-stat-item"><strong>{formatCompactCount(stats.following_count || 0)}</strong><span>팔로잉</span></div>
+        </div>
+      </div>
+      <div className="asked-profile-copy">
+        <div className="asked-display-name">{profileName}</div>
+        <div className="asked-account-id">@{profileIdLabel}</div>
+        <div className="asked-bio-line">{profile?.headline || profile?.bio || '한 줄 소개가 아직 없습니다.'}</div>
+      </div>
+      <div className="asked-cta-row">
+        <button type="button" className={isFollowing ? 'ghost asked-follow-button active' : 'ghost asked-follow-button'} onClick={onToggleFollow} disabled={followLoading}>{followLoading ? '처리중' : (isFollowing ? '팔로잉' : '팔로잉')}</button>
+        <button type="button" className="asked-question-button" onClick={onToggleAsk}>{askOpen ? '질문닫기' : '질문하기'}</button>
+        <button type="button" className="ghost asked-share-button" onClick={handleShare}>공유</button>
+      </div>
+      <div className="asked-ad-banner">
+        <div className="asked-ad-label">AD</div>
+        <div className="asked-ad-copy">광고 영역</div>
+      </div>
+    </div>
+  )
+}
+
+function QuestionProfilePage() {
+  const { profileId } = useParams()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  const [followLoading, setFollowLoading] = useState(false)
+  const [askRequested, setAskRequested] = useState(Boolean(location.state?.openAsk))
+
+  async function load() {
+    try {
+      const next = await api(`/api/profiles/${profileId}/view`)
+      setData(next)
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  useEffect(() => { load() }, [profileId])
+
+  async function toggleFollow() {
+    if (!data?.profile?.id || data?.is_owner) return
+    setFollowLoading(true)
+    try {
+      const isFollowing = Boolean(data?.viewer?.is_following)
+      const result = await api(`/api/profiles/${data.profile.id}/follow`, { method: isFollowing ? 'DELETE' : 'POST' })
+      setData(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          viewer: { ...(prev.viewer || {}), is_following: Boolean(result.is_following) },
+          profile: {
+            ...prev.profile,
+            stats: {
+              ...(prev.profile?.stats || {}),
+              follower_count: Number(result.follower_count || 0),
+              following_count: Number(result.following_count || prev.profile?.stats?.following_count || 0),
+            },
+          },
+        }
+      })
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
+  if (error) return <div className="card error">{error}</div>
+  if (!data?.profile) return <div className="card">불러오는 중...</div>
+
+  const profileName = data.owner?.nickname || data.profile.display_name || data.profile.title || '프로필 주인'
+  const isAskedStyle = !Boolean(data.is_owner)
+
+  return (
+    <div className={`stack page-stack question-profile-page${isAskedStyle ? ' asked-question-page' : ''}`}>
+      <section className={isAskedStyle ? 'asked-page-head' : 'card stack question-profile-header-card'}>
+        <div className={isAskedStyle ? 'asked-nav-row' : 'question-profile-header-row'}>
+          <BackIconButton onClick={() => navigate(-1)} />
+          {isAskedStyle ? <div className="asked-page-title">질문</div> : (
+            <button type="button" className="question-profile-summary">
+              <span className="feed-avatar question-profile-avatar">
+                {data.profile?.profile_image_url || data.owner?.photo_url ? <img src={data.profile?.profile_image_url || data.owner?.photo_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}
+              </span>
+              <span className="question-profile-summary-copy">
+                <strong>{profileName}</strong>
+                <span>{askRequested && !Boolean(data.is_owner) ? '질문을 남길 수 있는 화면입니다.' : '질문과 피드를 확인할 수 있습니다.'}</span>
+              </span>
+            </button>
+          )}
+        </div>
+      </section>
+      <QuestionBoard
+        profile={data.profile}
+        ownerNickname={profileName}
+        isOwner={Boolean(data.is_owner)}
+        onRefresh={load}
+        canAsk
+        initialAskOpen={askRequested && !Boolean(data.is_owner)}
+        variant={isAskedStyle ? 'asked' : 'default'}
+        headerExtras={isAskedStyle ? <AskedQuestionProfileHeader data={data} askOpen={askRequested} onToggleAsk={() => setAskRequested(prev => !prev)} onToggleFollow={toggleFollow} followLoading={followLoading} /> : null}
+      />
+    </div>
+  )
+}
 
 function FeedProfileCard({ item, onOpenProfile }) {
   const navigate = useNavigate()
@@ -2708,55 +2887,6 @@ function FeedProfileCard({ item, onOpenProfile }) {
         </div>
       </div>
     </article>
-  )
-}
-
-function QuestionProfilePage() {
-  const { profileId } = useParams()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [data, setData] = useState(null)
-  const [error, setError] = useState('')
-  const [profileOpen, setProfileOpen] = useState(false)
-  const openAskRequested = Boolean(location.state?.openAsk)
-
-  async function load() {
-    try {
-      const next = await api(`/api/profiles/${profileId}/view`)
-      setData(next)
-      setError('')
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
-  useEffect(() => { load() }, [profileId])
-
-  if (error) return <div className="card error">{error}</div>
-  if (!data?.profile) return <div className="card">불러오는 중...</div>
-
-  const profileName = data.owner?.nickname || data.profile.display_name || data.profile.title || '프로필 주인'
-  const profileAvatar = data.profile?.profile_image_url || data.owner?.photo_url || ''
-
-  return (
-    <div className="stack page-stack question-profile-page">
-      <section className="card stack question-profile-header-card">
-        <div className="question-profile-header-row">
-          <BackIconButton onClick={() => navigate(-1)} />
-          <button type="button" className="question-profile-summary" onClick={() => setProfileOpen(v => !v)}>
-            <span className="feed-avatar question-profile-avatar">
-              {profileAvatar ? <img src={profileAvatar} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}
-            </span>
-            <span className="question-profile-summary-copy">
-              <strong>{profileName}</strong>
-              <span>{openAskRequested && !Boolean(data.is_owner) ? '질문을 남길 수 있는 화면입니다.' : '질문과 피드를 확인할 수 있습니다.'}</span>
-            </span>
-          </button>
-        </div>
-        {profileOpen ? <ProfileOverviewCard profile={data.profile} expanded /> : null}
-      </section>
-      <QuestionBoard profile={data.profile} ownerNickname={profileName} isOwner={Boolean(data.is_owner)} onRefresh={load} canAsk initialAskOpen={openAskRequested && !Boolean(data.is_owner)} />
-    </div>
   )
 }
 

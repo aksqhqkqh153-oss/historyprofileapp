@@ -1187,6 +1187,7 @@ def profile_search_visible(row: dict) -> bool:
 
 def serialize_profile(conn, row: dict, include_private: bool = False) -> dict:
     profile_id = row["id"]
+    user_id = int(row.get("user_id") or 0)
     careers = [
         serialize_career(item)
         for item in map(row_to_dict, conn.execute("SELECT * FROM app_careers WHERE profile_id = ? ORDER BY sort_order ASC, id DESC", (profile_id,)).fetchall())
@@ -1214,6 +1215,12 @@ def serialize_profile(conn, row: dict, include_private: bool = False) -> dict:
     visible_uploads = upload_rows if include_private else [item for item in upload_rows if item.get("moderation_status") != "rejected"]
     visibility_mode = sanitize_visibility_mode(row.get("visibility_mode") or ("search" if to_bool(row.get("is_public")) else "private"))
     question_permission = sanitize_question_permission(row.get("question_permission") or ("any" if to_bool(row.get("allow_anonymous_questions")) else "none"))
+    feed_post_count = int(conn.execute("SELECT COUNT(*) FROM feed_posts WHERE user_id = ?", (user_id,)).fetchone()[0] or 0)
+    follower_count = int(conn.execute("SELECT COUNT(*) FROM follows WHERE to_user_id = ?", (user_id,)).fetchone()[0] or 0)
+    following_count = int(conn.execute("SELECT COUNT(*) FROM follows WHERE from_user_id = ?", (user_id,)).fetchone()[0] or 0)
+    answered_count = len([item for item in question_rows if item.get("status") == "answered"])
+    pending_count = len([item for item in question_rows if item.get("status") == "pending"])
+    rejected_count = len([item for item in question_rows if item.get("status") == "rejected"])
     return {
         "id": row["id"],
         "user_id": row["user_id"],
@@ -1246,6 +1253,14 @@ def serialize_profile(conn, row: dict, include_private: bool = False) -> dict:
         "qrs": qrs,
         "questions": [serialize_question(item) for item in question_rows],
         "uploads": [serialize_upload(item) for item in visible_uploads],
+        "stats": {
+            "feed_post_count": feed_post_count,
+            "answered_count": answered_count,
+            "pending_count": pending_count,
+            "rejected_count": rejected_count,
+            "follower_count": follower_count,
+            "following_count": following_count,
+        },
     }
 
 
@@ -2621,7 +2636,57 @@ def get_profile_view(profile_id: int, user=Depends(current_user_optional)):
         if not can_view:
             raise HTTPException(status_code=404, detail="프로필을 찾을 수 없습니다.")
         owner = conn.execute("SELECT * FROM users WHERE id = ?", (profile_row["user_id"],)).fetchone()
-        return {"profile": serialize_profile(conn, profile_row, include_private=is_owner), "owner": user_public_dict(owner), "is_owner": is_owner}
+        owner_id = int(profile_row.get("user_id") or 0)
+        viewer_id = int(user.get("id") or 0) if user else 0
+        viewer_following = False
+        viewer_followed_by = False
+        if viewer_id and owner_id and viewer_id != owner_id:
+            viewer_following = bool(conn.execute("SELECT 1 FROM follows WHERE from_user_id = ? AND to_user_id = ? LIMIT 1", (viewer_id, owner_id)).fetchone())
+            viewer_followed_by = bool(conn.execute("SELECT 1 FROM follows WHERE from_user_id = ? AND to_user_id = ? LIMIT 1", (owner_id, viewer_id)).fetchone())
+        return {
+            "profile": serialize_profile(conn, profile_row, include_private=is_owner),
+            "owner": user_public_dict(owner),
+            "is_owner": is_owner,
+            "viewer": {
+                "is_following": viewer_following,
+                "is_followed_by": viewer_followed_by,
+            },
+        }
+
+
+@app.post("/api/profiles/{profile_id}/follow")
+def follow_profile_owner(profile_id: int, user=Depends(current_user)):
+    with get_conn() as conn:
+        row = conn.execute("SELECT user_id FROM app_profiles WHERE id = ? LIMIT 1", (profile_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="프로필을 찾을 수 없습니다.")
+        target_user_id = int(row[0])
+        viewer_id = int(user.get("id") or 0)
+        if not viewer_id or viewer_id == target_user_id:
+            raise HTTPException(status_code=400, detail="자기 자신은 팔로우할 수 없습니다.")
+        conn.execute(
+            "INSERT OR IGNORE INTO follows(from_user_id, to_user_id, created_at) VALUES (?, ?, ?)",
+            (viewer_id, target_user_id, utcnow()),
+        )
+        follower_count = int(conn.execute("SELECT COUNT(*) FROM follows WHERE to_user_id = ?", (target_user_id,)).fetchone()[0] or 0)
+        following_count = int(conn.execute("SELECT COUNT(*) FROM follows WHERE from_user_id = ?", (target_user_id,)).fetchone()[0] or 0)
+        return {"ok": True, "is_following": True, "follower_count": follower_count, "following_count": following_count}
+
+
+@app.delete("/api/profiles/{profile_id}/follow")
+def unfollow_profile_owner(profile_id: int, user=Depends(current_user)):
+    with get_conn() as conn:
+        row = conn.execute("SELECT user_id FROM app_profiles WHERE id = ? LIMIT 1", (profile_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="프로필을 찾을 수 없습니다.")
+        target_user_id = int(row[0])
+        viewer_id = int(user.get("id") or 0)
+        if not viewer_id or viewer_id == target_user_id:
+            raise HTTPException(status_code=400, detail="자기 자신은 언팔로우할 수 없습니다.")
+        conn.execute("DELETE FROM follows WHERE from_user_id = ? AND to_user_id = ?", (viewer_id, target_user_id))
+        follower_count = int(conn.execute("SELECT COUNT(*) FROM follows WHERE to_user_id = ?", (target_user_id,)).fetchone()[0] or 0)
+        following_count = int(conn.execute("SELECT COUNT(*) FROM follows WHERE from_user_id = ?", (target_user_id,)).fetchone()[0] or 0)
+        return {"ok": True, "is_following": False, "follower_count": follower_count, "following_count": following_count}
 
 
 @app.get("/api/profile-public/{slug}")
