@@ -4058,11 +4058,14 @@ function UrlShortenerPage() {
 
 function BusinessCardBuilderPage() {
   const BUSINESS_CARD_STORAGE_KEY = 'historyprofile_saved_business_cards'
+  const BUSINESS_CARD_SHOP_UNLOCK_KEY = 'historyprofile_business_card_shop_unlocks'
   const [template, setTemplate] = useState('clean')
   const [cardSize, setCardSize] = useState('standard_90x50')
   const [savedCards, setSavedCards] = useState([])
   const [selectedSavedCard, setSelectedSavedCard] = useState('')
   const [shopOpen, setShopOpen] = useState(false)
+  const [shopPreviewId, setShopPreviewId] = useState('')
+  const [unlockedShopForms, setUnlockedShopForms] = useState([])
   const [backgroundMode, setBackgroundMode] = useState('solid')
   const [backgroundColor, setBackgroundColor] = useState('#ffffff')
   const [patternPreset, setPatternPreset] = useState('dots')
@@ -4122,15 +4125,28 @@ function BusinessCardBuilderPage() {
   ]
 
   const shopForms = [
-    { id: 'executive', name: '이그제큐티브', price: '₩3,900', desc: '법률·금융·컨설팅 업종용 고급형' },
-    { id: 'bold', name: '볼드 아이덴티티', price: '₩2,900', desc: '퍼스널 브랜딩 강조형' },
-    { id: 'portfolio', name: '포트폴리오형', price: '₩1,900', desc: '디자이너·개발자·강사용' },
-    { id: 'soft', name: '소프트 브랜딩', price: '₩1,900', desc: '뷰티·상담·라이프스타일 업종용' },
+    { id: 'executive', name: '이그제큐티브', price: '₩3,900', desc: '법률·금융·컨설팅 업종용 고급형', lockNote: '저장/원본 파일은 결제 후 사용 가능' },
+    { id: 'bold', name: '볼드 아이덴티티', price: '₩2,900', desc: '퍼스널 브랜딩 강조형', lockNote: '저장/원본 파일은 결제 후 사용 가능' },
+    { id: 'portfolio', name: '포트폴리오형', price: '₩1,900', desc: '디자이너·개발자·강사용', lockNote: '저장/원본 파일은 결제 후 사용 가능' },
+    { id: 'soft', name: '소프트 브랜딩', price: '₩1,900', desc: '뷰티·상담·라이프스타일 업종용', lockNote: '저장/원본 파일은 결제 후 사용 가능' },
   ]
+
+  const shopPreviewSeed = {
+    name: '홍길동',
+    jobTitle: '대표',
+    company: '히스토리프로필',
+    phone: '010-1234-5678',
+    email: 'hello@historyprofile.app',
+    website: 'historyprofile.app',
+    address: '서울시 강남구 테헤란로 00',
+    tagline: '이력·프로필·링크를 한 장으로 정리하는 명함 샘플입니다.',
+  }
 
   const currentTemplate = templateOptions.find(item => item.value === template) || templateOptions[0]
   const currentSize = sizeOptions.find(item => item.value === cardSize) || sizeOptions[0]
   const currentPattern = patternOptions.find(item => item.value === patternPreset) || patternOptions[0]
+  const currentShopForm = shopForms.find(item => item.id === template) || null
+  const activeShopPreview = shopForms.find(item => item.id === shopPreviewId) || null
 
   useEffect(() => {
     try {
@@ -4139,16 +4155,41 @@ function BusinessCardBuilderPage() {
     } catch {
       setSavedCards([])
     }
+    try {
+      const parsedUnlocks = JSON.parse(localStorage.getItem(BUSINESS_CARD_SHOP_UNLOCK_KEY) || '[]')
+      if (Array.isArray(parsedUnlocks)) setUnlockedShopForms(parsedUnlocks)
+    } catch {
+      setUnlockedShopForms([])
+    }
   }, [])
+
+  function isShopPaidTemplate(templateValue) {
+    return shopForms.some(item => item.id === templateValue)
+  }
+
+  function isTemplateUnlocked(templateValue) {
+    return !isShopPaidTemplate(templateValue) || unlockedShopForms.includes(templateValue)
+  }
+
+  function ensureTemplateUnlocked(actionLabel, templateValue = template) {
+    if (isTemplateUnlocked(templateValue)) return true
+    const targetForm = shopForms.find(item => item.id === templateValue)
+    if (targetForm) {
+      setShopOpen(true)
+      window.alert(`${targetForm.name} 폼은 ${actionLabel} 전에 결제가 필요합니다.`)
+      return false
+    }
+    return true
+  }
 
   useEffect(() => {
     const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern
-    if (!hasContent) return
+    if (!hasContent || !isTemplateUnlocked(template)) return
     const timer = window.setTimeout(() => {
       persistCurrentCard({ silent: true, title: form.name?.trim() || form.company?.trim() || '최근 작업' })
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern])
+  }, [template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern, unlockedShopForms])
 
   function persistCurrentCard({ silent = false, title } = {}) {
     const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern
@@ -4156,6 +4197,7 @@ function BusinessCardBuilderPage() {
       if (!silent) window.alert('저장할 명함 정보가 없습니다.')
       return null
     }
+    if (!ensureTemplateUnlocked('저장', template)) return null
     const snapshot = {
       id: `card-${Date.now()}`,
       title: title || form.name?.trim() || form.company?.trim() || '최근 작업',
@@ -4236,32 +4278,173 @@ function BusinessCardBuilderPage() {
   }
 
   function saveCard() {
+    if (!ensureTemplateUnlocked('저장', template)) return
     persistCurrentCard({ title: form.name?.trim() || form.company?.trim() || '내 명함' })
   }
 
-  function getBackgroundStyle() {
-    if (backgroundMode === 'photo' && uploadedPhoto) {
-      return { backgroundImage: `url(${uploadedPhoto})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#ffffff' }
+  function showPaymentGuide(item) {
+    window.alert(`${item.name} 폼은 현재 미리보기 및 적용만 가능합니다. 저장 또는 원본 파일 받기는 결제 연동 후 사용할 수 있습니다.`)
+  }
+
+  function openShopPreview(templateValue) {
+    setShopPreviewId(templateValue)
+  }
+
+  function closeShopPreview() {
+    setShopPreviewId('')
+  }
+
+  function applyShopForm(templateValue) {
+    setTemplate(templateValue)
+    setShopPreviewId('')
+    setShopOpen(false)
+    window.alert('선택한 명함폼이 만들기 화면에 적용되었습니다.')
+  }
+
+  function getTemplateBaseBackground(templateValue) {
+    switch (templateValue) {
+      case 'modern':
+        return { background: 'linear-gradient(135deg,#111827 0%,#1d4ed8 100%)', color: '#ffffff' }
+      case 'minimal':
+        return { background: 'linear-gradient(180deg,#fafafa 0%,#f1f5f9 100%)', color: '#0f172a' }
+      case 'executive':
+        return { background: 'linear-gradient(135deg,#111827 0%,#3f3f46 100%)', color: '#f8fafc' }
+      case 'soft':
+        return { background: 'linear-gradient(135deg,#fdf2f8 0%,#eff6ff 100%)', color: '#0f172a' }
+      case 'portfolio':
+        return { background: 'linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%)', color: '#1e3a8a' }
+      case 'bold':
+        return { background: 'linear-gradient(135deg,#7c3aed 0%,#ec4899 100%)', color: '#ffffff' }
+      case 'mono':
+        return { background: 'linear-gradient(180deg,#ffffff 0%,#e5e7eb 100%)', color: '#111827' }
+      case 'clean':
+      default:
+        return { background: 'linear-gradient(180deg,#ffffff 0%,#f7fbff 100%)', color: '#111827' }
     }
-    if (backgroundMode === 'pattern') {
-      if (uploadedPattern) {
-        return { backgroundImage: `url(${uploadedPattern})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#111827' }
-      }
+  }
+
+  function getPreviewAppearance({ templateValue, mode = 'template', solidColor = backgroundColor, photoUrl = uploadedPhoto, patternUrl = uploadedPattern, patternValue = patternPreset } = {}) {
+    if (mode === 'photo' && photoUrl) {
       return {
-        backgroundColor: currentPattern.base,
-        backgroundImage: currentPattern.css,
-        backgroundSize: currentPattern.size,
+        reactStyle: { backgroundImage: `url(${photoUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#ffffff' },
+        htmlBackgroundCss: `background-image:url('${String(photoUrl).replace(/'/g, "%27")}');background-size:cover;background-position:center;`,
+        color: '#ffffff',
+      }
+    }
+    if (mode === 'pattern') {
+      if (patternUrl) {
+        return {
+          reactStyle: { backgroundImage: `url(${patternUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#111827' },
+          htmlBackgroundCss: `background-image:url('${String(patternUrl).replace(/'/g, "%27")}');background-size:cover;background-position:center;`,
+          color: '#111827',
+        }
+      }
+      const patternItem = patternOptions.find(item => item.value === patternValue) || patternOptions[0]
+      return {
+        reactStyle: { backgroundColor: patternItem.base, backgroundImage: patternItem.css, backgroundSize: patternItem.size, color: '#111827' },
+        htmlBackgroundCss: `background-color:${patternItem.base};background-image:${patternItem.css};background-size:${patternItem.size};`,
         color: '#111827',
       }
     }
-    return { background: backgroundColor, color: backgroundColor === '#111827' ? '#ffffff' : '#111827' }
+    if (mode === 'solid') {
+      return {
+        reactStyle: { background: solidColor, color: solidColor === '#111827' ? '#ffffff' : '#111827' },
+        htmlBackgroundCss: `background:${solidColor};`,
+        color: solidColor === '#111827' ? '#ffffff' : '#111827',
+      }
+    }
+    const base = getTemplateBaseBackground(templateValue)
+    return {
+      reactStyle: { background: base.background, color: base.color },
+      htmlBackgroundCss: `background:${base.background};`,
+      color: base.color,
+    }
   }
 
-  const previewStyle = {
-    '--card-width-mm': currentSize.widthMm,
-    '--card-height-mm': currentSize.heightMm,
-    '--card-ratio': `${currentSize.widthMm} / ${currentSize.heightMm}`,
-    ...getBackgroundStyle(),
+  function escapeXml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
+  function downloadOriginalFile({ templateValue = template, sizeValue = cardSize, previewData = form, appearanceMode = backgroundMode, solidColor = backgroundColor, photoUrl = uploadedPhoto, patternUrl = uploadedPattern, patternValue = patternPreset } = {}) {
+    if (!ensureTemplateUnlocked('원본 파일 받기', templateValue)) return
+    const size = sizeOptions.find(item => item.value === sizeValue) || sizeOptions[0]
+    const appearance = getPreviewAppearance({ templateValue, mode: appearanceMode, solidColor, photoUrl, patternUrl, patternValue })
+    const width = 1080
+    const height = Math.round(width * (size.heightMm / size.widthMm))
+    const isLightText = appearance.color === '#ffffff' || appearance.color === '#f8fafc'
+    const badgeStyle = isLightText
+      ? 'background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff;'
+      : 'background:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.55);color:#111827;'
+    const fullName = previewData.name || '홍길동'
+    const roleLine = [previewData.jobTitle || '직함', previewData.company || '회사명'].filter(Boolean).join(' · ')
+    const infoItems = [previewData.phone || '010-0000-0000', previewData.email || 'name@example.com', previewData.website || 'www.example.com', previewData.address || '서울시 강남구 테헤란로 00']
+    const tagline = previewData.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'
+    const html = `
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;padding:38px;display:flex;flex-direction:column;justify-content:space-between;border-radius:42px;box-sizing:border-box;overflow:hidden;${appearance.htmlBackgroundCss}color:${appearance.color};font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
+        <div style="display:inline-flex;align-self:flex-start;padding:12px 18px;border-radius:999px;font-size:30px;font-weight:800;${badgeStyle}">${escapeXml((templateOptions.find(item => item.value === templateValue)?.label || templateValue) + ' · ' + size.label)}</div>
+        <div>
+          <div style="font-size:88px;font-weight:900;letter-spacing:-0.04em;line-height:1.05;word-break:keep-all;overflow-wrap:anywhere;">${escapeXml(fullName)}</div>
+          <div style="margin-top:18px;font-size:34px;opacity:.82;overflow-wrap:anywhere;">${escapeXml(roleLine)}</div>
+          <div style="height:2px;background:currentColor;opacity:.14;margin:28px 0 24px;"></div>
+          <div style="display:grid;gap:12px;font-size:28px;line-height:1.55;overflow-wrap:anywhere;">
+            ${infoItems.map(item => `<div>${escapeXml(item)}</div>`).join('')}
+          </div>
+        </div>
+        <div style="font-size:24px;line-height:1.65;opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeXml(tagline)}</div>
+      </div>
+    `
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <foreignObject x="0" y="0" width="${width}" height="${height}">${html}</foreignObject>
+      </svg>
+    `
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+    const blobUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = `${(previewData.name || templateValue || 'business-card').replace(/\s+/g, '-').toLowerCase()}-${templateValue}.svg`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1200)
+  }
+
+  function BusinessCardPreviewCanvas({ templateValue, sizeValue, previewData, appearanceMode = 'template', solidColor = backgroundColor, photoUrl = uploadedPhoto, patternUrl = uploadedPattern, patternValue = patternPreset, className = '', badgeSuffix = '', hideBadge = false }) {
+    const previewSize = sizeOptions.find(item => item.value === sizeValue) || sizeOptions[0]
+    const appearance = getPreviewAppearance({ templateValue, mode: appearanceMode, solidColor, photoUrl, patternUrl, patternValue })
+    const label = templateOptions.find(item => item.value === templateValue)?.label || templateValue
+    return (
+      <div
+        className={`business-card-preview business-card-preview-${templateValue} ${className}`.trim()}
+        style={{
+          '--card-width-mm': previewSize.widthMm,
+          '--card-height-mm': previewSize.heightMm,
+          '--card-ratio': `${previewSize.widthMm} / ${previewSize.heightMm}`,
+          ...appearance.reactStyle,
+        }}
+      >
+        {hideBadge ? null : <div className="business-card-preview-badge">{label}{badgeSuffix ? ` · ${badgeSuffix}` : ''}</div>}
+        <div className="business-card-preview-main">
+          <div className="business-card-name">{previewData.name || '홍길동'}</div>
+          <div className="business-card-role">{[previewData.jobTitle || '직함', previewData.company || '회사명'].filter(Boolean).join(' · ')}</div>
+          <div className="business-card-divider" />
+          <div className="business-card-info-list">
+            <div>{previewData.phone || '010-0000-0000'}</div>
+            <div>{previewData.email || 'name@example.com'}</div>
+            <div>{previewData.website || 'www.example.com'}</div>
+            <div>{previewData.address || '서울시 강남구 테헤란로 00'}</div>
+          </div>
+        </div>
+        <div className="business-card-preview-foot">
+          <div className="business-card-tagline">{previewData.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'}</div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -4273,28 +4456,32 @@ function BusinessCardBuilderPage() {
               <div>
                 <div className="business-card-preview-summary-label">명함 미리보기</div>
                 <strong>{currentTemplate.label}</strong>
+                {currentShopForm ? <div className="muted small-text business-card-paid-caption">적용은 무료 · 저장/원본 파일은 결제 후 사용</div> : null}
               </div>
-              <div className="chip">{currentSize.label}</div>
+              <div className="business-card-preview-summary-right">
+                <div className="chip">{currentSize.label}</div>
+                <button type="button" className="ghost business-card-original-button" onClick={() => downloadOriginalFile()}>원본 파일 받기</button>
+              </div>
             </div>
             <div className="business-card-preview-stage">
-              <div className={`business-card-preview business-card-preview-${template}`} style={previewStyle}>
-                <div className="business-card-preview-badge">{currentTemplate.label} · {currentSize.label}</div>
-                <div className="business-card-preview-main">
-                  <div className="business-card-name">{form.name || '홍길동'}</div>
-                  <div className="business-card-role">{[form.jobTitle || '직함', form.company || '회사명'].filter(Boolean).join(' · ')}</div>
-                  <div className="business-card-divider" />
-                  <div className="business-card-info-list">
-                    <div>{form.phone || '010-0000-0000'}</div>
-                    <div>{form.email || 'name@example.com'}</div>
-                    <div>{form.website || 'www.example.com'}</div>
-                    <div>{form.address || '서울시 강남구 테헤란로 00'}</div>
-                  </div>
-                </div>
-                <div className="business-card-preview-foot">
-                  <div className="business-card-tagline">{form.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'}</div>
-                </div>
-              </div>
+              <BusinessCardPreviewCanvas
+                templateValue={template}
+                sizeValue={cardSize}
+                previewData={form}
+                appearanceMode={backgroundMode}
+                solidColor={backgroundColor}
+                photoUrl={uploadedPhoto}
+                patternUrl={uploadedPattern}
+                patternValue={patternPreset}
+                badgeSuffix={currentSize.label}
+              />
             </div>
+            {currentShopForm && !isTemplateUnlocked(template) ? (
+              <div className="business-card-paid-banner">
+                <strong>{currentShopForm.name}</strong>
+                <span>현재는 미리보기와 적용만 가능하며 저장/원본 파일은 결제 후 사용할 수 있습니다.</span>
+              </div>
+            ) : null}
           </div>
 
           <div className="stack business-card-form-panel">
@@ -4320,7 +4507,11 @@ function BusinessCardBuilderPage() {
                 <label>명함폼</label>
                 <div className="business-card-shop-inline">
                   <select value={template} onChange={e => setTemplate(e.target.value)}>
-                    {templateOptions.map(item => <option key={item.value} value={item.value}>{item.label}{item.premium ? ' · 프리미엄' : ''}</option>)}
+                    {templateOptions.map(item => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}{isShopPaidTemplate(item.value) ? ' · 유료폼' : item.premium ? ' · 프리미엄' : ''}
+                      </option>
+                    ))}
                   </select>
                   <button type="button" className="ghost business-card-shop-button" onClick={() => setShopOpen(true)}>폼상점</button>
                 </div>
@@ -4396,34 +4587,63 @@ function BusinessCardBuilderPage() {
 
       {shopOpen ? (
         <div className="business-card-shop-modal" role="dialog" aria-modal="true">
-          <div className="business-card-shop-backdrop" onClick={() => setShopOpen(false)} />
+          <div className="business-card-shop-backdrop" onClick={() => { setShopOpen(false); closeShopPreview() }} />
           <div className="business-card-shop-sheet card stack">
             <div className="business-card-shop-head">
-              <strong>폼상점</strong>
-              <button type="button" className="ghost" onClick={() => setShopOpen(false)}>닫기</button>
+              <div className="stack gap-6">
+                <strong>폼상점</strong>
+                <div className="muted small-text">각 카드의 좌측 하단 미리보기를 눌러 확대하고, 적용하기로 만들기 화면에 반영할 수 있습니다.</div>
+              </div>
+              <button type="button" className="ghost" onClick={() => { setShopOpen(false); closeShopPreview() }}>닫기</button>
             </div>
             <div className="business-card-shop-grid">
               {shopForms.map(item => (
-                <article key={item.id} className="business-card-shop-item">
-                  <div>
+                <article key={item.id} className={`business-card-shop-item ${template === item.id ? 'business-card-shop-item-active' : ''}`}>
+                  <div className="business-card-shop-item-copy">
                     <strong>{item.name}</strong>
                     <div className="muted small-text">{item.desc}</div>
+                    <div className="business-card-shop-item-note">{item.lockNote}</div>
                   </div>
+                  <button type="button" className="business-card-shop-thumb-button" onClick={() => openShopPreview(item.id)} aria-label={`${item.name} 미리보기 확대`}>
+                    <BusinessCardPreviewCanvas templateValue={item.id} sizeValue="standard_90x50" previewData={shopPreviewSeed} appearanceMode="template" className="business-card-preview-thumb" hideBadge />
+                    <span className="business-card-shop-thumb-zoom">확대</span>
+                  </button>
                   <div className="business-card-shop-item-foot">
-                    <span className="chip">{item.price}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTemplate(item.id)
-                        setShopOpen(false)
-                        window.alert(`${item.name} 폼이 적용되었습니다. 실제 결제 연동은 아직 연결되지 않았습니다.`)
-                      }}
-                    >적용하기</button>
+                    <div className="business-card-shop-cta">
+                      <span className="chip business-card-shop-price">{item.price}</span>
+                      <div className="business-card-shop-cta-buttons">
+                        <button type="button" className="ghost" onClick={() => showPaymentGuide(item)}>결제안내</button>
+                        <button type="button" onClick={() => applyShopForm(item.id)}>{template === item.id ? '적용중' : '적용하기'}</button>
+                      </div>
+                    </div>
                   </div>
                 </article>
               ))}
             </div>
           </div>
+
+          {activeShopPreview ? (
+            <div className="business-card-preview-lightbox" role="dialog" aria-modal="true">
+              <div className="business-card-preview-lightbox-backdrop" onClick={closeShopPreview} />
+              <div className="business-card-preview-lightbox-card card stack">
+                <div className="business-card-preview-lightbox-head">
+                  <div>
+                    <strong>{activeShopPreview.name}</strong>
+                    <div className="muted small-text">확대 미리보기 · 적용은 무료 / 저장·원본 파일은 결제 후 사용</div>
+                  </div>
+                  <button type="button" className="ghost" onClick={closeShopPreview}>닫기</button>
+                </div>
+                <div className="business-card-preview-lightbox-stage">
+                  <BusinessCardPreviewCanvas templateValue={activeShopPreview.id} sizeValue="standard_90x50" previewData={shopPreviewSeed} appearanceMode="template" className="business-card-preview-large" badgeSuffix="90 × 50mm" />
+                </div>
+                <div className="business-card-preview-lightbox-actions">
+                  <button type="button" className="ghost" onClick={() => downloadOriginalFile({ templateValue: activeShopPreview.id, sizeValue: 'standard_90x50', previewData: shopPreviewSeed, appearanceMode: 'template' })}>원본 파일 받기</button>
+                  <button type="button" className="ghost" onClick={() => showPaymentGuide(activeShopPreview)}>결제안내</button>
+                  <button type="button" onClick={() => applyShopForm(activeShopPreview.id)}>적용하기</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
