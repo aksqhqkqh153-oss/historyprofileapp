@@ -2077,3 +2077,13 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 @media (max-width: 900px){
   .business-priority-list,.business-plan-grid,.business-competitor-grid{grid-template-columns:1fr}
 }
+
+.more-launch-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.more-launch-card{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--line);border-radius:20px;background:#fff;color:inherit;text-decoration:none;box-shadow:0 8px 24px rgba(15,23,42,.04)}
+.more-launch-card:hover{transform:translateY(-1px);box-shadow:0 14px 28px rgba(15,23,42,.08)}
+.more-launch-icon{width:44px;height:44px;border-radius:14px;background:#f3f6fb;display:inline-flex;align-items:center;justify-content:center}
+.business-tab-row{display:flex;flex-wrap:wrap;gap:8px}
+.business-tab-chip{padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:700}
+.business-tab-chip.active{background:#0f172a;color:#fff;border-color:#0f172a}
+.is-hidden{display:none !important}
+@media (max-width: 900px){.more-launch-grid{grid-template-columns:1fr}}
