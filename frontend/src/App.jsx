@@ -4144,9 +4144,21 @@ function BusinessCardBuilderPage() {
   useEffect(() => {
     const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern
     if (!hasContent) return
+    const timer = window.setTimeout(() => {
+      persistCurrentCard({ silent: true, title: form.name?.trim() || form.company?.trim() || '최근 작업' })
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern])
+
+  function persistCurrentCard({ silent = false, title } = {}) {
+    const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern
+    if (!hasContent) {
+      if (!silent) window.alert('저장할 명함 정보가 없습니다.')
+      return null
+    }
     const snapshot = {
       id: `card-${Date.now()}`,
-      title: form.name?.trim() || form.company?.trim() || '최근 작업',
+      title: title || form.name?.trim() || form.company?.trim() || '최근 작업',
       template,
       cardSize,
       form,
@@ -4157,17 +4169,19 @@ function BusinessCardBuilderPage() {
       uploadedPattern,
       updatedAt: new Date().toISOString(),
     }
-    const timer = window.setTimeout(() => {
-      setSavedCards(current => {
-        const comparable = JSON.stringify({ template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern })
-        const next = [snapshot, ...current.filter(item => JSON.stringify({ template: item.template, cardSize: item.cardSize, form: item.form, backgroundMode: item.backgroundMode, backgroundColor: item.backgroundColor, patternPreset: item.patternPreset, uploadedPhoto: item.uploadedPhoto, uploadedPattern: item.uploadedPattern }) !== comparable)]
-          .slice(0, 20)
-        localStorage.setItem(BUSINESS_CARD_STORAGE_KEY, JSON.stringify(next))
-        return next
-      })
-    }, 350)
-    return () => window.clearTimeout(timer)
-  }, [template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern])
+    let savedSnapshot = snapshot
+    setSavedCards(current => {
+      const comparable = JSON.stringify({ template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern })
+      const next = [snapshot, ...current.filter(item => JSON.stringify({ template: item.template, cardSize: item.cardSize, form: item.form, backgroundMode: item.backgroundMode, backgroundColor: item.backgroundColor, patternPreset: item.patternPreset, uploadedPhoto: item.uploadedPhoto, uploadedPattern: item.uploadedPattern }) !== comparable)]
+        .slice(0, 20)
+      localStorage.setItem(BUSINESS_CARD_STORAGE_KEY, JSON.stringify(next))
+      savedSnapshot = next[0]
+      return next
+    })
+    setSelectedSavedCard(snapshot.id)
+    if (!silent) window.alert('명함이 저장되었습니다.')
+    return savedSnapshot
+  }
 
   function updateField(key, value) {
     setForm(current => ({ ...current, [key]: value }))
@@ -4221,6 +4235,10 @@ function BusinessCardBuilderPage() {
     window.print()
   }
 
+  function saveCard() {
+    persistCurrentCard({ title: form.name?.trim() || form.company?.trim() || '내 명함' })
+  }
+
   function getBackgroundStyle() {
     if (backgroundMode === 'photo' && uploadedPhoto) {
       return { backgroundImage: `url(${uploadedPhoto})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#ffffff' }
@@ -4251,6 +4269,13 @@ function BusinessCardBuilderPage() {
       <section className="card stack business-card-builder-card">
         <div className="business-card-layout">
           <div className="business-card-preview-panel">
+            <div className="business-card-preview-summary card">
+              <div>
+                <div className="business-card-preview-summary-label">명함 미리보기</div>
+                <strong>{currentTemplate.label}</strong>
+              </div>
+              <div className="chip">{currentSize.label}</div>
+            </div>
             <div className="business-card-preview-stage">
               <div className={`business-card-preview business-card-preview-${template}`} style={previewStyle}>
                 <div className="business-card-preview-badge">{currentTemplate.label} · {currentSize.label}</div>
@@ -4273,6 +4298,12 @@ function BusinessCardBuilderPage() {
           </div>
 
           <div className="stack business-card-form-panel">
+            <div className="business-card-section-head">
+              <div>
+                <h3>세부 설정</h3>
+                <div className="muted small-text">명함 스타일과 배경을 먼저 정하고, 아래 정보 항목을 입력하세요.</div>
+              </div>
+            </div>
             <div className="business-card-control-grid business-card-control-grid-top business-card-control-grid-top-4">
               <div className="stack business-card-field business-card-field-load">
                 <label>불러오기</label>
@@ -4356,7 +4387,8 @@ function BusinessCardBuilderPage() {
 
             <div className="business-card-head-actions business-card-bottom-actions">
               <button type="button" className="ghost" onClick={copySummary}>정보복사</button>
-              <button type="button" onClick={printCard}>인쇄하기</button>
+              <button type="button" className="business-card-action-desktop" onClick={printCard}>인쇄하기</button>
+              <button type="button" className="business-card-action-mobile" onClick={saveCard}>저장</button>
             </div>
           </div>
         </div>

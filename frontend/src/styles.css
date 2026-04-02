@@ -1859,17 +1859,20 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .business-card-builder-page .card{overflow:visible}
 .business-card-builder-card{overflow:visible}
 .business-card-head-actions{display:flex;gap:10px;flex-wrap:wrap}
-.business-card-bottom-actions{margin-top:auto;padding-top:8px;justify-content:flex-end}
-.business-card-layout{display:grid;grid-template-columns:minmax(360px,.9fr) minmax(0,1.1fr);gap:20px;align-items:start;overflow:hidden}
-.business-card-form-panel{min-width:0;display:flex;flex-direction:column;gap:16px}
+.business-card-bottom-actions{margin-top:auto;padding-top:12px;justify-content:flex-end}
+.business-card-layout{display:grid;grid-template-columns:minmax(360px,.92fr) minmax(0,1.08fr);gap:24px;align-items:start;overflow:hidden}
+.business-card-form-panel{min-width:0;display:flex;flex-direction:column;gap:16px;padding:2px 0}
+.business-card-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .business-card-control-grid{display:grid;gap:12px;min-width:0}
 .business-card-control-grid-top{grid-template-columns:repeat(3,minmax(0,1fr))}
 .business-card-control-grid-top-4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .business-card-control-grid-main{grid-template-columns:repeat(3,minmax(0,1fr))}
 .business-card-field,.business-card-field>*{min-width:0}
 .business-card-field-span-full{grid-column:1/-1}
-.business-card-preview-panel{position:sticky;top:84px;align-self:start;min-width:0}
-.business-card-preview-stage{display:flex;justify-content:center;align-items:flex-start;overflow:hidden;padding:10px 0}
+.business-card-preview-panel{position:sticky;top:84px;align-self:start;min-width:0;display:flex;flex-direction:column;gap:12px}
+.business-card-preview-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:20px;background:linear-gradient(180deg,var(--surface-soft),rgba(255,255,255,.95));border:1px solid var(--line)}
+.business-card-preview-summary-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.business-card-preview-stage{display:flex;justify-content:center;align-items:flex-start;overflow:hidden;padding:10px 0;border-radius:24px;background:linear-gradient(180deg,var(--surface-soft),rgba(248,250,252,.5))}
 .business-card-preview{width:calc(var(--card-width-mm, 90) * 1mm);height:calc(var(--card-height-mm, 50) * 1mm);max-width:100%;aspect-ratio:var(--card-ratio, 1.8 / 1);min-height:240px;border-radius:28px;padding:24px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--line);box-shadow:var(--shadow-soft);overflow:hidden;position:relative}
 .business-card-preview::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,0));pointer-events:none}
 .business-card-preview-badge{display:inline-flex;align-self:flex-start;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.75);font-size:12px;font-weight:800;border:1px solid rgba(255,255,255,.55);max-width:100%;word-break:keep-all}
@@ -1898,7 +1901,10 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .business-card-shop-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .business-card-shop-item{display:flex;flex-direction:column;justify-content:space-between;gap:14px;padding:16px;border:1px solid var(--line);border-radius:18px;background:var(--surface-soft)}
 .business-card-shop-item-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-@media (max-width:960px){.business-card-layout{grid-template-columns:1fr}.business-card-preview-panel{order:-1;position:sticky;top:72px;z-index:4;background:var(--surface)}.business-card-preview-stage{padding-top:0}.business-card-preview{width:min(100%,420px);height:auto;max-width:none}.business-card-control-grid-top-4,.business-card-control-grid-main{grid-template-columns:repeat(3,minmax(0,1fr))}.business-card-bottom-actions{justify-content:stretch}.business-card-bottom-actions button{flex:1}}
-@media (max-width:640px){.business-card-builder-card{padding-inline:12px}.business-card-preview-panel{top:64px}.business-card-preview-stage{padding:0}.business-card-preview{width:100%;height:auto;padding:16px;border-radius:22px;min-height:0}.business-card-name{font-size:24px}.business-card-role,.business-card-info-list{font-size:12px}.business-card-control-grid{gap:8px}.business-card-control-grid-top-4,.business-card-control-grid-main{grid-template-columns:repeat(3,minmax(0,1fr))}.business-card-control-grid label{font-size:11px;word-break:keep-all}.business-card-control-grid select,.business-card-control-grid input,.business-card-control-grid textarea,.business-card-shop-button{font-size:11px;padding:10px 8px}.business-card-shop-inline{grid-template-columns:minmax(0,1fr)}.business-card-shop-grid{grid-template-columns:1fr}.business-card-bottom-actions{flex-direction:column}.business-card-bottom-actions button{width:100%}}
+.business-card-bottom-actions button{flex:1 1 0;min-height:46px}
+.business-card-action-mobile{display:none}
+.business-card-action-desktop{display:inline-flex}
+@media (max-width:960px){.business-card-layout{grid-template-columns:1fr}.business-card-preview-panel{order:-1;position:static;top:auto;z-index:0;background:transparent}.business-card-preview-summary{padding:12px 14px}.business-card-preview-stage{padding-top:0}.business-card-preview{width:min(100%,420px);height:auto;max-width:none}.business-card-control-grid-top-4,.business-card-control-grid-main{grid-template-columns:repeat(2,minmax(0,1fr))}.business-card-bottom-actions{justify-content:stretch}}
+@media (max-width:640px){.business-card-builder-card{padding-inline:12px}.business-card-section-head h3{font-size:18px}.business-card-preview-panel{gap:10px}.business-card-preview-stage{padding:10px 0 0}.business-card-preview{width:100%;height:auto;padding:16px;border-radius:22px;min-height:0}.business-card-name{font-size:24px}.business-card-role,.business-card-info-list{font-size:12px}.business-card-control-grid{gap:8px}.business-card-control-grid-top-4,.business-card-control-grid-main{grid-template-columns:1fr}.business-card-control-grid label{font-size:11px;word-break:keep-all}.business-card-control-grid select,.business-card-control-grid input,.business-card-control-grid textarea,.business-card-shop-button{font-size:11px;padding:10px 8px}.business-card-shop-inline{grid-template-columns:minmax(0,1fr)}.business-card-shop-grid{grid-template-columns:1fr}.business-card-bottom-actions{flex-direction:row;gap:8px}.business-card-bottom-actions button{width:auto}.business-card-action-desktop{display:none}.business-card-action-mobile{display:inline-flex}}
 @media print{.topbar-fixed,.bottom-nav,.business-card-form-panel,.business-card-head-actions,.business-card-shop-modal{display:none!important}.app-shell{padding:0!important}.main-content{padding:0!important}.business-card-preview-panel{position:static}.business-card-preview-stage{padding:0;justify-content:flex-start}.business-card-preview{box-shadow:none;border:1px solid #d1d5db;min-height:200px;max-width:none;width:calc(var(--card-width-mm, 90) * 1mm);height:calc(var(--card-height-mm, 50) * 1mm)}}
 
