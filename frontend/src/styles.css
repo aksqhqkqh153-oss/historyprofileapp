@@ -2128,6 +2128,22 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .asked-feed-card{background:#fff;border:1px solid #e7edf4;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 24px rgba(15,23,42,.05)}
 .asked-feed-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .asked-feed-copy{min-width:0;flex:1}
+
+.asked-ad-banner{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid #e5ebf3;border-radius:22px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 10px 24px rgba(15,23,42,.05)}
+.asked-ad-banner-head{display:flex;align-items:center;gap:10px}
+.asked-ad-label{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:24px;padding:0 8px;border-radius:999px;background:#0f172a;color:#fff;font-size:11px;font-weight:800;letter-spacing:.06em}
+.asked-ad-copy{font-size:13px;font-weight:700;color:#334155}
+.asked-adsense-slot{min-height:120px;width:100%}
+.asked-direct-ad{text-decoration:none;color:inherit}
+.asked-direct-ad-body{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.asked-direct-ad-copy{display:flex;flex-direction:column;gap:6px;min-width:0}
+.asked-direct-ad-copy strong{font-size:15px;color:#0f172a}
+.asked-direct-ad-copy span{font-size:13px;line-height:1.55;color:#475569}
+.asked-direct-ad img{width:88px;height:88px;object-fit:cover;border-radius:18px;border:1px solid #e2e8f0;flex:0 0 auto}
+.asked-direct-ad-cta{display:inline-flex;align-items:center;justify-content:center;min-width:88px;height:42px;padding:0 14px;border-radius:999px;background:#0f172a;color:#fff;font-size:13px;font-weight:800;flex:0 0 auto}
+.asked-ad-recommendation{display:flex;flex-direction:column;gap:6px}
+.asked-ad-recommendation strong{font-size:15px;color:#0f172a}
+.asked-ad-recommendation span{font-size:13px;line-height:1.55;color:#475569}
 .asked-question-body{font-size:15px;line-height:1.65;color:#0f172a;white-space:pre-wrap}
 .asked-answer-box{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:18px;background:#f8fafc;border:1px solid #e7edf4}
 .asked-owner-box{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:#f8fafc;border:1px solid #e7edf4}
@@ -2160,4 +2176,6 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .asked-action-button{border-radius:14px;padding:10px 4px}
   .asked-comment-form{grid-template-columns:1fr}
   .asked-comment-form button{width:100%}
+  .asked-direct-ad-body{align-items:flex-start}
+  .asked-direct-ad img,.asked-direct-ad-cta{width:100%;max-width:none}
 }

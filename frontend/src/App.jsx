@@ -8,6 +8,7 @@ import AdminPage from './pages/AdminPage'
 import { TextField, Metric } from './components/ui'
 import TurnstileWidget from './components/TurnstileWidget'
 import { useTurnstileConfig } from './hooks/useTurnstileConfig'
+import MonetizationAdBanner from './components/MonetizationAdBanner'
 
 function pageTitle(pathname) {
   if (pathname.startsWith('/chats')) return '채팅'
@@ -2769,10 +2770,7 @@ function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow
         <button type="button" className="asked-question-button" onClick={onToggleAsk}>{askOpen ? '질문닫기' : '질문하기'}</button>
         <button type="button" className="ghost asked-share-button" onClick={handleShare}>공유</button>
       </div>
-      <div className="asked-ad-banner">
-        <div className="asked-ad-label">AD</div>
-        <div className="asked-ad-copy">광고 영역</div>
-      </div>
+      <MonetizationAdBanner />
     </div>
   )
 }
