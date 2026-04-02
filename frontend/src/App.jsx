@@ -1610,6 +1610,16 @@ function MusicPage() {
 
 function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
   const sheetRef = useDismissLayer(open, onClose)
+  const [dragOffset, setDragOffset] = useState(0)
+  const dragStateRef = useRef({ active: false, startY: 0, currentY: 0 })
+
+  useEffect(() => {
+    if (!open) {
+      dragStateRef.current = { active: false, startY: 0, currentY: 0 }
+      setDragOffset(0)
+    }
+  }, [open])
+
   if (!open) return null
   const items = [
     { path: '/vault', label: '저장함', desc: '이력서 · 포트폴리오 · 증빙자료 태그/폴더/즐겨찾기 관리', icon: 'folder' },
@@ -1619,9 +1629,41 @@ function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용으로 재생', icon: 'music' }] : []),
     { path: '/more', label: '기타기능', desc: '업데이트 예정', icon: 'more', disabled: true },
   ]
+  function getClientY(event) {
+    if (event.touches?.length) return event.touches[0].clientY
+    if (event.changedTouches?.length) return event.changedTouches[0].clientY
+    return event.clientY
+  }
+
+  function handleDragStart(event) {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const inScrollArea = Boolean(target.closest('.bottom-sheet-list'))
+    const scroller = target.closest('.bottom-sheet-list')
+    if (inScrollArea && scroller && scroller.scrollTop > 0) return
+    dragStateRef.current = { active: true, startY: getClientY(event), currentY: getClientY(event) }
+    setDragOffset(0)
+  }
+
+  function handleDragMove(event) {
+    if (!dragStateRef.current.active) return
+    const currentY = getClientY(event)
+    const nextOffset = Math.max(0, currentY - dragStateRef.current.startY)
+    dragStateRef.current.currentY = currentY
+    setDragOffset(nextOffset)
+  }
+
+  function handleDragEnd() {
+    if (!dragStateRef.current.active) return
+    const shouldClose = dragOffset > 120
+    dragStateRef.current = { active: false, startY: 0, currentY: 0 }
+    setDragOffset(0)
+    if (shouldClose) onClose?.()
+  }
+
   return createPortal(
-    <div className="bottom-sheet-backdrop" role="presentation">
-      <div className="bottom-sheet" ref={sheetRef} role="dialog" aria-modal="true" aria-label="더보기">
+    <div className="bottom-sheet-backdrop" role="presentation" onMouseMove={handleDragMove} onMouseUp={handleDragEnd} onMouseLeave={handleDragEnd} onTouchMove={handleDragMove} onTouchEnd={handleDragEnd} onTouchCancel={handleDragEnd}>
+      <div className="bottom-sheet" ref={sheetRef} role="dialog" aria-modal="true" aria-label="더보기" onMouseDown={handleDragStart} onTouchStart={handleDragStart} style={{ transform: dragOffset ? `translateY(${dragOffset}px)` : undefined, transition: dragStateRef.current.active ? 'none' : undefined }}>
         <div className="bottom-sheet-handle" />
         <div className="split-row responsive-row bottom-sheet-head">
           <strong>더보기</strong>

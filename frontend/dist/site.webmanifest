@@ -4,7 +4,7 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#f7b500",
+  "theme_color": "#ffffff",
   "description": "프토리 운영 웹앱",
   "icons": [
     {

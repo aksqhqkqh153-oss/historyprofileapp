@@ -1064,6 +1064,11 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   padding: 12px 18px 22px;
   box-shadow: 0 -12px 34px rgba(15, 23, 42, .18);
   animation: bottomSheetUp .22s ease;
+  touch-action: pan-y;
+  will-change: transform;
+}
+.bottom-sheet.dragging {
+  transition: none;
 }
 @keyframes bottomSheetUp {
   from { transform: translateY(100%); }
@@ -1075,6 +1080,8 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   border-radius: 999px;
   background: #d7dfe8;
   margin: 0 auto 14px;
+  cursor: grab;
+  touch-action: none;
 }
 .bottom-sheet-head { margin-bottom: 8px; }
 .bottom-sheet-list { display: flex; flex-direction: column; gap: 10px; }
