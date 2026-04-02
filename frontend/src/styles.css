@@ -2198,6 +2198,15 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   gap: 10px;
   flex-wrap: wrap;
 }
+.music-quick-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+.music-quick-add-input {
+  width: 100%;
+}
 .music-layout-grid,
 .music-settings-grid {
   display: grid;
@@ -2299,5 +2308,8 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .music-hero-actions > * {
     flex: 1 1 auto;
     text-align: center;
+  }
+  .music-quick-add-row {
+    grid-template-columns: 1fr;
   }
 }

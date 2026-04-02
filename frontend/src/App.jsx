@@ -1051,27 +1051,47 @@ function parseYoutubeVideoList(value) {
 }
 
 function buildYoutubeEmbedUrl(item) {
+  const autoplay = item?.autoplay !== false
+  const loop = item?.continuousPlay !== false
+  const params = new URLSearchParams({
+    rel: '0',
+    modestbranding: '1',
+    playsinline: '1',
+  })
+  if (autoplay) params.set('autoplay', '1')
+  if (loop) params.set('loop', '1')
+
   const playlistId = extractYoutubePlaylistId(item?.playlistUrl || item?.playlistId)
   if (playlistId) {
-    return `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(playlistId)}&rel=0&modestbranding=1`
+    params.set('list', playlistId)
+    return `https://www.youtube-nocookie.com/embed/videoseries?${params.toString()}`
   }
+
   const explicitVideoIds = parseYoutubeVideoList(item?.videosText)
   const primaryVideoId = extractYoutubeVideoId(item?.videoUrl || item?.videoId || explicitVideoIds[0] || '')
   const playlistVideoIds = explicitVideoIds.filter(id => id !== primaryVideoId)
   if (primaryVideoId && playlistVideoIds.length) {
-    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(primaryVideoId)}?playlist=${encodeURIComponent(playlistVideoIds.join(','))}&rel=0&modestbranding=1`
+    params.set('playlist', loop ? [primaryVideoId, ...playlistVideoIds].join(',') : playlistVideoIds.join(','))
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(primaryVideoId)}?${params.toString()}`
   }
   if (primaryVideoId) {
-    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(primaryVideoId)}?rel=0&modestbranding=1`
+    if (loop) params.set('playlist', primaryVideoId)
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(primaryVideoId)}?${params.toString()}`
   }
   return ''
 }
 
 function MusicPage() {
   const [playlists, setPlaylists] = useLocalCollection(LOCAL_STORAGE_KEYS.musicPlaylists, defaultMusicPlaylists())
+  const [quickAddUrl, setQuickAddUrl] = useState('')
   const normalizedPlaylists = useMemo(() => {
     const source = Array.isArray(playlists) && playlists.length ? playlists : defaultMusicPlaylists()
-    return source.map(item => ({ ...item, embedUrl: buildYoutubeEmbedUrl(item) }))
+    return source.map(item => ({
+      ...item,
+      autoplay: item?.autoplay !== false,
+      continuousPlay: item?.continuousPlay !== false,
+      embedUrl: buildYoutubeEmbedUrl(item),
+    }))
   }, [playlists])
   const [selectedId, setSelectedId] = useState(() => normalizedPlaylists[0]?.id || '')
   const [form, setForm] = useState(() => {
@@ -1083,6 +1103,8 @@ function MusicPage() {
       videoUrl: first.videoUrl || '',
       videosText: first.videosText || '',
       sourceLabel: first.sourceLabel || 'YouTube 공개 재생목록',
+      autoplay: first.autoplay !== false,
+      continuousPlay: first.continuousPlay !== false,
     }
   })
 
@@ -1104,6 +1126,8 @@ function MusicPage() {
       videoUrl: activePlaylist.videoUrl || '',
       videosText: activePlaylist.videosText || '',
       sourceLabel: activePlaylist.sourceLabel || 'YouTube 공개 재생목록',
+      autoplay: activePlaylist.autoplay !== false,
+      continuousPlay: activePlaylist.continuousPlay !== false,
     })
   }, [activePlaylist?.id])
 
@@ -1117,6 +1141,8 @@ function MusicPage() {
     const nextPlaylistUrl = String(form.playlistUrl || '').trim()
     const nextVideoUrl = String(form.videoUrl || '').trim()
     const nextVideosText = String(form.videosText || '').trim()
+    const nextAutoplay = form.autoplay !== false
+    const nextContinuousPlay = form.continuousPlay !== false
     const hasPlayableSource = Boolean(extractYoutubePlaylistId(nextPlaylistUrl) || extractYoutubeVideoId(nextVideoUrl) || parseYoutubeVideoList(nextVideosText).length)
     if (!hasPlayableSource) {
       window.alert('공개 YouTube 재생목록 링크 또는 영상 링크를 입력해주세요.')
@@ -1132,8 +1158,50 @@ function MusicPage() {
       videoId: extractYoutubeVideoId(nextVideoUrl),
       videosText: nextVideosText,
       sourceLabel: nextSourceLabel,
+      autoplay: nextAutoplay,
+      continuousPlay: nextContinuousPlay,
       updated_at: new Date().toISOString(),
     } : item))
+  }
+
+  function createPlaylistItemFromUrl(rawUrl, indexOffset = 0) {
+    const url = String(rawUrl || '').trim()
+    const playlistId = extractYoutubePlaylistId(url)
+    const videoId = extractYoutubeVideoId(url)
+    if (!playlistId && !videoId) return null
+    const now = new Date().toISOString()
+    const playlistNumber = normalizedPlaylists.length + indexOffset + 1
+    return {
+      id: makeLocalId('playlist'),
+      name: playlistId ? `YouTube 재생목록 ${playlistNumber}` : `YouTube 링크 ${playlistNumber}`,
+      description: playlistId ? '빠른 추가로 등록한 공개 YouTube 재생목록' : '빠른 추가로 등록한 공개 YouTube 영상',
+      playlistUrl: playlistId ? url : '',
+      playlistId: playlistId || '',
+      videoUrl: videoId ? url : '',
+      videoId: videoId || '',
+      videosText: '',
+      sourceLabel: 'YouTube 빠른 추가',
+      autoplay: true,
+      continuousPlay: true,
+      created_at: now,
+      updated_at: now,
+    }
+  }
+
+  function handleQuickAddPlaylist() {
+    const segments = String(quickAddUrl || '').split(/\n|,/).map(item => item.trim()).filter(Boolean)
+    if (!segments.length) {
+      window.alert('상단 입력칸에 YouTube 링크를 입력해주세요.')
+      return
+    }
+    const items = segments.map((segment, index) => createPlaylistItemFromUrl(segment, index)).filter(Boolean)
+    if (!items.length) {
+      window.alert('공개 YouTube 재생목록 링크 또는 영상 링크만 등록할 수 있습니다.')
+      return
+    }
+    setPlaylists(current => [...items, ...current])
+    setSelectedId(items[0].id)
+    setQuickAddUrl('')
   }
 
   function handleAddPlaylist() {
@@ -1147,6 +1215,8 @@ function MusicPage() {
       videoId: '',
       videosText: '',
       sourceLabel: 'YouTube 공개 재생목록',
+      autoplay: true,
+      continuousPlay: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -1159,6 +1229,8 @@ function MusicPage() {
       videoUrl: '',
       videosText: '',
       sourceLabel: item.sourceLabel,
+      autoplay: item.autoplay,
+      continuousPlay: item.continuousPlay,
     })
   }
 
@@ -1186,6 +1258,15 @@ function MusicPage() {
             <button type="button" className="ghost" onClick={handleAddPlaylist}>플레이리스트 추가</button>
             <a className="button-link" href="https://www.youtube.com/" target="_blank" rel="noreferrer">YouTube 열기</a>
           </div>
+        </div>
+        <div className="music-quick-add-row">
+          <input
+            className="input music-quick-add-input"
+            value={quickAddUrl}
+            onChange={event => setQuickAddUrl(event.target.value)}
+            placeholder="맨 위 입력칸에 YouTube 재생목록/영상 링크를 넣고 저장하면 새 플레이리스트가 바로 추가됩니다. 여러 개는 줄바꿈 또는 쉼표로 입력"
+          />
+          <button type="button" className="button-link" onClick={handleQuickAddPlaylist}>링크 저장 후 재생</button>
         </div>
         <div className="grid-3 music-metric-grid">
           <Metric label="등록 재생목록" value={normalizedPlaylists.length} />
@@ -1247,6 +1328,8 @@ function MusicPage() {
             <div className="music-source-row"><strong>소스명</strong><span>{activePlaylist?.sourceLabel || 'YouTube 공개 재생목록'}</span></div>
             <div className="music-source-row"><strong>플레이리스트 링크</strong><span className="music-source-value">{activePlaylist?.playlistUrl || '-'}</span></div>
             <div className="music-source-row"><strong>대표 영상 링크</strong><span className="music-source-value">{activePlaylist?.videoUrl || '-'}</span></div>
+            <div className="music-source-row"><strong>자동재생</strong><span>{activePlaylist?.autoplay !== false ? '사용' : '해제'}</span></div>
+            <div className="music-source-row"><strong>연속듣기</strong><span>{activePlaylist?.continuousPlay !== false ? '사용' : '해제'}</span></div>
           </div>
         </div>
       </div>
@@ -1260,6 +1343,8 @@ function MusicPage() {
           <TextField label="YouTube 공개 재생목록 링크" value={form.playlistUrl} onChange={value => setForm(current => ({ ...current, playlistUrl: value }))} placeholder="https://www.youtube.com/playlist?list=..." />
           <TextField label="대표 YouTube 영상 링크" value={form.videoUrl} onChange={value => setForm(current => ({ ...current, videoUrl: value }))} placeholder="https://www.youtube.com/watch?v=..." />
           <TextField label="추가 영상 링크/ID 목록" value={form.videosText} onChange={value => setForm(current => ({ ...current, videosText: value }))} multiline rows={4} placeholder="영상 링크 또는 11자리 video ID를 줄바꿈으로 여러 개 입력" />
+          <label className="check-row"><input type="checkbox" checked={form.autoplay !== false} onChange={event => setForm(current => ({ ...current, autoplay: event.target.checked }))} />자동재생 사용</label>
+          <label className="check-row"><input type="checkbox" checked={form.continuousPlay !== false} onChange={event => setForm(current => ({ ...current, continuousPlay: event.target.checked }))} />연속듣기 반복 재생</label>
           <div className="muted small-text">공개 재생목록 링크가 있으면 그 값을 우선 사용하고, 없으면 대표 영상 + 추가 영상 목록으로 순차 재생합니다.</div>
         </div>
 
