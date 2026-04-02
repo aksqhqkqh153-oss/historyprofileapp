@@ -2686,7 +2686,7 @@ function buildDefaultAiDrafts() {
 
 function buildDefaultHiringPosts() {
   return [
-    { id: makeLocalId('job'), company: '히스토리프로필 스튜디오', title: '프로필 디자이너', employmentType: '계약직', budget: '월 250만원', status: '모집중', source: '기업 채용관' },
+    { id: makeLocalId('job'), company: '프토리 스튜디오', title: '프로필 디자이너', employmentType: '계약직', budget: '월 250만원', status: '모집중', source: '기업 채용관' },
     { id: makeLocalId('job'), company: '브랜드링크 파트너스', title: 'SEO 공개 URL 운영 매니저', employmentType: '파트타임', budget: '월 120만원', status: '모집중', source: '기업 채용관' },
   ]
 }
@@ -5027,7 +5027,7 @@ function PublicProfilePage() {
   useEffect(() => {
     if (!data?.profile) return
     const seo = data.seo || {}
-    document.title = seo.title || `${data.profile.title} | historyprofile_app`
+    document.title = seo.title || `${data.profile.title} | 프토리`
 
     function upsertMeta(selector, attrs) {
       let el = document.head.querySelector(selector)
@@ -5540,10 +5540,10 @@ function BusinessCardBuilderPage() {
   const shopPreviewSeed = {
     name: '홍길동',
     jobTitle: '대표',
-    company: '히스토리프로필',
+    company: '프토리',
     phone: '010-1234-5678',
-    email: 'hello@historyprofile.app',
-    website: 'historyprofile.app',
+    email: 'hello@historyprofile.com',
+    website: 'www.historyprofile.com',
     address: '서울시 강남구 테헤란로 00',
     tagline: '이력·프로필·링크를 한 장으로 정리하는 명함 샘플입니다.',
   }

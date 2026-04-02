@@ -1,11 +1,11 @@
 {
-  "name": "이청잘",
-  "short_name": "이청잘",
+  "name": "프토리",
+  "short_name": "프토리",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#ffffff",
-  "description": "이청잘 운영 웹앱",
+  "theme_color": "#f7b500",
+  "description": "프토리 운영 웹앱",
   "icons": [
     {
       "src": "/icon-192.png",
