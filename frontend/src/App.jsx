@@ -4481,17 +4481,6 @@ function BusinessCardBuilderPage() {
                   <div className="muted small-text">명함 스타일과 배경을 먼저 정하고, 아래 정보 항목을 입력하세요.</div>
                 </div>
               </div>
-              <div className="business-card-preview-summary card business-card-settings-summary">
-                <div>
-                  <div className="business-card-preview-summary-label">명함 미리보기</div>
-                  <strong>{currentTemplate.label}</strong>
-                  {currentShopForm ? <div className="muted small-text business-card-paid-caption">적용은 무료 · 저장/원본 파일은 결제 후 사용</div> : null}
-                </div>
-                <div className="business-card-preview-summary-right">
-                  <div className="chip">{currentSize.label}</div>
-                  <button type="button" className="ghost business-card-original-button" onClick={() => downloadOriginalFile()}>원본 파일 받기</button>
-                </div>
-              </div>
               <div className="business-card-control-grid business-card-control-grid-top business-card-control-grid-top-4">
               <div className="stack business-card-field business-card-field-load">
                 <label>불러오기</label>
@@ -4579,6 +4568,7 @@ function BusinessCardBuilderPage() {
 
               <div className="business-card-head-actions business-card-bottom-actions">
                 <button type="button" className="ghost" onClick={copySummary}>정보복사</button>
+                <button type="button" className="ghost business-card-bottom-original-button" onClick={() => downloadOriginalFile()}>원본 파일 받기</button>
                 <button type="button" className="business-card-action-desktop" onClick={printCard}>인쇄하기</button>
                 <button type="button" className="business-card-action-mobile" onClick={saveCard}>저장</button>
               </div>
