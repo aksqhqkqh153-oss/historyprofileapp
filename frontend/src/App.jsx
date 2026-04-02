@@ -22,6 +22,7 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/more')) return '더보기'
   if (pathname.startsWith('/schedule')) return '일정'
   if (pathname.startsWith('/admin')) return '관리자'
+  if (pathname.startsWith('/business-card')) return '명함만들기'
   if (pathname.startsWith('/url-shortener')) return 'URL단축'
   if (pathname.startsWith('/qr-generator')) return 'QR생성'
   if (pathname.startsWith('/p/')) return '공개 프로필'
@@ -159,6 +160,7 @@ function IconGlyph({ name, label }) {
     chatMini: <svg {...common}><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4.5 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z" /></svg>,
     folder: <svg {...common}><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z" /></svg>,
     briefcase: <svg {...common}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M3 12h18" /></svg>,
+    businessCard: <svg {...common}><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="8" cy="12" r="2" /><path d="M13 10h5" /><path d="M13 13h5" /><path d="M6 16c.8-1.2 1.8-1.8 3-1.8s2.2.6 3 1.8" /></svg>,
     document: <svg {...common}><path d="M8 3h6l5 5v13a1 1 0 0 1-1 1H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M14 3v5h5" /><path d="M10 13h6" /><path d="M10 17h6" /><path d="M10 9h2" /></svg>,
     star: <svg {...common}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9Z" /></svg>,
   }
@@ -461,10 +463,9 @@ function AppShell({ user, setUser }) {
             <AnchoredPopup anchorRef={menuButtonRef} open={activePopup === 'menu'} className="menu-popup dropdown-popup">
               <div className="dropdown-title">메뉴</div>
               <div className="dropdown-list">
-                {MENU_ITEMS.map(item => {
-                  const iconName = item.path === '/schedule' ? 'calendar' : item.path === '/url-shortener' ? 'link' : 'qr'
-                  return <Link key={item.path} className="dropdown-item dropdown-item-with-icon" to={item.path}><IconGlyph name={iconName} label={item.label} /><span>{item.label}</span></Link>
-                })}
+                {MENU_ITEMS.map(item => (
+                  <Link key={item.path} className="dropdown-item dropdown-item-with-icon" to={item.path}><IconGlyph name={item.icon || 'home'} label={item.label} /><span>{item.label}</span></Link>
+                ))}
               </div>
             </AnchoredPopup>
             <button ref={profileSwitchButtonRef} type="button" className="ghost topbar-profile-switch topbar-text-trigger" onClick={async () => { await loadMultiProfiles(); togglePopup('profiles') }} aria-expanded={activePopup === 'profiles'} aria-label="계정 전환">
@@ -572,6 +573,7 @@ function AppShell({ user, setUser }) {
           <Route path="/introductions-manager" element={<IntroductionsManagerPage />} />
           <Route path="/share-links-manager" element={<ShareLinksManagerPage />} />
           <Route path="/schedule" element={<SchedulePage />} />
+          <Route path="/business-card" element={<BusinessCardBuilderPage />} />
           <Route path="/url-shortener" element={<UrlShortenerPage />} />
           <Route path="/qr-generator" element={<QrGeneratorPage />} />
           <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
@@ -2511,17 +2513,10 @@ function HomePage({ user }) {
   useEffect(() => {
     function handleScroll() {
       const current = window.scrollY || window.pageYOffset || 0
-      const previous = lastScrollTopRef.current
-      const delta = current - previous
-      if (current <= 120) {
-        setStoryBarVisible(true)
-      } else if (delta > 10) {
-        setStoryBarVisible(false)
-      } else if (delta < -8) {
-        setStoryBarVisible(true)
-      }
+      setStoryBarVisible(current <= 8)
       lastScrollTopRef.current = current
     }
+    handleScroll()
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
@@ -4054,6 +4049,111 @@ function UrlShortenerPage() {
               </button>
             </article>
           )) : <div className="muted">생성된 단축 URL이 없습니다.</div>}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function BusinessCardBuilderPage() {
+  const [template, setTemplate] = useState('clean')
+  const [form, setForm] = useState({
+    name: '',
+    jobTitle: '',
+    company: '',
+    phone: '',
+    email: '',
+    website: '',
+    address: '',
+    tagline: '',
+  })
+
+  const templateOptions = [
+    { value: 'clean', label: '기본형', description: '가장 무난한 세로형 명함' },
+    { value: 'modern', label: '모던형', description: '강조색이 있는 가로형 명함' },
+    { value: 'minimal', label: '미니멀형', description: '정보만 간결하게 배치한 명함' },
+  ]
+
+  const currentTemplate = templateOptions.find(item => item.value === template) || templateOptions[0]
+
+  function updateField(key, value) {
+    setForm(current => ({ ...current, [key]: value }))
+  }
+
+  async function copySummary() {
+    const lines = [
+      form.name || '이름',
+      [form.jobTitle, form.company].filter(Boolean).join(' · '),
+      form.phone,
+      form.email,
+      form.website,
+      form.address,
+      form.tagline,
+    ].filter(Boolean)
+    await navigator.clipboard.writeText(lines.join('\n'))
+    window.alert('명함 정보가 복사되었습니다.')
+  }
+
+  function printCard() {
+    window.print()
+  }
+
+  return (
+    <div className="stack page-stack business-card-builder-page">
+      <section className="card stack">
+        <div className="split-row business-card-page-head">
+          <div className="stack">
+            <h3>명함만들기</h3>
+            <div className="muted small-text">폼을 입력하고 명함 유형을 바꾸면 배치가 바로 변경됩니다.</div>
+          </div>
+          <div className="business-card-head-actions">
+            <button type="button" className="ghost" onClick={copySummary}>정보 복사</button>
+            <button type="button" onClick={printCard}>인쇄하기</button>
+          </div>
+        </div>
+        <div className="business-card-layout">
+          <div className="stack business-card-form-panel">
+            <div className="grid-2">
+              <div className="stack">
+                <label>명함 유형</label>
+                <select value={template} onChange={e => setTemplate(e.target.value)}>
+                  {templateOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+                <div className="muted small-text">{currentTemplate.description}</div>
+              </div>
+              <TextField label="이름" value={form.name} onChange={value => updateField('name', value)} />
+              <TextField label="직함" value={form.jobTitle} onChange={value => updateField('jobTitle', value)} />
+              <TextField label="회사명" value={form.company} onChange={value => updateField('company', value)} />
+              <TextField label="연락처" value={form.phone} onChange={value => updateField('phone', value)} />
+              <TextField label="이메일" value={form.email} onChange={value => updateField('email', value)} />
+              <TextField label="웹사이트" value={form.website} onChange={value => updateField('website', value)} />
+              <TextField label="주소" value={form.address} onChange={value => updateField('address', value)} />
+            </div>
+            <div className="stack">
+              <label>한 줄 소개</label>
+              <textarea value={form.tagline} onChange={e => updateField('tagline', e.target.value)} placeholder="예: 고객의 이력을 한 장의 프로필로 정리합니다." rows={4} />
+            </div>
+          </div>
+
+          <div className="business-card-preview-panel">
+            <div className={`business-card-preview business-card-preview-${template}`}>
+              <div className="business-card-preview-badge">{currentTemplate.label}</div>
+              <div className="business-card-preview-main">
+                <div className="business-card-name">{form.name || '홍길동'}</div>
+                <div className="business-card-role">{[form.jobTitle || '직함', form.company || '회사명'].filter(Boolean).join(' · ')}</div>
+                <div className="business-card-divider" />
+                <div className="business-card-info-list">
+                  <div>{form.phone || '010-0000-0000'}</div>
+                  <div>{form.email || 'name@example.com'}</div>
+                  <div>{form.website || 'www.example.com'}</div>
+                  <div>{form.address || '서울시 강남구 테헤란로 00'}</div>
+                </div>
+              </div>
+              <div className="business-card-preview-foot">
+                <div className="business-card-tagline">{form.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </div>
