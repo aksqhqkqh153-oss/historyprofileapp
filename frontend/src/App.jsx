@@ -1081,6 +1081,14 @@ function buildYoutubeEmbedUrl(item) {
   return ''
 }
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] || char))
+}
+
+function serializeForInlineScript(value) {
+  return JSON.stringify(value).replace(/</g, '\u003c').replace(/>/g, '\u003e').replace(/&/g, '\u0026')
+}
+
 function MusicPage() {
   const [playlists, setPlaylists] = useLocalCollection(LOCAL_STORAGE_KEYS.musicPlaylists, defaultMusicPlaylists())
   const [quickAddUrl, setQuickAddUrl] = useState('')
@@ -1173,7 +1181,19 @@ function MusicPage() {
   function renderBackgroundPlayerWindow(target) {
     const popup = backgroundPlayerWindowRef.current
     if (!popup || popup.closed) return false
-    const safeTitle = String(target?.name || '음악듣기').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))
+    const playableItems = normalizedPlaylists.filter(item => item?.embedUrl)
+    const targetIndex = Math.max(0, playableItems.findIndex(item => item.id === target?.id))
+    const initialData = {
+      playlists: playableItems.map(item => ({
+        id: item.id,
+        name: item.name || '이름 없는 플레이리스트',
+        description: item.description || '',
+        sourceLabel: item.sourceLabel || 'YouTube 공개 재생목록',
+        embedUrl: item.embedUrl,
+      })),
+      currentIndex: targetIndex,
+    }
+    const safeTitle = escapeHtml(target?.name || '음악듣기')
     popup.document.open()
     popup.document.write(`<!doctype html>
 <html lang="ko">
@@ -1182,29 +1202,128 @@ function MusicPage() {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${safeTitle} - 백그라운드 재생</title>
     <style>
-      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0f172a; color: #fff; font-family: Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
-      .wrap { display: flex; flex-direction: column; width: 100%; height: 100%; }
-      .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: rgba(15, 23, 42, 0.96); border-bottom: 1px solid rgba(255,255,255,0.12); }
-      .title { font-size: 14px; font-weight: 700; }
-      .sub { font-size: 12px; color: rgba(255,255,255,0.74); margin-top: 4px; }
-      .frame-wrap { flex: 1; min-height: 0; }
-      iframe { width: 100%; height: 100%; border: 0; background: #000; }
-      button { border: 0; border-radius: 999px; padding: 10px 14px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #020617; color: #e2e8f0; font-family: Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+      body { overflow: hidden; }
+      .app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+      .topbar { padding: 14px 16px 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.24); background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(2,6,23,.98)); }
+      .title { font-size: 15px; font-weight: 800; }
+      .sub { margin-top: 4px; font-size: 12px; color: #94a3b8; line-height: 1.5; }
+      .video-shell { padding: 12px 16px 10px; }
+      .video-frame { width: 100%; aspect-ratio: 16 / 9; border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 18px; overflow: hidden; background: #000; }
+      iframe { width: 100%; height: 100%; border: 0; display: block; }
+      .controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; padding: 0 16px 12px; }
+      button { appearance: none; border: 0; border-radius: 14px; padding: 11px 10px; background: #1e293b; color: #f8fafc; cursor: pointer; font-weight: 700; }
+      button.primary { background: #2563eb; }
+      button.danger { background: #334155; }
+      button:disabled { opacity: .42; cursor: not-allowed; }
+      .playlist-wrap { flex: 1; min-height: 0; padding: 0 16px 16px; }
+      .playlist-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+      .playlist-head strong { font-size: 14px; }
+      .playlist-note { font-size: 12px; color: #94a3b8; }
+      .playlist-list { display: flex; flex-direction: column; gap: 10px; height: calc(100% - 42px); overflow: auto; padding-right: 2px; }
+      .playlist-item { width: 100%; text-align: left; background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.18); padding: 12px 14px; border-radius: 16px; }
+      .playlist-item.active { border-color: rgba(59,130,246,.9); background: rgba(37,99,235,.16); box-shadow: 0 0 0 1px rgba(59,130,246,.26) inset; }
+      .playlist-title { display: block; font-size: 14px; font-weight: 800; color: #f8fafc; }
+      .playlist-desc { display: block; margin-top: 6px; font-size: 12px; color: #cbd5e1; line-height: 1.45; }
+      .playlist-meta { display: block; margin-top: 8px; font-size: 11px; color: #93c5fd; }
+      .status { padding: 0 16px 14px; font-size: 12px; color: #94a3b8; }
+      @media (max-width: 540px) {
+        .controls { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <div class="head">
-        <div>
-          <div class="title">${safeTitle}</div>
-          <div class="sub">백그라운드 재생창 · 다른 창을 눌러도 이 창이 유지되면 재생이 계속됩니다.</div>
-        </div>
-        <button type="button" onclick="window.close()">닫기</button>
-      </div>
-      <div class="frame-wrap">
-        <iframe src="${target.embedUrl}" title="${safeTitle}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-      </div>
-    </div>
+    <div id="app"></div>
+    <script>
+      const initialData = ${serializeForInlineScript(initialData)};
+      const app = document.getElementById('app');
+      const state = {
+        playlists: Array.isArray(initialData.playlists) ? initialData.playlists : [],
+        currentIndex: Number.isFinite(initialData.currentIndex) ? initialData.currentIndex : 0,
+        isStopped: false,
+      };
+
+      function currentItem() {
+        return state.playlists[state.currentIndex] || null;
+      }
+
+      function frameMarkup() {
+        const item = currentItem();
+        if (!item || state.isStopped) {
+          return '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;padding:24px;color:#94a3b8;font-size:13px;text-align:center;line-height:1.6;">정지 상태입니다.<br>재생 버튼을 누르면 현재 선택한 플레이리스트가 다시 시작됩니다.</div>';
+        }
+        return '<iframe src="' + item.embedUrl + '" title="' + escapeHtml(item.name || 'YouTube 플레이어') + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>';
+      }
+
+      function render() {
+        const item = currentItem();
+        const hasPrev = state.currentIndex > 0;
+        const hasNext = state.currentIndex < state.playlists.length - 1;
+        const playlistItems = state.playlists.map((playlist, index) => {
+          const active = index === state.currentIndex;
+          return '<button type="button" class="playlist-item' + (active ? ' active' : '') + '" data-index="' + index + '">' +
+            '<span class="playlist-title">' + escapeHtml(playlist.name || '이름 없는 플레이리스트') + '</span>' +
+            '<span class="playlist-desc">' + escapeHtml(playlist.description || '설명이 없습니다.') + '</span>' +
+            '<span class="playlist-meta">' + escapeHtml(playlist.sourceLabel || 'YouTube 공개 재생목록') + '</span>' +
+          '</button>';
+        }).join('');
+
+        app.innerHTML = '<div class="app">' +
+          '<div class="topbar">' +
+            '<div class="title">' + escapeHtml(item?.name || '음악듣기 백그라운드 실행') + '</div>' +
+            '<div class="sub">백그라운드 전용 플레이어 · 다른 창이나 앱을 사용해도 이 재생창이 유지되는 동안 계속 들을 수 있도록 구성했습니다.</div>' +
+          '</div>' +
+          '<div class="video-shell"><div class="video-frame">' + frameMarkup() + '</div></div>' +
+          '<div class="controls">' +
+            '<button type="button" data-action="prev"' + (hasPrev ? '' : ' disabled') + '>이전곡 재생</button>' +
+            '<button type="button" class="primary" data-action="play"' + (item ? '' : ' disabled') + '>재생</button>' +
+            '<button type="button" class="danger" data-action="stop"' + (item ? '' : ' disabled') + '>정지</button>' +
+            '<button type="button" data-action="next"' + (hasNext ? '' : ' disabled') + '>다음곡 재생</button>' +
+          '</div>' +
+          '<div class="status">' + escapeHtml(item ? ((state.currentIndex + 1) + ' / ' + state.playlists.length + '번째 재생목록') : '재생 가능한 플레이리스트가 없습니다.') + '</div>' +
+          '<div class="playlist-wrap">' +
+            '<div class="playlist-head"><strong>저장된 플레이리스트</strong><span class="playlist-note">목록을 누르면 바로 전환됩니다</span></div>' +
+            '<div class="playlist-list">' + playlistItems + '</div>' +
+          '</div>' +
+        '</div>';
+
+        app.querySelectorAll('[data-action]').forEach(button => {
+          button.addEventListener('click', event => {
+            const action = event.currentTarget.getAttribute('data-action');
+            if (action === 'prev' && state.currentIndex > 0) {
+              state.currentIndex -= 1;
+              state.isStopped = false;
+            }
+            if (action === 'play') state.isStopped = false;
+            if (action === 'stop') state.isStopped = true;
+            if (action === 'next' && state.currentIndex < state.playlists.length - 1) {
+              state.currentIndex += 1;
+              state.isStopped = false;
+            }
+            render();
+          });
+        });
+
+        app.querySelectorAll('.playlist-item').forEach(button => {
+          button.addEventListener('click', event => {
+            const nextIndex = Number(event.currentTarget.getAttribute('data-index'));
+            if (Number.isFinite(nextIndex)) {
+              state.currentIndex = nextIndex;
+              state.isStopped = false;
+              render();
+            }
+          });
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] || char));
+      }
+
+      render();
+    </script>
   </body>
 </html>`)
     popup.document.close()
@@ -1364,7 +1483,7 @@ function MusicPage() {
         <div className="split-row responsive-row">
           <div className="stack gap-6">
             <strong>음악듣기</strong>
-            <div className="muted small-text">관리자 계정만 사용할 수 있는 YouTube 공식 임베드 플레이어입니다. 공개 재생목록 또는 공개 영상 링크를 붙여넣어 재생목록처럼 청취할 수 있으며, 백그라운드 재생 버튼으로 별도 재생창을 열면 다른 창을 눌러도 더 안정적으로 계속 들을 수 있습니다.</div>
+            <div className="muted small-text">관리자 계정만 사용할 수 있는 YouTube 공식 임베드 플레이어입니다. 공개 재생목록 또는 공개 영상 링크를 붙여넣어 재생목록처럼 청취할 수 있으며, 백그라운드 재생 버튼으로 전용 재생창을 열면 상단 작은 영상, 이전곡/재생/정지/다음곡 버튼, 저장된 플레이리스트 목록을 함께 보면서 다른 창이나 앱을 사용해도 더 안정적으로 계속 들을 수 있습니다.</div>
           </div>
           <div className="music-hero-actions">
             <button type="button" className="ghost" onClick={handleAddPlaylist}>플레이리스트 추가</button>
@@ -1408,6 +1527,7 @@ function MusicPage() {
                   <div className="music-playlist-actions">
                     <button type="button" className="ghost music-control-button" onClick={() => handlePlayPlaylist(item.id)}>재생</button>
                     <button type="button" className="ghost music-control-button" onClick={() => handleBackgroundPlay(item.id)}>백그라운드</button>
+                    <button type="button" className="ghost music-control-button" onClick={() => handleBackgroundPlay(item.id)}>앱 실행</button>
                     <button type="button" className="ghost music-control-button" onClick={() => handleStopPlaylist(item.id)}>정지</button>
                     <button type="button" className="ghost music-delete-button" onClick={() => handleDeletePlaylist(item.id)}>삭제</button>
                   </div>
@@ -1423,6 +1543,7 @@ function MusicPage() {
             <div className="music-player-top-actions">
               <button type="button" className="ghost music-control-button" onClick={() => activePlaylist?.id && handlePlayPlaylist(activePlaylist.id)} disabled={!activePlaylist?.embedUrl}>재생</button>
               <button type="button" className="ghost music-control-button" onClick={() => activePlaylist?.id && handleBackgroundPlay(activePlaylist.id)} disabled={!activePlaylist?.embedUrl}>백그라운드</button>
+              <button type="button" className="ghost music-control-button" onClick={() => activePlaylist?.id && handleBackgroundPlay(activePlaylist.id)} disabled={!activePlaylist?.embedUrl}>앱 실행</button>
               <button type="button" className="ghost music-control-button" onClick={() => handleStopPlaylist(activePlaylist?.id)} disabled={!isActivePlaying && !(backgroundPlayerWindowRef.current && !backgroundPlayerWindowRef.current.closed)}>정지</button>
               <div className="muted small-text">공개 YouTube 콘텐츠만 사용 · 백그라운드 새창 지원</div>
             </div>
