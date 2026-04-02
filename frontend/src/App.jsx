@@ -4055,12 +4055,19 @@ function UrlShortenerPage() {
   )
 }
 
+
 function BusinessCardBuilderPage() {
   const BUSINESS_CARD_STORAGE_KEY = 'historyprofile_saved_business_cards'
   const [template, setTemplate] = useState('clean')
-  const [cardSize, setCardSize] = useState('standard')
+  const [cardSize, setCardSize] = useState('standard_90x50')
   const [savedCards, setSavedCards] = useState([])
   const [selectedSavedCard, setSelectedSavedCard] = useState('')
+  const [shopOpen, setShopOpen] = useState(false)
+  const [backgroundMode, setBackgroundMode] = useState('solid')
+  const [backgroundColor, setBackgroundColor] = useState('#ffffff')
+  const [patternPreset, setPatternPreset] = useState('dots')
+  const [uploadedPhoto, setUploadedPhoto] = useState('')
+  const [uploadedPattern, setUploadedPattern] = useState('')
   const [form, setForm] = useState({
     name: '',
     jobTitle: '',
@@ -4073,19 +4080,57 @@ function BusinessCardBuilderPage() {
   })
 
   const templateOptions = [
-    { value: 'clean', label: '기본형', description: '가장 무난한 세로형 명함' },
-    { value: 'modern', label: '모던형', description: '강조색이 있는 가로형 명함' },
-    { value: 'minimal', label: '미니멀형', description: '정보만 간결하게 배치한 명함' },
+    { value: 'clean', label: '클린 베이직', description: '가장 무난한 세로형 명함', premium: false },
+    { value: 'modern', label: '모던 포인트', description: '강조색이 있는 가로형 명함', premium: false },
+    { value: 'minimal', label: '미니멀 라인', description: '정보만 간결하게 배치한 명함', premium: false },
+    { value: 'executive', label: '이그제큐티브', description: '고급스러운 블랙 골드 톤', premium: true },
+    { value: 'soft', label: '소프트 브랜딩', description: '부드러운 라운드 감성형', premium: false },
+    { value: 'portfolio', label: '포트폴리오형', description: '웹/포트폴리오 강조형', premium: false },
+    { value: 'bold', label: '볼드 아이덴티티', description: '강한 제목과 컬러 블록형', premium: true },
+    { value: 'mono', label: '모노 클래식', description: '흑백 대비 중심의 클래식형', premium: false },
   ]
 
   const sizeOptions = [
-    { value: 'slim', label: '슬림형', ratio: '90 × 45mm' },
-    { value: 'standard', label: '기본형', ratio: '90 × 50mm' },
-    { value: 'square', label: '정사각형', ratio: '55 × 55mm' },
+    { value: 'standard_90x50', label: '90 × 50mm', widthMm: 90, heightMm: 50 },
+    { value: 'standard_91x55', label: '91 × 55mm', widthMm: 91, heightMm: 55 },
+    { value: 'us_89x51', label: '89 × 51mm', widthMm: 89, heightMm: 51 },
+    { value: 'euro_85x55', label: '85 × 55mm', widthMm: 85, heightMm: 55 },
+    { value: 'mini_86x48', label: '86 × 48mm', widthMm: 86, heightMm: 48 },
+    { value: 'slim_90x45', label: '90 × 45mm', widthMm: 90, heightMm: 45 },
+    { value: 'wide_95x55', label: '95 × 55mm', widthMm: 95, heightMm: 55 },
+    { value: 'square_55x55', label: '55 × 55mm', widthMm: 55, heightMm: 55 },
+    { value: 'square_60x60', label: '60 × 60mm', widthMm: 60, heightMm: 60 },
+    { value: 'long_120x50', label: '120 × 50mm', widthMm: 120, heightMm: 50 },
+  ]
+
+  const colorOptions = [
+    { value: '#ffffff', label: '화이트' },
+    { value: '#f8fafc', label: '라이트 그레이' },
+    { value: '#fee2e2', label: '로즈 핑크' },
+    { value: '#dbeafe', label: '스카이 블루' },
+    { value: '#dcfce7', label: '민트 그린' },
+    { value: '#ede9fe', label: '라벤더' },
+    { value: '#fef3c7', label: '크림 옐로우' },
+    { value: '#111827', label: '딥 블랙' },
+  ]
+
+  const patternOptions = [
+    { value: 'dots', label: '도트 패턴', css: 'radial-gradient(circle at 1px 1px, rgba(15,23,42,.16) 1px, transparent 0)', size: '18px 18px', base: '#ffffff' },
+    { value: 'grid', label: '그리드 패턴', css: 'linear-gradient(rgba(15,23,42,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,.08) 1px, transparent 1px)', size: '18px 18px', base: '#ffffff' },
+    { value: 'diagonal', label: '사선 패턴', css: 'repeating-linear-gradient(135deg, rgba(37,99,235,.10) 0 10px, rgba(255,255,255,.0) 10px 20px)', size: 'auto', base: '#eff6ff' },
+    { value: 'waves', label: '웨이브 패턴', css: 'radial-gradient(circle at 0 0, rgba(14,165,233,.12) 0 24px, transparent 25px), radial-gradient(circle at 30px 30px, rgba(59,130,246,.10) 0 20px, transparent 21px)', size: '60px 60px', base: '#f8fafc' },
+  ]
+
+  const shopForms = [
+    { id: 'executive', name: '이그제큐티브', price: '₩3,900', desc: '법률·금융·컨설팅 업종용 고급형' },
+    { id: 'bold', name: '볼드 아이덴티티', price: '₩2,900', desc: '퍼스널 브랜딩 강조형' },
+    { id: 'portfolio', name: '포트폴리오형', price: '₩1,900', desc: '디자이너·개발자·강사용' },
+    { id: 'soft', name: '소프트 브랜딩', price: '₩1,900', desc: '뷰티·상담·라이프스타일 업종용' },
   ]
 
   const currentTemplate = templateOptions.find(item => item.value === template) || templateOptions[0]
-  const currentSize = sizeOptions.find(item => item.value === cardSize) || sizeOptions[1]
+  const currentSize = sizeOptions.find(item => item.value === cardSize) || sizeOptions[0]
+  const currentPattern = patternOptions.find(item => item.value === patternPreset) || patternOptions[0]
 
   useEffect(() => {
     try {
@@ -4097,7 +4142,7 @@ function BusinessCardBuilderPage() {
   }, [])
 
   useEffect(() => {
-    const hasContent = Object.values(form).some(value => String(value || '').trim())
+    const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern
     if (!hasContent) return
     const snapshot = {
       id: `card-${Date.now()}`,
@@ -4105,19 +4150,24 @@ function BusinessCardBuilderPage() {
       template,
       cardSize,
       form,
+      backgroundMode,
+      backgroundColor,
+      patternPreset,
+      uploadedPhoto,
+      uploadedPattern,
       updatedAt: new Date().toISOString(),
     }
     const timer = window.setTimeout(() => {
       setSavedCards(current => {
-        const comparable = JSON.stringify({ template, cardSize, form })
-        const next = [snapshot, ...current.filter(item => JSON.stringify({ template: item.template, cardSize: item.cardSize, form: item.form }) !== comparable)]
-          .slice(0, 12)
+        const comparable = JSON.stringify({ template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern })
+        const next = [snapshot, ...current.filter(item => JSON.stringify({ template: item.template, cardSize: item.cardSize, form: item.form, backgroundMode: item.backgroundMode, backgroundColor: item.backgroundColor, patternPreset: item.patternPreset, uploadedPhoto: item.uploadedPhoto, uploadedPattern: item.uploadedPattern }) !== comparable)]
+          .slice(0, 20)
         localStorage.setItem(BUSINESS_CARD_STORAGE_KEY, JSON.stringify(next))
         return next
       })
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [template, cardSize, form])
+  }, [template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern])
 
   function updateField(key, value) {
     setForm(current => ({ ...current, [key]: value }))
@@ -4128,7 +4178,12 @@ function BusinessCardBuilderPage() {
     const target = savedCards.find(item => item.id === cardId)
     if (!target) return
     setTemplate(target.template || 'clean')
-    setCardSize(target.cardSize || 'standard')
+    setCardSize(target.cardSize || 'standard_90x50')
+    setBackgroundMode(target.backgroundMode || 'solid')
+    setBackgroundColor(target.backgroundColor || '#ffffff')
+    setPatternPreset(target.patternPreset || 'dots')
+    setUploadedPhoto(target.uploadedPhoto || '')
+    setUploadedPattern(target.uploadedPattern || '')
     setForm({
       name: target.form?.name || '',
       jobTitle: target.form?.jobTitle || '',
@@ -4139,6 +4194,13 @@ function BusinessCardBuilderPage() {
       address: target.form?.address || '',
       tagline: target.form?.tagline || '',
     })
+  }
+
+  function readLocalImage(file, onDone) {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => onDone(String(reader.result || ''))
+    reader.readAsDataURL(file)
   }
 
   async function copySummary() {
@@ -4159,32 +4221,59 @@ function BusinessCardBuilderPage() {
     window.print()
   }
 
+  function getBackgroundStyle() {
+    if (backgroundMode === 'photo' && uploadedPhoto) {
+      return { backgroundImage: `url(${uploadedPhoto})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#ffffff' }
+    }
+    if (backgroundMode === 'pattern') {
+      if (uploadedPattern) {
+        return { backgroundImage: `url(${uploadedPattern})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#111827' }
+      }
+      return {
+        backgroundColor: currentPattern.base,
+        backgroundImage: currentPattern.css,
+        backgroundSize: currentPattern.size,
+        color: '#111827',
+      }
+    }
+    return { background: backgroundColor, color: backgroundColor === '#111827' ? '#ffffff' : '#111827' }
+  }
+
+  const previewStyle = {
+    '--card-width-mm': currentSize.widthMm,
+    '--card-height-mm': currentSize.heightMm,
+    '--card-ratio': `${currentSize.widthMm} / ${currentSize.heightMm}`,
+    ...getBackgroundStyle(),
+  }
+
   return (
     <div className="stack page-stack business-card-builder-page">
       <section className="card stack business-card-builder-card">
         <div className="business-card-layout">
           <div className="business-card-preview-panel">
-            <div className={`business-card-preview business-card-preview-${template} business-card-size-${cardSize}`}>
-              <div className="business-card-preview-badge">{currentTemplate.label} · {currentSize.ratio}</div>
-              <div className="business-card-preview-main">
-                <div className="business-card-name">{form.name || '홍길동'}</div>
-                <div className="business-card-role">{[form.jobTitle || '직함', form.company || '회사명'].filter(Boolean).join(' · ')}</div>
-                <div className="business-card-divider" />
-                <div className="business-card-info-list">
-                  <div>{form.phone || '010-0000-0000'}</div>
-                  <div>{form.email || 'name@example.com'}</div>
-                  <div>{form.website || 'www.example.com'}</div>
-                  <div>{form.address || '서울시 강남구 테헤란로 00'}</div>
+            <div className="business-card-preview-stage">
+              <div className={`business-card-preview business-card-preview-${template}`} style={previewStyle}>
+                <div className="business-card-preview-badge">{currentTemplate.label} · {currentSize.label}</div>
+                <div className="business-card-preview-main">
+                  <div className="business-card-name">{form.name || '홍길동'}</div>
+                  <div className="business-card-role">{[form.jobTitle || '직함', form.company || '회사명'].filter(Boolean).join(' · ')}</div>
+                  <div className="business-card-divider" />
+                  <div className="business-card-info-list">
+                    <div>{form.phone || '010-0000-0000'}</div>
+                    <div>{form.email || 'name@example.com'}</div>
+                    <div>{form.website || 'www.example.com'}</div>
+                    <div>{form.address || '서울시 강남구 테헤란로 00'}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="business-card-preview-foot">
-                <div className="business-card-tagline">{form.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'}</div>
+                <div className="business-card-preview-foot">
+                  <div className="business-card-tagline">{form.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'}</div>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="stack business-card-form-panel">
-            <div className="business-card-control-grid business-card-control-grid-top">
+            <div className="business-card-control-grid business-card-control-grid-top business-card-control-grid-top-4">
               <div className="stack business-card-field business-card-field-load">
                 <label>불러오기</label>
                 <select value={selectedSavedCard} onChange={e => loadSavedCard(e.target.value)}>
@@ -4196,11 +4285,14 @@ function BusinessCardBuilderPage() {
                   ))}
                 </select>
               </div>
-              <div className="stack business-card-field">
-                <label>명함 유형</label>
-                <select value={template} onChange={e => setTemplate(e.target.value)}>
-                  {templateOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
+              <div className="stack business-card-field business-card-field-with-shop">
+                <label>명함폼</label>
+                <div className="business-card-shop-inline">
+                  <select value={template} onChange={e => setTemplate(e.target.value)}>
+                    {templateOptions.map(item => <option key={item.value} value={item.value}>{item.label}{item.premium ? ' · 프리미엄' : ''}</option>)}
+                  </select>
+                  <button type="button" className="ghost business-card-shop-button" onClick={() => setShopOpen(true)}>폼상점</button>
+                </div>
               </div>
               <div className="stack business-card-field">
                 <label>명함크기</label>
@@ -4208,9 +4300,45 @@ function BusinessCardBuilderPage() {
                   {sizeOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
               </div>
+              <div className="stack business-card-field">
+                <label>명함배경</label>
+                <select value={backgroundMode} onChange={e => setBackgroundMode(e.target.value)}>
+                  <option value="solid">단색</option>
+                  <option value="photo">사진</option>
+                  <option value="pattern">패턴</option>
+                </select>
+              </div>
             </div>
 
             <div className="business-card-control-grid business-card-control-grid-main">
+              {backgroundMode === 'solid' ? (
+                <div className="stack business-card-field">
+                  <label>단색선택</label>
+                  <select value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)}>
+                    {colorOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </div>
+              ) : null}
+              {backgroundMode === 'photo' ? (
+                <div className="stack business-card-field">
+                  <label>사진첨부</label>
+                  <input type="file" accept="image/*" onChange={e => readLocalImage(e.target.files?.[0], setUploadedPhoto)} />
+                </div>
+              ) : null}
+              {backgroundMode === 'pattern' ? (
+                <>
+                  <div className="stack business-card-field">
+                    <label>기본패턴</label>
+                    <select value={patternPreset} onChange={e => setPatternPreset(e.target.value)}>
+                      {patternOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="stack business-card-field">
+                    <label>패턴첨부</label>
+                    <input type="file" accept="image/*" onChange={e => readLocalImage(e.target.files?.[0], setUploadedPattern)} />
+                  </div>
+                </>
+              ) : null}
               <TextField label="이름" value={form.name} onChange={value => updateField('name', value)} />
               <TextField label="직함" value={form.jobTitle} onChange={value => updateField('jobTitle', value)} />
               <TextField label="회사명" value={form.company} onChange={value => updateField('company', value)} />
@@ -4233,6 +4361,39 @@ function BusinessCardBuilderPage() {
           </div>
         </div>
       </section>
+
+      {shopOpen ? (
+        <div className="business-card-shop-modal" role="dialog" aria-modal="true">
+          <div className="business-card-shop-backdrop" onClick={() => setShopOpen(false)} />
+          <div className="business-card-shop-sheet card stack">
+            <div className="business-card-shop-head">
+              <strong>폼상점</strong>
+              <button type="button" className="ghost" onClick={() => setShopOpen(false)}>닫기</button>
+            </div>
+            <div className="business-card-shop-grid">
+              {shopForms.map(item => (
+                <article key={item.id} className="business-card-shop-item">
+                  <div>
+                    <strong>{item.name}</strong>
+                    <div className="muted small-text">{item.desc}</div>
+                  </div>
+                  <div className="business-card-shop-item-foot">
+                    <span className="chip">{item.price}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTemplate(item.id)
+                        setShopOpen(false)
+                        window.alert(`${item.name} 폼이 적용되었습니다. 실제 결제 연동은 아직 연결되지 않았습니다.`)
+                      }}
+                    >적용하기</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
