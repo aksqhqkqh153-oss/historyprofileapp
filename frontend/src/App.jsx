@@ -4056,7 +4056,11 @@ function UrlShortenerPage() {
 }
 
 function BusinessCardBuilderPage() {
+  const BUSINESS_CARD_STORAGE_KEY = 'historyprofile_saved_business_cards'
   const [template, setTemplate] = useState('clean')
+  const [cardSize, setCardSize] = useState('standard')
+  const [savedCards, setSavedCards] = useState([])
+  const [selectedSavedCard, setSelectedSavedCard] = useState('')
   const [form, setForm] = useState({
     name: '',
     jobTitle: '',
@@ -4074,10 +4078,67 @@ function BusinessCardBuilderPage() {
     { value: 'minimal', label: '미니멀형', description: '정보만 간결하게 배치한 명함' },
   ]
 
+  const sizeOptions = [
+    { value: 'slim', label: '슬림형', ratio: '90 × 45mm' },
+    { value: 'standard', label: '기본형', ratio: '90 × 50mm' },
+    { value: 'square', label: '정사각형', ratio: '55 × 55mm' },
+  ]
+
   const currentTemplate = templateOptions.find(item => item.value === template) || templateOptions[0]
+  const currentSize = sizeOptions.find(item => item.value === cardSize) || sizeOptions[1]
+
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(BUSINESS_CARD_STORAGE_KEY) || '[]')
+      if (Array.isArray(parsed)) setSavedCards(parsed)
+    } catch {
+      setSavedCards([])
+    }
+  }, [])
+
+  useEffect(() => {
+    const hasContent = Object.values(form).some(value => String(value || '').trim())
+    if (!hasContent) return
+    const snapshot = {
+      id: `card-${Date.now()}`,
+      title: form.name?.trim() || form.company?.trim() || '최근 작업',
+      template,
+      cardSize,
+      form,
+      updatedAt: new Date().toISOString(),
+    }
+    const timer = window.setTimeout(() => {
+      setSavedCards(current => {
+        const comparable = JSON.stringify({ template, cardSize, form })
+        const next = [snapshot, ...current.filter(item => JSON.stringify({ template: item.template, cardSize: item.cardSize, form: item.form }) !== comparable)]
+          .slice(0, 12)
+        localStorage.setItem(BUSINESS_CARD_STORAGE_KEY, JSON.stringify(next))
+        return next
+      })
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [template, cardSize, form])
 
   function updateField(key, value) {
     setForm(current => ({ ...current, [key]: value }))
+  }
+
+  function loadSavedCard(cardId) {
+    setSelectedSavedCard(cardId)
+    const target = savedCards.find(item => item.id === cardId)
+    if (!target) return
+    setTemplate(target.template || 'clean')
+    setCardSize(target.cardSize || 'standard')
+    setForm({
+      name: target.form?.name || '',
+      jobTitle: target.form?.jobTitle || '',
+      company: target.form?.company || '',
+      phone: target.form?.phone || '',
+      email: target.form?.email || '',
+      website: target.form?.website || '',
+      address: target.form?.address || '',
+      tagline: target.form?.tagline || '',
+    })
   }
 
   async function copySummary() {
@@ -4100,44 +4161,11 @@ function BusinessCardBuilderPage() {
 
   return (
     <div className="stack page-stack business-card-builder-page">
-      <section className="card stack">
-        <div className="split-row business-card-page-head">
-          <div className="stack">
-            <h3>명함만들기</h3>
-            <div className="muted small-text">폼을 입력하고 명함 유형을 바꾸면 배치가 바로 변경됩니다.</div>
-          </div>
-          <div className="business-card-head-actions">
-            <button type="button" className="ghost" onClick={copySummary}>정보 복사</button>
-            <button type="button" onClick={printCard}>인쇄하기</button>
-          </div>
-        </div>
+      <section className="card stack business-card-builder-card">
         <div className="business-card-layout">
-          <div className="stack business-card-form-panel">
-            <div className="grid-2">
-              <div className="stack">
-                <label>명함 유형</label>
-                <select value={template} onChange={e => setTemplate(e.target.value)}>
-                  {templateOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
-                <div className="muted small-text">{currentTemplate.description}</div>
-              </div>
-              <TextField label="이름" value={form.name} onChange={value => updateField('name', value)} />
-              <TextField label="직함" value={form.jobTitle} onChange={value => updateField('jobTitle', value)} />
-              <TextField label="회사명" value={form.company} onChange={value => updateField('company', value)} />
-              <TextField label="연락처" value={form.phone} onChange={value => updateField('phone', value)} />
-              <TextField label="이메일" value={form.email} onChange={value => updateField('email', value)} />
-              <TextField label="웹사이트" value={form.website} onChange={value => updateField('website', value)} />
-              <TextField label="주소" value={form.address} onChange={value => updateField('address', value)} />
-            </div>
-            <div className="stack">
-              <label>한 줄 소개</label>
-              <textarea value={form.tagline} onChange={e => updateField('tagline', e.target.value)} placeholder="예: 고객의 이력을 한 장의 프로필로 정리합니다." rows={4} />
-            </div>
-          </div>
-
           <div className="business-card-preview-panel">
-            <div className={`business-card-preview business-card-preview-${template}`}>
-              <div className="business-card-preview-badge">{currentTemplate.label}</div>
+            <div className={`business-card-preview business-card-preview-${template} business-card-size-${cardSize}`}>
+              <div className="business-card-preview-badge">{currentTemplate.label} · {currentSize.ratio}</div>
               <div className="business-card-preview-main">
                 <div className="business-card-name">{form.name || '홍길동'}</div>
                 <div className="business-card-role">{[form.jobTitle || '직함', form.company || '회사명'].filter(Boolean).join(' · ')}</div>
@@ -4152,6 +4180,55 @@ function BusinessCardBuilderPage() {
               <div className="business-card-preview-foot">
                 <div className="business-card-tagline">{form.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'}</div>
               </div>
+            </div>
+          </div>
+
+          <div className="stack business-card-form-panel">
+            <div className="business-card-control-grid business-card-control-grid-top">
+              <div className="stack business-card-field business-card-field-load">
+                <label>불러오기</label>
+                <select value={selectedSavedCard} onChange={e => loadSavedCard(e.target.value)}>
+                  <option value="">저장된 명함 선택</option>
+                  {savedCards.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {(item.title || '최근 작업')} · {new Date(item.updatedAt).toLocaleDateString('ko-KR')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="stack business-card-field">
+                <label>명함 유형</label>
+                <select value={template} onChange={e => setTemplate(e.target.value)}>
+                  {templateOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </div>
+              <div className="stack business-card-field">
+                <label>명함크기</label>
+                <select value={cardSize} onChange={e => setCardSize(e.target.value)}>
+                  {sizeOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="business-card-control-grid business-card-control-grid-main">
+              <TextField label="이름" value={form.name} onChange={value => updateField('name', value)} />
+              <TextField label="직함" value={form.jobTitle} onChange={value => updateField('jobTitle', value)} />
+              <TextField label="회사명" value={form.company} onChange={value => updateField('company', value)} />
+              <TextField label="연락처" value={form.phone} onChange={value => updateField('phone', value)} />
+              <TextField label="이메일" value={form.email} onChange={value => updateField('email', value)} />
+              <TextField label="웹사이트" value={form.website} onChange={value => updateField('website', value)} />
+              <div className="business-card-field business-card-field-span-full">
+                <TextField label="주소" value={form.address} onChange={value => updateField('address', value)} />
+              </div>
+              <div className="stack business-card-field business-card-field-span-full">
+                <label>한줄 소개</label>
+                <textarea value={form.tagline} onChange={e => updateField('tagline', e.target.value)} placeholder="예: 고객의 이력을 한 장의 프로필로 정리합니다." rows={4} />
+              </div>
+            </div>
+
+            <div className="business-card-head-actions business-card-bottom-actions">
+              <button type="button" className="ghost" onClick={copySummary}>정보복사</button>
+              <button type="button" onClick={printCard}>인쇄하기</button>
             </div>
           </div>
         </div>
