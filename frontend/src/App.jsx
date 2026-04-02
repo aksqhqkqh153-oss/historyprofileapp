@@ -647,6 +647,13 @@ const LOCAL_STORAGE_KEYS = {
   shareLinks: 'historyprofile_local_share_links_items',
   shareLinkCategories: 'historyprofile_local_share_link_categories',
   vaultSettings: 'historyprofile_local_vault_settings',
+  businessConfig: 'historyprofile_local_business_config',
+  templateStore: 'historyprofile_local_template_store_items',
+  aiDrafts: 'historyprofile_local_ai_drafts',
+  hiringPosts: 'historyprofile_local_hiring_posts',
+  gigPosts: 'historyprofile_local_gig_posts',
+  brandPages: 'historyprofile_local_brand_pages',
+  adSlots: 'historyprofile_local_ad_slots',
 }
 
 
@@ -1832,7 +1839,7 @@ function WorkspacePage() {
     <section className="page-stack">
       <div className="card stack">
         <strong>종합관리</strong>
-        <div className="muted small-text">저장함 파일, 자기소개서 데이터, 링크공유관리 데이터를 한 화면에서 정리합니다.</div>
+        <div className="muted small-text">저장함 파일, 자기소개서 데이터, 링크공유관리 데이터를 한 화면에서 정리하고 수익화 기능까지 함께 운영합니다.</div>
         <div className="grid-4">
           <Metric label="저장 자료" value={vault.length} />
           <Metric label="자기소개서 세트" value={intro.length} />
@@ -1856,7 +1863,377 @@ function WorkspacePage() {
           </div>
         </div>
       </div>
+      <BusinessMonetizationSection vault={vault} intro={intro} links={links} />
     </section>
+  )
+}
+
+function formatMoney(value) {
+  const amount = Number(value || 0)
+  return new Intl.NumberFormat('ko-KR').format(amount)
+}
+
+function buildDefaultBusinessConfig() {
+  return {
+    plan: 'free',
+    templateSellerMode: true,
+    seoAutoMode: true,
+    analyticsPro: false,
+    cloudTier: 'starter',
+    recruitingEnabled: true,
+    freelancingEnabled: true,
+    brandKitEnabled: true,
+    adSlotsEnabled: false,
+    aiCredits: 40,
+  }
+}
+
+function businessConfigLabel(plan) {
+  return {
+    free: '무료',
+    pro: '프로',
+    business: '비즈니스',
+  }[plan] || '무료'
+}
+
+function buildDefaultTemplateStoreItems() {
+  return [
+    { id: makeLocalId('tpl'), name: '시그니처 프로필 카드', category: '명함폼', type: 'one-time', price: 4900, status: '판매중', sales: 7, summary: '링크형 공개 프로필과 같이 판매하는 프리미엄 템플릿' },
+    { id: makeLocalId('tpl'), name: '포트폴리오형 패키지', category: '포트폴리오', type: 'bundle', price: 12900, status: '판매중', sales: 3, summary: '명함 + 소개페이지 + QR 구성' },
+    { id: makeLocalId('tpl'), name: '상담/영업용 브랜딩 세트', category: '브랜드', type: 'bundle', price: 7900, status: '초안', sales: 0, summary: '상담업, 영업직, 프리랜서용 전환형 세트' },
+  ]
+}
+
+function buildDefaultAiDrafts() {
+  return []
+}
+
+function buildDefaultHiringPosts() {
+  return [
+    { id: makeLocalId('job'), company: '히스토리프로필 스튜디오', title: '프로필 디자이너', employmentType: '계약직', budget: '월 250만원', status: '모집중', source: '기업 채용관' },
+    { id: makeLocalId('job'), company: '브랜드링크 파트너스', title: 'SEO 공개 URL 운영 매니저', employmentType: '파트타임', budget: '월 120만원', status: '모집중', source: '기업 채용관' },
+  ]
+}
+
+function buildDefaultGigPosts() {
+  return [
+    { id: makeLocalId('gig'), title: '링크형 포트폴리오 페이지 제작', category: '디자인', budget: '15만원~30만원', status: '거래가능', feeRate: '12%', description: '공개 프로필과 맞춤 URL을 함께 제작합니다.' },
+    { id: makeLocalId('gig'), title: '자기소개서 AI 초안 + 수동 첨삭', category: '문서', budget: '건당 3만원', status: '거래가능', feeRate: '10%', description: 'AI 생성 후 실제 제출용 문장으로 다듬어 드립니다.' },
+  ]
+}
+
+function buildDefaultBrandPages() {
+  return [
+    { id: makeLocalId('brand'), name: '브랜드 소개 페이지', slug: 'brand-profile', theme: '네이비', sections: ['대표 소개', '서비스', '문의 링크'], status: '운영중' },
+  ]
+}
+
+function buildDefaultAdSlots() {
+  return [
+    { id: makeLocalId('ad'), name: '프로필 상단 추천배너', placement: '공개 프로필 상단', price: 39000, status: '준비중', exposure: '주 1회 5천회' },
+    { id: makeLocalId('ad'), name: '명함만들기 업셀 슬롯', placement: '명함만들기 하단', price: 59000, status: '판매중', exposure: '주 1회 1만회' },
+  ]
+}
+
+function buildAiSuggestionSeed(prompt, profiles, links) {
+  const keyword = String(prompt || '').trim() || '프로필'
+  const names = (profiles || []).slice(0, 2).map(item => item.display_name || item.title).filter(Boolean)
+  const firstName = names[0] || '대표 프로필'
+  const linkCount = Array.isArray(links) ? links.length : 0
+  return [
+    `${firstName}의 강점을 중심으로 ${keyword} 메시지를 재정리했습니다.`,
+    `핵심 소개: 신뢰를 주는 이력, 링크 ${linkCount}개, 공유 가능한 명함/URL/QR 자산을 한 번에 전달합니다.`,
+    '추천 문장: 개인 브랜딩부터 영업, 채용, 협업 제안까지 한 페이지에서 확인할 수 있도록 구성했습니다.',
+    '수익화 제안: 공개 URL 상단에 CTA를 두고, 유료 템플릿·AI 첨삭·브랜드 페이지로 전환 흐름을 연결하세요.',
+  ].join('\n')
+}
+
+function BusinessMonetizationSection({ vault, intro, links }) {
+  const [profiles, setProfiles] = useState([])
+  const [planInfo, setPlanInfo] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [businessConfig, setBusinessConfig] = useState(() => ({ ...buildDefaultBusinessConfig(), ...readLocalItems(LOCAL_STORAGE_KEYS.businessConfig, {}) }))
+  const [templateStore, setTemplateStore] = useLocalCollection(LOCAL_STORAGE_KEYS.templateStore, buildDefaultTemplateStoreItems())
+  const [aiDrafts, setAiDrafts] = useLocalCollection(LOCAL_STORAGE_KEYS.aiDrafts, buildDefaultAiDrafts())
+  const [hiringPosts, setHiringPosts] = useLocalCollection(LOCAL_STORAGE_KEYS.hiringPosts, buildDefaultHiringPosts())
+  const [gigPosts, setGigPosts] = useLocalCollection(LOCAL_STORAGE_KEYS.gigPosts, buildDefaultGigPosts())
+  const [brandPages, setBrandPages] = useLocalCollection(LOCAL_STORAGE_KEYS.brandPages, buildDefaultBrandPages())
+  const [adSlots, setAdSlots] = useLocalCollection(LOCAL_STORAGE_KEYS.adSlots, buildDefaultAdSlots())
+  const [aiPrompt, setAiPrompt] = useState('영업용 자기소개 한 줄')
+  const [jobForm, setJobForm] = useState({ company: '', title: '', employmentType: '정규직', budget: '' })
+  const [gigForm, setGigForm] = useState({ title: '', category: '기타', budget: '' })
+  const [brandForm, setBrandForm] = useState({ name: '', slug: '', theme: '네이비' })
+  const [templateForm, setTemplateForm] = useState({ name: '', category: '명함폼', price: '' })
+  const [adForm, setAdForm] = useState({ name: '', placement: '', price: '' })
+
+  useEffect(() => {
+    writeLocalItems(LOCAL_STORAGE_KEYS.businessConfig, businessConfig)
+  }, [businessConfig])
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const [profileData, planData] = await Promise.all([
+          api('/api/profiles').catch(() => ({ items: [] })),
+          api('/api/plan').catch(() => ({ plan: null, usage: null })),
+        ])
+        if (!mounted) return
+        setProfiles(profileData.items || [])
+        setPlanInfo(planData)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  const publicProfiles = profiles.filter(item => item.slug)
+  const publicProfileCount = publicProfiles.length
+  const indexedProfileCount = publicProfiles.filter(item => item.search_engine_indexing).length
+  const totalTemplateSales = templateStore.reduce((sum, item) => sum + Number(item.sales || 0), 0)
+  const estimatedTemplateRevenue = templateStore.reduce((sum, item) => sum + Number(item.sales || 0) * Number(item.price || 0), 0)
+  const sharedLinkCount = Array.isArray(links) ? links.length : 0
+  const introCount = Array.isArray(intro) ? intro.length : 0
+  const usedStorageMb = Number(planInfo?.plan?.used_storage_mb || 0)
+  const seoUrls = publicProfiles.slice(0, 5).map(item => ({
+    id: item.id,
+    title: item.display_name || item.title,
+    slug: item.slug,
+    headline: item.headline || item.bio || '공개 프로필 소개 문구를 입력해보세요.',
+    indexable: Boolean(item.search_engine_indexing),
+  }))
+
+  const analyticsRows = useMemo(() => {
+    return seoUrls.map((item, index) => ({
+      ...item,
+      visits: 120 + index * 37 + sharedLinkCount * 3,
+      clicks: 18 + index * 9 + Math.max(1, Math.round(sharedLinkCount / 2)),
+      leads: 3 + index + Math.min(4, introCount),
+    }))
+  }, [seoUrls, sharedLinkCount, introCount])
+
+  const priorities = [
+    ['1', '프리미엄 구독', '고급 명함, PDF, 저장공간, SEO 공개 URL을 묶어 월 구독으로 전환'],
+    ['2', '폼상점 강화', '명함폼·브랜드 템플릿 판매와 판매자 모드 운영'],
+    ['3', '포트폴리오 공개 URL', '공개 프로필을 검색 노출형 랜딩 페이지로 전환'],
+    ['4', 'AI 자기소개/프로필 생성', '사용량 기반 크레딧 과금'],
+    ['5', '기업 채용 연동', '기업용 채용관/브랜드 페이지 구독'],
+    ['6', 'QR/링크 Analytics', '방문수·클릭·전환 지표를 Pro 기능으로 제공'],
+    ['7', '클라우드 저장함 유료화', '용량, 버전관리, 폴더 정책 차등'],
+    ['8', '외주/프리랜서 거래', '중개 수수료 기반 거래 구조'],
+    ['9', '브랜드 페이지 제작', '기업 소개/문의/링크를 담는 미니 홈페이지'],
+    ['10', '광고/홍보 슬롯', '공개 프로필 및 명함 화면 노출 상품'],
+  ]
+
+  function updatePlan(nextPlan) {
+    setBusinessConfig(current => ({ ...current, plan: nextPlan, analyticsPro: nextPlan !== 'free', adSlotsEnabled: nextPlan === 'business' }))
+  }
+
+  function generateAiDraft() {
+    const prompt = aiPrompt.trim()
+    if (!prompt) return
+    const content = buildAiSuggestionSeed(prompt, profiles, links)
+    const next = {
+      id: makeLocalId('aidraft'),
+      title: prompt,
+      content,
+      created_at: new Date().toISOString(),
+      credit_cost: 1,
+    }
+    setAiDrafts(current => [next, ...current].slice(0, 20))
+    setBusinessConfig(current => ({ ...current, aiCredits: Math.max(0, Number(current.aiCredits || 0) - 1) }))
+    setAiPrompt('')
+  }
+
+  function addTemplateItem() {
+    if (!templateForm.name.trim()) return
+    setTemplateStore(current => [{
+      id: makeLocalId('tpl'),
+      name: templateForm.name.trim(),
+      category: templateForm.category,
+      type: 'one-time',
+      price: Number(templateForm.price || 0),
+      status: '초안',
+      sales: 0,
+      summary: '직접 추가한 판매용 템플릿',
+    }, ...current])
+    setTemplateForm({ name: '', category: '명함폼', price: '' })
+  }
+
+  function addHiringPost() {
+    if (!jobForm.company.trim() || !jobForm.title.trim()) return
+    setHiringPosts(current => [{ id: makeLocalId('job'), ...jobForm, status: '모집중', source: '기업 채용관' }, ...current])
+    setJobForm({ company: '', title: '', employmentType: '정규직', budget: '' })
+  }
+
+  function addGigPost() {
+    if (!gigForm.title.trim()) return
+    setGigPosts(current => [{ id: makeLocalId('gig'), ...gigForm, status: '거래가능', feeRate: businessConfig.plan === 'business' ? '8%' : '12%', description: '앱 내 거래 보드에서 등록한 프로젝트' }, ...current])
+    setGigForm({ title: '', category: '기타', budget: '' })
+  }
+
+  function addBrandPage() {
+    if (!brandForm.name.trim() || !brandForm.slug.trim()) return
+    setBrandPages(current => [{ id: makeLocalId('brand'), name: brandForm.name.trim(), slug: brandForm.slug.trim(), theme: brandForm.theme, sections: ['대표 소개', '서비스', '문의 링크'], status: '초안' }, ...current])
+    setBrandForm({ name: '', slug: '', theme: '네이비' })
+  }
+
+  function addAdSlot() {
+    if (!adForm.name.trim() || !adForm.placement.trim()) return
+    setAdSlots(current => [{ id: makeLocalId('ad'), name: adForm.name.trim(), placement: adForm.placement.trim(), price: Number(adForm.price || 0), status: '준비중', exposure: '주 1회 3천회' }, ...current])
+    setAdForm({ name: '', placement: '', price: '' })
+  }
+
+  return (
+    <div className="stack business-monetization">
+      <div className="card stack">
+        <div className="split-row responsive-row">
+          <div className="stack gap-6">
+            <strong>사업화 / 수익화 센터</strong>
+            <div className="muted small-text">프로필, 경력, URL, 명함, 자기소개서, 저장함을 판매·구독·채용·거래 구조로 확장하는 운영 화면입니다.</div>
+          </div>
+          <div className="chip-row">
+            <span className="chip">현재 플랜 {businessConfigLabel(businessConfig.plan)}</span>
+            <span className="chip">AI 크레딧 {businessConfig.aiCredits}</span>
+          </div>
+        </div>
+        <div className="grid-4">
+          <Metric label="공개 URL" value={publicProfileCount} />
+          <Metric label="검색 노출" value={indexedProfileCount} />
+          <Metric label="템플릿 판매" value={totalTemplateSales} />
+          <Metric label="예상 매출" value={`₩${formatMoney(estimatedTemplateRevenue)}`} />
+        </div>
+        <div className="business-priority-list">
+          {priorities.map(([rank, title, desc]) => (
+            <div key={rank} className="business-priority-item"><span className="business-priority-rank">{rank}</span><div><strong>{title}</strong><div className="muted small-text">{desc}</div></div></div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2 business-monetization-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>1. 프리미엄 구독</strong><span className="muted small-text">B2C 구독형</span></div>
+          <div className="business-plan-grid">
+            {[
+              { key: 'free', title: '무료', price: '₩0', desc: '기본 프로필/링크/명함 제작' },
+              { key: 'pro', title: '프로', price: '월 ₩9,900', desc: 'SEO 공개 URL, Analytics, PDF, 추가 저장공간' },
+              { key: 'business', title: '비즈니스', price: '월 ₩29,000', desc: '브랜드 페이지, 광고 슬롯, 팀/채용 운영' },
+            ].map(item => (
+              <button key={item.key} type="button" className={`business-plan-card ${businessConfig.plan === item.key ? 'active' : ''}`} onClick={() => updatePlan(item.key)}>
+                <strong>{item.title}</strong>
+                <div>{item.price}</div>
+                <div className="muted small-text">{item.desc}</div>
+              </button>
+            ))}
+          </div>
+          <div className="muted small-text">실결제 연동 전 단계로, 현재는 운영 시뮬레이션과 UI 흐름을 먼저 구성했습니다.</div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>2. 폼상점 / 템플릿 판매</strong><Link className="button-link" to="/business-card">명함만들기 이동</Link></div>
+          <div className="grid-2">
+            <TextField label="템플릿명" value={templateForm.name} onChange={value => setTemplateForm(current => ({ ...current, name: value }))} />
+            <div className="stack"><label>카테고리</label><select value={templateForm.category} onChange={e => setTemplateForm(current => ({ ...current, category: e.target.value }))}><option value="명함폼">명함폼</option><option value="포트폴리오">포트폴리오</option><option value="브랜드">브랜드</option></select></div>
+            <TextField label="가격" value={templateForm.price} onChange={value => setTemplateForm(current => ({ ...current, price: value }))} />
+            <div className="stack justify-end"><button type="button" onClick={addTemplateItem}>판매템플릿 추가</button></div>
+          </div>
+          <div className="stack compact-list">
+            {templateStore.map(item => <div key={item.id} className="mini-card"><strong>{item.name}</strong><div className="muted small-text">{item.category} · {item.status} · {item.sales}건 판매 · ₩{formatMoney(item.price)}</div><div className="muted small-text">{item.summary}</div></div>)}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>3. 포트폴리오 공개 URL / SEO</strong><Link className="button-link" to="/share-links-manager">링크공유관리</Link></div>
+          <div className="muted small-text">LinkedIn은 네트워크가 강하지만 디자인 브랜딩이 약하고, Notion은 문서 강점 대비 공유 UX가 약합니다. 이 앱은 공개 URL과 명함/QR을 결합해 차별화합니다.</div>
+          <div className="stack compact-list">
+            {loading ? <div className="muted">프로필 불러오는 중...</div> : seoUrls.length ? seoUrls.map(item => <div key={item.id} className="mini-card"><div className="split-row responsive-row"><strong>{item.title}</strong><button type="button" className="ghost small-button" onClick={() => copyToClipboard(`${window.location.origin}/p/${item.slug}`)}>URL 복사</button></div><div className="muted small-text">/{item.slug} · {item.indexable ? '검색 노출 ON' : '검색 노출 OFF'}</div><div className="muted small-text">{item.headline}</div></div>) : <div className="muted">공개 URL이 연결된 프로필이 없습니다.</div>}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>4. AI 자기소개서 / 프로필 생성</strong><span className="muted small-text">사용량 과금형</span></div>
+          <TextField label="생성 요청" value={aiPrompt} onChange={setAiPrompt} />
+          <div className="action-wrap"><button type="button" onClick={generateAiDraft} disabled={!businessConfig.aiCredits}>AI 초안 만들기</button><Link className="button-link" to="/introductions-manager">자기소개서관리</Link></div>
+          <div className="stack compact-list">
+            {aiDrafts.length ? aiDrafts.map(item => <div key={item.id} className="mini-card"><strong>{item.title}</strong><div className="pre-wrap small-text">{item.content}</div><div className="muted small-text">{formatDateLabel(item.created_at)} · {item.credit_cost}크레딧</div></div>) : <div className="muted">생성된 AI 초안이 없습니다.</div>}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>5. 기업 채용 연동</strong><span className="muted small-text">B2B 구독형</span></div>
+          <div className="grid-2">
+            <TextField label="회사명" value={jobForm.company} onChange={value => setJobForm(current => ({ ...current, company: value }))} />
+            <TextField label="포지션" value={jobForm.title} onChange={value => setJobForm(current => ({ ...current, title: value }))} />
+            <div className="stack"><label>고용형태</label><select value={jobForm.employmentType} onChange={e => setJobForm(current => ({ ...current, employmentType: e.target.value }))}><option value="정규직">정규직</option><option value="계약직">계약직</option><option value="파트타임">파트타임</option></select></div>
+            <TextField label="예산/연봉" value={jobForm.budget} onChange={value => setJobForm(current => ({ ...current, budget: value }))} />
+          </div>
+          <button type="button" onClick={addHiringPost}>채용공고 추가</button>
+          <div className="stack compact-list">{hiringPosts.map(item => <div key={item.id} className="mini-card"><strong>{item.company} · {item.title}</strong><div className="muted small-text">{item.employmentType} · {item.budget || '조건 협의'} · {item.status}</div></div>)}</div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>6. QR / 링크 Analytics</strong><Link className="button-link" to="/qr-generator">QR생성</Link></div>
+          <div className="muted small-text">Canva는 템플릿은 강하지만 데이터 관리가 약합니다. 여기서는 공개 프로필/링크 클릭 데이터를 묶어 판매 포인트로 사용합니다.</div>
+          <div className="stack compact-list">{analyticsRows.length ? analyticsRows.map(item => <div key={item.id} className="mini-card"><strong>{item.title}</strong><div className="muted small-text">방문 {item.visits} · 클릭 {item.clicks} · 문의전환 {item.leads}</div><div className="muted small-text">{item.indexable ? 'SEO 노출형' : '링크 전용'} 공개 URL</div></div>) : <div className="muted">분석할 공개 URL이 없습니다.</div>}</div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>7. 클라우드 저장함 유료화</strong><Link className="button-link" to="/vault">저장함 이동</Link></div>
+          <div className="grid-4">
+            <Metric label="저장 파일" value={vault.length} />
+            <Metric label="자기소개" value={introCount} />
+            <Metric label="링크 자산" value={sharedLinkCount} />
+            <Metric label="사용량" value={`${usedStorageMb}MB`} />
+          </div>
+          <div className="muted small-text">무료는 기본 저장/관리, Pro는 용량 확대와 버전관리, Business는 팀 보관/승인 흐름으로 확장하는 구조를 잡아두었습니다.</div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>8. 외주 / 프리랜서 거래</strong><span className="muted small-text">중개 수수료형</span></div>
+          <div className="grid-2">
+            <TextField label="프로젝트명" value={gigForm.title} onChange={value => setGigForm(current => ({ ...current, title: value }))} />
+            <div className="stack"><label>카테고리</label><select value={gigForm.category} onChange={e => setGigForm(current => ({ ...current, category: e.target.value }))}><option value="기타">기타</option><option value="디자인">디자인</option><option value="개발">개발</option><option value="문서">문서</option></select></div>
+            <TextField label="예산" value={gigForm.budget} onChange={value => setGigForm(current => ({ ...current, budget: value }))} />
+            <div className="stack justify-end"><button type="button" onClick={addGigPost}>거래 글 추가</button></div>
+          </div>
+          <div className="stack compact-list">{gigPosts.map(item => <div key={item.id} className="mini-card"><strong>{item.title}</strong><div className="muted small-text">{item.category} · {item.budget || '예산 협의'} · 수수료 {item.feeRate}</div><div className="muted small-text">{item.description}</div></div>)}</div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>9. 브랜드 페이지 제작</strong><span className="muted small-text">기업용 미니 홈페이지</span></div>
+          <div className="grid-2">
+            <TextField label="페이지명" value={brandForm.name} onChange={value => setBrandForm(current => ({ ...current, name: value }))} />
+            <TextField label="슬러그" value={brandForm.slug} onChange={value => setBrandForm(current => ({ ...current, slug: value }))} />
+            <div className="stack"><label>테마</label><select value={brandForm.theme} onChange={e => setBrandForm(current => ({ ...current, theme: e.target.value }))}><option value="네이비">네이비</option><option value="블루">블루</option><option value="그린">그린</option><option value="핑크">핑크</option></select></div>
+            <div className="stack justify-end"><button type="button" onClick={addBrandPage}>브랜드 페이지 추가</button></div>
+          </div>
+          <div className="stack compact-list">{brandPages.map(item => <div key={item.id} className="mini-card"><strong>{item.name}</strong><div className="muted small-text">/{item.slug} · {item.theme} · {item.status}</div><div className="muted small-text">{item.sections.join(' · ')}</div></div>)}</div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>10. 광고 / 홍보 슬롯</strong><span className="muted small-text">노출형 상품</span></div>
+          <div className="grid-2">
+            <TextField label="상품명" value={adForm.name} onChange={value => setAdForm(current => ({ ...current, name: value }))} />
+            <TextField label="노출위치" value={adForm.placement} onChange={value => setAdForm(current => ({ ...current, placement: value }))} />
+            <TextField label="판매가" value={adForm.price} onChange={value => setAdForm(current => ({ ...current, price: value }))} />
+            <div className="stack justify-end"><button type="button" onClick={addAdSlot}>광고 상품 추가</button></div>
+          </div>
+          <div className="stack compact-list">{adSlots.map(item => <div key={item.id} className="mini-card"><strong>{item.name}</strong><div className="muted small-text">{item.placement} · {item.status} · ₩{formatMoney(item.price)}</div><div className="muted small-text">예상 노출 {item.exposure}</div></div>)}</div>
+        </div>
+      </div>
+
+      <div className="card stack">
+        <strong>경쟁 서비스 기준 차별화 포인트</strong>
+        <div className="business-competitor-grid">
+          <div className="bordered-box"><strong>LinkedIn</strong><div className="muted small-text">네트워크/채용 강점 · 디자인 브랜딩 약점 → 명함/템플릿/공개 URL로 차별화</div></div>
+          <div className="bordered-box"><strong>Notion</strong><div className="muted small-text">문서/포트폴리오 강점 · 공유 UX 약점 → QR/단축URL/공개 프로필 전환</div></div>
+          <div className="bordered-box"><strong>Canva</strong><div className="muted small-text">템플릿 강점 · 데이터/프로필 관리 약점 → 이력/링크/질문/분석 결합</div></div>
+          <div className="bordered-box"><strong>Wanted</strong><div className="muted small-text">채용 강점 · 개인 브랜딩 약점 → 프로필→명함→채용관 흐름으로 확장</div></div>
+        </div>
+      </div>
+    </div>
   )
 }
 

@@ -2063,3 +2063,17 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .business-card-shop-cta{width:100%;margin-left:0}
   .business-card-shop-item-foot{min-height:0}
 }
+
+.business-monetization{gap:18px}
+.business-monetization-grid{align-items:start}
+.business-priority-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.business-priority-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#fff,#f8fbff)}
+.business-priority-rank{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:#0f172a;color:#fff;font-size:12px;font-weight:800;flex:0 0 auto}
+.business-plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.business-plan-card{text-align:left;padding:16px;border-radius:18px;border:1px solid var(--line);background:#fff;display:flex;flex-direction:column;gap:6px}
+.business-plan-card.active{border-color:var(--accent);box-shadow:0 14px 30px rgba(59,130,246,.14);background:linear-gradient(180deg,#eff6ff,#fff)}
+.business-competitor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.justify-end{justify-content:flex-end}
+@media (max-width: 900px){
+  .business-priority-list,.business-plan-grid,.business-competitor-grid{grid-template-columns:1fr}
+}
