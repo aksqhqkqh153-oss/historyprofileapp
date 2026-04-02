@@ -1084,6 +1084,8 @@ function buildYoutubeEmbedUrl(item) {
 function MusicPage() {
   const [playlists, setPlaylists] = useLocalCollection(LOCAL_STORAGE_KEYS.musicPlaylists, defaultMusicPlaylists())
   const [quickAddUrl, setQuickAddUrl] = useState('')
+  const [playingId, setPlayingId] = useState('')
+  const [playNonce, setPlayNonce] = useState(0)
   const normalizedPlaylists = useMemo(() => {
     const source = Array.isArray(playlists) && playlists.length ? playlists : defaultMusicPlaylists()
     return source.map(item => ({
@@ -1113,9 +1115,14 @@ function MusicPage() {
     if (!normalizedPlaylists.some(item => item.id === selectedId)) {
       setSelectedId(normalizedPlaylists[0].id)
     }
-  }, [normalizedPlaylists, selectedId])
+    if (playingId && !normalizedPlaylists.some(item => item.id === playingId)) {
+      setPlayingId('')
+    }
+  }, [normalizedPlaylists, selectedId, playingId])
 
   const activePlaylist = normalizedPlaylists.find(item => item.id === selectedId) || normalizedPlaylists[0] || null
+  const isActivePlaying = Boolean(activePlaylist?.id && activePlaylist.id === playingId && activePlaylist.embedUrl)
+  const activePlayerUrl = isActivePlaying ? activePlaylist.embedUrl : ''
 
   useEffect(() => {
     if (!activePlaylist) return
@@ -1132,6 +1139,24 @@ function MusicPage() {
   }, [activePlaylist?.id])
 
   const previewEmbedUrl = useMemo(() => buildYoutubeEmbedUrl(form), [form])
+
+  function handlePlayPlaylist(id) {
+    const target = normalizedPlaylists.find(item => item.id === id)
+    if (!target?.embedUrl) {
+      window.alert('재생 가능한 YouTube 링크를 먼저 저장해주세요.')
+      return
+    }
+    setSelectedId(id)
+    setPlayingId(id)
+    setPlayNonce(current => current + 1)
+  }
+
+  function handleStopPlaylist(id = activePlaylist?.id || '') {
+    if (!id) return
+    if (playingId === id) {
+      setPlayingId('')
+    }
+  }
 
   function handleSavePlaylist() {
     if (!activePlaylist) return
@@ -1201,6 +1226,8 @@ function MusicPage() {
     }
     setPlaylists(current => [...items, ...current])
     setSelectedId(items[0].id)
+    setPlayingId(items[0].id)
+    setPlayNonce(current => current + 1)
     setQuickAddUrl('')
   }
 
@@ -1293,7 +1320,11 @@ function MusicPage() {
                     </span>
                     <span className="muted small-text">{item.embedUrl ? '재생 가능' : '설정 필요'}</span>
                   </button>
-                  <button type="button" className="ghost music-delete-button" onClick={() => handleDeletePlaylist(item.id)}>삭제</button>
+                  <div className="music-playlist-actions">
+                    <button type="button" className="ghost music-control-button" onClick={() => handlePlayPlaylist(item.id)}>재생</button>
+                    <button type="button" className="ghost music-control-button" onClick={() => handleStopPlaylist(item.id)}>정지</button>
+                    <button type="button" className="ghost music-delete-button" onClick={() => handleDeletePlaylist(item.id)}>삭제</button>
+                  </div>
                 </div>
               )
             })}
@@ -1303,14 +1334,18 @@ function MusicPage() {
         <div className="card stack music-player-card">
           <div className="split-row responsive-row">
             <strong>{activePlaylist?.name || '플레이어'}</strong>
-            <div className="muted small-text">공개 YouTube 콘텐츠만 사용</div>
+            <div className="music-player-top-actions">
+              <button type="button" className="ghost music-control-button" onClick={() => activePlaylist?.id && handlePlayPlaylist(activePlaylist.id)} disabled={!activePlaylist?.embedUrl}>재생</button>
+              <button type="button" className="ghost music-control-button" onClick={() => handleStopPlaylist(activePlaylist?.id)} disabled={!isActivePlaying}>정지</button>
+              <div className="muted small-text">공개 YouTube 콘텐츠만 사용</div>
+            </div>
           </div>
           <div className="music-player-frame-wrap">
-            {activePlaylist?.embedUrl ? (
+            {activePlayerUrl ? (
               <iframe
-                key={activePlaylist.embedUrl}
+                key={`${activePlaylist.id}-${playNonce}`}
                 className="music-player-frame"
-                src={activePlaylist.embedUrl}
+                src={activePlayerUrl}
                 title={activePlaylist.name || 'YouTube 음악 플레이어'}
                 loading="lazy"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -1319,8 +1354,8 @@ function MusicPage() {
               />
             ) : (
               <div className="music-player-empty">
-                <strong>재생 가능한 링크를 입력해주세요.</strong>
-                <div className="muted small-text">공개 YouTube 재생목록 링크를 넣으면 플레이리스트 형태로 바로 재생됩니다.</div>
+                <strong>{activePlaylist?.embedUrl ? '현재 재생이 정지되었습니다.' : '재생 가능한 링크를 입력해주세요.'}</strong>
+                <div className="muted small-text">{activePlaylist?.embedUrl ? '재생 버튼을 누르면 선택한 플레이리스트가 다시 시작됩니다.' : '공개 YouTube 재생목록 링크를 넣으면 플레이리스트 형태로 바로 재생됩니다.'}</div>
               </div>
             )}
           </div>

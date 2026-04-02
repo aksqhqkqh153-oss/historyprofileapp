@@ -2225,6 +2225,16 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   gap: 10px;
   align-items: stretch;
 }
+.music-playlist-actions,
+.music-player-top-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.music-control-button {
+  min-width: 64px;
+}
 .music-playlist-item.active .music-playlist-select {
   border-color: #bcd0ff;
   background: var(--accent-soft);
