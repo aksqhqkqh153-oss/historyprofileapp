@@ -2,6 +2,101 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { Metric } from '../components/ui'
 
+const MONETIZATION_MODELS = [
+  {
+    key: 'adsense',
+    label: 'Google AdSense 반응형 광고',
+    inUse: true,
+    revenueType: 'RPM',
+    defaultPageViews: 100000,
+    defaultRpm: 1.5,
+    defaultCost: 0,
+    summary: '현재 질문 화면 AD 영역에 연결 가능한 기본 광고 모델입니다.',
+    details: '질문 화면 페이지뷰 기준 RPM으로 예상 수익을 계산합니다.',
+  },
+  {
+    key: 'direct',
+    label: '직접 판매형 스폰서 광고',
+    inUse: true,
+    revenueType: 'FIXED_PLUS_RPM',
+    defaultPageViews: 100000,
+    defaultRpm: 4.5,
+    defaultCost: 100000,
+    defaultFixedRevenue: 500000,
+    summary: '앱 운영자가 직접 광고주를 받아 고정비 또는 보장형 금액을 받는 방식입니다.',
+    details: '고정 스폰서비 + 노출 기반 추가 단가를 합산해 계산합니다.',
+  },
+  {
+    key: 'recommendation',
+    label: '추천/대체 광고 영역',
+    inUse: true,
+    revenueType: 'NONE',
+    defaultPageViews: 100000,
+    defaultRpm: 0,
+    defaultCost: 0,
+    summary: '광고 코드가 없을 때 추천 배너를 보여주는 안전 모드입니다.',
+    details: '직접 수익은 없지만 공백 지면 방지, 제휴 문의 유도 용도로 사용됩니다.',
+  },
+]
+
+const KRW_PER_USD = 1450
+
+function formatNumber(value) {
+  const numeric = Number(value || 0)
+  return Number.isFinite(numeric) ? numeric.toLocaleString('ko-KR') : '0'
+}
+
+function formatCurrency(value) {
+  const numeric = Math.round(Number(value || 0))
+  return `${numeric.toLocaleString('ko-KR')}원`
+}
+
+function createCalculatorState(model) {
+  return {
+    pageViews: model.defaultPageViews || 0,
+    rpmUsd: model.defaultRpm || 0,
+    adCostKrw: model.defaultCost || 0,
+    fixedRevenueKrw: model.defaultFixedRevenue || 0,
+    fillRate: model.revenueType === 'NONE' ? 0 : 100,
+  }
+}
+
+function calculateModel(model, input) {
+  const pageViews = Math.max(0, Number(input.pageViews || 0))
+  const rpmUsd = Math.max(0, Number(input.rpmUsd || 0))
+  const adCostKrw = Math.max(0, Number(input.adCostKrw || 0))
+  const fixedRevenueKrw = Math.max(0, Number(input.fixedRevenueKrw || 0))
+  const fillRate = Math.min(100, Math.max(0, Number(input.fillRate || 0)))
+  const effectivePageViews = Math.round(pageViews * (fillRate / 100))
+  const rpmRevenueKrw = (effectivePageViews / 1000) * rpmUsd * KRW_PER_USD
+
+  if (model.revenueType === 'FIXED_PLUS_RPM') {
+    const totalRevenue = fixedRevenueKrw + rpmRevenueKrw
+    return {
+      effectivePageViews,
+      revenueKrw: totalRevenue,
+      adCostKrw,
+      netProfitKrw: totalRevenue - adCostKrw,
+    }
+  }
+
+  if (model.revenueType === 'RPM') {
+    return {
+      effectivePageViews,
+      revenueKrw: rpmRevenueKrw,
+      adCostKrw,
+      netProfitKrw: rpmRevenueKrw - adCostKrw,
+    }
+  }
+
+  return {
+    effectivePageViews,
+    revenueKrw: fixedRevenueKrw,
+    adCostKrw,
+    netProfitKrw: fixedRevenueKrw - adCostKrw,
+  }
+}
+
 export default function AdminPage() {
   const [overview, setOverview] = useState(null)
   const [reports, setReports] = useState([])
@@ -15,9 +110,12 @@ export default function AdminPage() {
   const [costGuide, setCostGuide] = useState(null)
   const [smsTestPhone, setSmsTestPhone] = useState('')
   const [integrationMessage, setIntegrationMessage] = useState('')
+  const [calculatorInputs, setCalculatorInputs] = useState(() => (
+    Object.fromEntries(MONETIZATION_MODELS.map(model => [model.key, createCalculatorState(model)]))
+  ))
 
   async function load() {
-    const [o, r, u, us, q, h, integ] = await Promise.all([
+    const [o, r, u, us, q, h, integ, guide] = await Promise.all([
       api('/api/admin/overview'),
       api('/api/admin/reports'),
       api('/api/admin/uploads'),
@@ -41,6 +139,17 @@ export default function AdminPage() {
 
   function toggleSelection(setter, id) {
     setter(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id])
+  }
+
+  function updateCalculator(modelKey, field, value) {
+    const nextValue = value === '' ? '' : Number(value)
+    setCalculatorInputs(prev => ({
+      ...prev,
+      [modelKey]: {
+        ...prev[modelKey],
+        [field]: Number.isNaN(nextValue) ? 0 : nextValue,
+      },
+    }))
   }
 
   async function resolveReport(item, status) {
@@ -87,6 +196,22 @@ export default function AdminPage() {
     uploads: uploads.filter(item => item.moderation_status === 'pending').length,
   }), [reports, uploads])
 
+  const monetizationRows = useMemo(() => MONETIZATION_MODELS.map(model => {
+    const input = calculatorInputs[model.key] || createCalculatorState(model)
+    return {
+      ...model,
+      ...calculateModel(model, input),
+      input,
+    }
+  }), [calculatorInputs])
+
+  const monetizationSummary = useMemo(() => monetizationRows.reduce((acc, item) => ({
+    pageViews: acc.pageViews + Number(item.input.pageViews || 0),
+    revenueKrw: acc.revenueKrw + Number(item.revenueKrw || 0),
+    adCostKrw: acc.adCostKrw + Number(item.adCostKrw || 0),
+    netProfitKrw: acc.netProfitKrw + Number(item.netProfitKrw || 0),
+  }), { pageViews: 0, revenueKrw: 0, adCostKrw: 0, netProfitKrw: 0 }), [monetizationRows])
+
   return (
     <div className="stack page-stack">
       {overview ? (
@@ -101,6 +226,78 @@ export default function AdminPage() {
           <Metric label="정지 사용자" value={overview.suspended_users || 0} />
         </section>
       ) : null}
+
+      <section className="card stack">
+        <div className="split-row responsive-row">
+          <div>
+            <h3>광고 수익 모델 관리자</h3>
+            <div className="muted small-text">현재 앱에 연결된 광고 수익 모델을 한 화면에서 정리하고, 조회수·광고비·예상 순수익을 즉시 계산합니다.</div>
+          </div>
+          <div className="muted small-text">기준 환율: 1 USD = {formatNumber(KRW_PER_USD)}원</div>
+        </div>
+
+        <div className="grid-4">
+          <Metric label="총 예상 조회수" value={formatNumber(monetizationSummary.pageViews)} />
+          <Metric label="총 예상 매출" value={formatCurrency(monetizationSummary.revenueKrw)} />
+          <Metric label="총 광고비/운영비" value={formatCurrency(monetizationSummary.adCostKrw)} />
+          <Metric label="총 예상 순수익" value={formatCurrency(monetizationSummary.netProfitKrw)} />
+        </div>
+
+        <div className="list compact-list">
+          {monetizationRows.map(item => (
+            <div key={item.key} className="bordered-box stack">
+              <div className="split-row responsive-row">
+                <div>
+                  <strong>{item.label}</strong>
+                  <div className="muted small-text">{item.summary}</div>
+                  <div className="muted small-text">{item.details}</div>
+                </div>
+                <div className="muted small-text">앱 사용 여부: {item.inUse ? '사용 중' : '미사용'}</div>
+              </div>
+
+              <div className="grid-4">
+                <label className="stack small-text">
+                  <span>예상 조회수(PV)</span>
+                  <input type="number" min="0" value={item.input.pageViews} onChange={e => updateCalculator(item.key, 'pageViews', e.target.value)} />
+                </label>
+                <label className="stack small-text">
+                  <span>실제 광고 노출률(%)</span>
+                  <input type="number" min="0" max="100" value={item.input.fillRate} onChange={e => updateCalculator(item.key, 'fillRate', e.target.value)} />
+                </label>
+                <label className="stack small-text">
+                  <span>{item.revenueType === 'FIXED_PLUS_RPM' || item.revenueType === 'RPM' ? '예상 RPM(USD)' : '고정 수익(원)'}</span>
+                  {item.revenueType === 'NONE' ? (
+                    <input type="number" min="0" value={item.input.fixedRevenueKrw} onChange={e => updateCalculator(item.key, 'fixedRevenueKrw', e.target.value)} />
+                  ) : (
+                    <input type="number" min="0" step="0.1" value={item.input.rpmUsd} onChange={e => updateCalculator(item.key, 'rpmUsd', e.target.value)} />
+                  )}
+                </label>
+                <label className="stack small-text">
+                  <span>광고비/운영비(원)</span>
+                  <input type="number" min="0" value={item.input.adCostKrw} onChange={e => updateCalculator(item.key, 'adCostKrw', e.target.value)} />
+                </label>
+              </div>
+
+              {item.revenueType === 'FIXED_PLUS_RPM' ? (
+                <div className="grid-2">
+                  <label className="stack small-text">
+                    <span>고정 스폰서 매출(원)</span>
+                    <input type="number" min="0" value={item.input.fixedRevenueKrw} onChange={e => updateCalculator(item.key, 'fixedRevenueKrw', e.target.value)} />
+                  </label>
+                  <div className="muted small-text bordered-box">직접 판매형은 고정 계약비 + 노출형 매출을 함께 더해 순수익을 계산합니다.</div>
+                </div>
+              ) : null}
+
+              <div className="grid-4">
+                <Metric label="실제 계산 노출수" value={formatNumber(item.effectivePageViews)} />
+                <Metric label="예상 수익금액" value={formatCurrency(item.revenueKrw)} />
+                <Metric label="광고비용" value={formatCurrency(item.adCostKrw)} />
+                <Metric label="순수익" value={formatCurrency(item.netProfitKrw)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {integrationStatus ? (
         <section className="card stack">
