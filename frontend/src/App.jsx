@@ -1086,6 +1086,7 @@ function MusicPage() {
   const [quickAddUrl, setQuickAddUrl] = useState('')
   const [playingId, setPlayingId] = useState('')
   const [playNonce, setPlayNonce] = useState(0)
+  const backgroundPlayerWindowRef = useRef(null)
   const normalizedPlaylists = useMemo(() => {
     const source = Array.isArray(playlists) && playlists.length ? playlists : defaultMusicPlaylists()
     return source.map(item => ({
@@ -1138,6 +1139,24 @@ function MusicPage() {
     })
   }, [activePlaylist?.id])
 
+
+  useEffect(() => {
+    return () => {
+      if (backgroundPlayerWindowRef.current && !backgroundPlayerWindowRef.current.closed) {
+        backgroundPlayerWindowRef.current.close()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!playingId) return
+    const playingItem = normalizedPlaylists.find(item => item.id === playingId)
+    if (!playingItem?.embedUrl) return
+    if (backgroundPlayerWindowRef.current && !backgroundPlayerWindowRef.current.closed) {
+      renderBackgroundPlayerWindow(playingItem)
+    }
+  }, [playingId, playNonce, normalizedPlaylists])
+
   const previewEmbedUrl = useMemo(() => buildYoutubeEmbedUrl(form), [form])
 
   function handlePlayPlaylist(id) {
@@ -1151,10 +1170,76 @@ function MusicPage() {
     setPlayNonce(current => current + 1)
   }
 
+  function renderBackgroundPlayerWindow(target) {
+    const popup = backgroundPlayerWindowRef.current
+    if (!popup || popup.closed) return false
+    const safeTitle = String(target?.name || '음악듣기').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))
+    popup.document.open()
+    popup.document.write(`<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${safeTitle} - 백그라운드 재생</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0f172a; color: #fff; font-family: Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+      .wrap { display: flex; flex-direction: column; width: 100%; height: 100%; }
+      .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: rgba(15, 23, 42, 0.96); border-bottom: 1px solid rgba(255,255,255,0.12); }
+      .title { font-size: 14px; font-weight: 700; }
+      .sub { font-size: 12px; color: rgba(255,255,255,0.74); margin-top: 4px; }
+      .frame-wrap { flex: 1; min-height: 0; }
+      iframe { width: 100%; height: 100%; border: 0; background: #000; }
+      button { border: 0; border-radius: 999px; padding: 10px 14px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <div class="title">${safeTitle}</div>
+          <div class="sub">백그라운드 재생창 · 다른 창을 눌러도 이 창이 유지되면 재생이 계속됩니다.</div>
+        </div>
+        <button type="button" onclick="window.close()">닫기</button>
+      </div>
+      <div class="frame-wrap">
+        <iframe src="${target.embedUrl}" title="${safeTitle}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+    </div>
+  </body>
+</html>`)
+    popup.document.close()
+    popup.focus()
+    return true
+  }
+
+  function handleBackgroundPlay(id = activePlaylist?.id || '') {
+    const target = normalizedPlaylists.find(item => item.id === id)
+    if (!target?.embedUrl) {
+      window.alert('재생 가능한 YouTube 링크를 먼저 저장해주세요.')
+      return
+    }
+    setSelectedId(target.id)
+    setPlayingId(target.id)
+    setPlayNonce(current => current + 1)
+    const popup = backgroundPlayerWindowRef.current && !backgroundPlayerWindowRef.current.closed
+      ? backgroundPlayerWindowRef.current
+      : window.open('', 'historyprofileappMusicBackgroundPlayer', 'popup=yes,width=460,height=820,resizable=yes,scrollbars=no')
+    if (!popup) {
+      window.alert('브라우저가 재생 새창을 차단했습니다. 팝업 허용 후 다시 시도해주세요.')
+      return
+    }
+    backgroundPlayerWindowRef.current = popup
+    renderBackgroundPlayerWindow(target)
+  }
+
   function handleStopPlaylist(id = activePlaylist?.id || '') {
     if (!id) return
     if (playingId === id) {
       setPlayingId('')
+    }
+    if (backgroundPlayerWindowRef.current && !backgroundPlayerWindowRef.current.closed) {
+      backgroundPlayerWindowRef.current.close()
+      backgroundPlayerWindowRef.current = null
     }
   }
 
@@ -1279,7 +1364,7 @@ function MusicPage() {
         <div className="split-row responsive-row">
           <div className="stack gap-6">
             <strong>음악듣기</strong>
-            <div className="muted small-text">관리자 계정만 사용할 수 있는 YouTube 공식 임베드 플레이어입니다. 공개 재생목록 또는 공개 영상 링크를 붙여넣어 재생목록처럼 청취할 수 있습니다.</div>
+            <div className="muted small-text">관리자 계정만 사용할 수 있는 YouTube 공식 임베드 플레이어입니다. 공개 재생목록 또는 공개 영상 링크를 붙여넣어 재생목록처럼 청취할 수 있으며, 백그라운드 재생 버튼으로 별도 재생창을 열면 다른 창을 눌러도 더 안정적으로 계속 들을 수 있습니다.</div>
           </div>
           <div className="music-hero-actions">
             <button type="button" className="ghost" onClick={handleAddPlaylist}>플레이리스트 추가</button>
@@ -1322,6 +1407,7 @@ function MusicPage() {
                   </button>
                   <div className="music-playlist-actions">
                     <button type="button" className="ghost music-control-button" onClick={() => handlePlayPlaylist(item.id)}>재생</button>
+                    <button type="button" className="ghost music-control-button" onClick={() => handleBackgroundPlay(item.id)}>백그라운드</button>
                     <button type="button" className="ghost music-control-button" onClick={() => handleStopPlaylist(item.id)}>정지</button>
                     <button type="button" className="ghost music-delete-button" onClick={() => handleDeletePlaylist(item.id)}>삭제</button>
                   </div>
@@ -1336,8 +1422,9 @@ function MusicPage() {
             <strong>{activePlaylist?.name || '플레이어'}</strong>
             <div className="music-player-top-actions">
               <button type="button" className="ghost music-control-button" onClick={() => activePlaylist?.id && handlePlayPlaylist(activePlaylist.id)} disabled={!activePlaylist?.embedUrl}>재생</button>
-              <button type="button" className="ghost music-control-button" onClick={() => handleStopPlaylist(activePlaylist?.id)} disabled={!isActivePlaying}>정지</button>
-              <div className="muted small-text">공개 YouTube 콘텐츠만 사용</div>
+              <button type="button" className="ghost music-control-button" onClick={() => activePlaylist?.id && handleBackgroundPlay(activePlaylist.id)} disabled={!activePlaylist?.embedUrl}>백그라운드</button>
+              <button type="button" className="ghost music-control-button" onClick={() => handleStopPlaylist(activePlaylist?.id)} disabled={!isActivePlaying && !(backgroundPlayerWindowRef.current && !backgroundPlayerWindowRef.current.closed)}>정지</button>
+              <div className="muted small-text">공개 YouTube 콘텐츠만 사용 · 백그라운드 새창 지원</div>
             </div>
           </div>
           <div className="music-player-frame-wrap">
@@ -1347,7 +1434,7 @@ function MusicPage() {
                 className="music-player-frame"
                 src={activePlayerUrl}
                 title={activePlaylist.name || 'YouTube 음악 플레이어'}
-                loading="lazy"
+                loading="eager"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
@@ -4096,7 +4183,7 @@ ${optionText}`, current ? String(customCategories.indexOf(current) + 1) : '')
           <div className="message-board" ref={boardRef}>
             {messages.length ? messages.map(item => (
               <div key={item.id} className={`message-item ${item.sender_id === selected?.user_id ? 'incoming' : 'outgoing'}`}>
-                {item.has_attachment ? (String(item.message_type || '').startsWith('video') ? <video src={item.attachment_url} poster={item.attachment_preview_url || undefined} controls playsInline preload="metadata" /> : <img src={item.attachment_preview_url || item.attachment_url} alt={item.attachment_name || '첨부'} loading="lazy" />) : null}
+                {item.has_attachment ? (String(item.message_type || '').startsWith('video') ? <video src={item.attachment_url} poster={item.attachment_preview_url || undefined} controls playsInline preload="metadata" /> : <img src={item.attachment_preview_url || item.attachment_url} alt={item.attachment_name || '첨부'} loading="eager" />) : null}
                 <div>{item.message}</div>
                 <div className="muted small-text">{formatDateLabel(item.created_at)}</div>
                 {item.has_attachment ? <div className="muted small-text">첨부 {item.attachment_size_mb}MB</div> : null}
@@ -6170,7 +6257,7 @@ function MediaPreviewList({ items }) {
           <div key={`${url}-${index}`} className="media-card">
             {kind === 'video'
               ? <video src={url} poster={previewUrl || undefined} controls playsInline preload="metadata" />
-              : <img src={previewUrl || url} alt="업로드 미디어" loading="lazy" />}
+              : <img src={previewUrl || url} alt="업로드 미디어" loading="eager" />}
             <div className="muted small-text">{kind === 'video' ? '영상' : '사진'}{previewUrl ? ' · 미리보기 적용' : ''}</div>
           </div>
         )
