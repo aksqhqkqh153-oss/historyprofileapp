@@ -2500,6 +2500,17 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .public-unified-shell{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(280px,.8fr);gap:18px;align-items:start}
 .public-unified-main,.public-unified-side{min-width:0}
 .public-focus-card,.public-story-career-card,.public-intro-card,.public-feed-card,.public-side-card,.public-mini-business-card{border-radius:24px}
+
+.public-hero-business-card-stage{display:flex;align-items:center;justify-content:center;min-height:220px;padding:24px;background:#fff;border-bottom:1px solid var(--line);overflow:hidden}
+.public-hero-business-card-stage.has-card{background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)}
+.public-hero-business-card-stage.empty-card{background:#fff}
+.public-hero-business-card-image{display:block;width:min(100%,560px);max-height:220px;object-fit:contain;border-radius:22px;box-shadow:0 18px 40px rgba(15,23,42,.12);border:1px solid rgba(203,213,225,.9);background:#fff}
+.public-hero-business-card-empty{display:flex;align-items:center;justify-content:center;width:min(100%,560px);min-height:180px;padding:24px;border-radius:22px;border:1px dashed #cbd5e1;background:#fff;color:#64748b;font-size:16px;font-weight:700;text-align:center}
+@media (max-width: 768px){
+  .public-hero-business-card-stage{min-height:180px;padding:16px}
+  .public-hero-business-card-image{max-height:180px;border-radius:18px}
+  .public-hero-business-card-empty{min-height:148px;font-size:15px;border-radius:18px}
+}
 .public-secondary-actions button{min-width:auto}
 .public-identity-panel{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(240px,.8fr);gap:14px;align-items:start}
 .public-story-summary{font-size:18px;font-weight:800;line-height:1.5;color:#0f172a}

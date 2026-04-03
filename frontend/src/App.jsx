@@ -4886,8 +4886,9 @@ function ProfilePage() {
             <div className="inline-form"><input value={profileForm.profile_image_url} onChange={e => setProfileForm({ ...profileForm, profile_image_url: e.target.value })} /><button type="button" onClick={() => uploadMedia(url => setProfileForm(prev => ({ ...prev, profile_image_url: url })), 'profile', 'image/*')}>업로드</button></div>
           </div>
           <div className="stack">
-            <label>커버 이미지 URL</label>
-            <div className="inline-form"><input value={profileForm.cover_image_url} onChange={e => setProfileForm({ ...profileForm, cover_image_url: e.target.value })} /><button type="button" onClick={() => uploadMedia(url => setProfileForm(prev => ({ ...prev, cover_image_url: url })), 'cover', 'image/*')}>업로드</button></div>
+            <label>명함 이미지 URL</label>
+            <div className="inline-form"><input placeholder="공개 프로필 상단에 노출될 명함 이미지 URL" value={profileForm.cover_image_url} onChange={e => setProfileForm({ ...profileForm, cover_image_url: e.target.value })} /><button type="button" onClick={() => uploadMedia(url => setProfileForm(prev => ({ ...prev, cover_image_url: url })), 'business-card-cover', 'image/*')}>업로드</button></div>
+            <div className="muted small-text">상대방 공개 프로필 최상단에는 명함 이미지 1장만 노출됩니다. 등록하지 않으면 흰 배경 안내 문구가 표시됩니다.</div>
           </div>
           <div className="stack full-span">
             <label>소개</label>
@@ -5166,6 +5167,8 @@ function ProfileBrandingHubCard({ profile }) {
 function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUrl }) {
   const publicUrl = getPublicProfileUrl(profile?.slug)
   const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필'
+  const businessCardImageUrl = (profile?.cover_image_url || '').trim()
+  const hasBusinessCardImage = Boolean(businessCardImageUrl)
   const quickTags = [
     profile?.current_work || '현재 하는 일 미입력',
     profile?.industry_category || '업종 미입력',
@@ -5174,7 +5177,13 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
 
   return (
     <section className="public-hero-card" style={{ '--public-accent': profile?.theme_color || '#facc15' }}>
-      <div className="public-hero-cover" style={{ backgroundImage: profile?.cover_image_url ? `url(${profile.cover_image_url})` : undefined }} />
+      <div className={`public-hero-cover public-hero-business-card-stage ${hasBusinessCardImage ? 'has-card' : 'empty-card'}`}>
+        {hasBusinessCardImage ? (
+          <img className="public-hero-business-card-image" src={businessCardImageUrl} alt={`${profileName} 명함`} />
+        ) : (
+          <div className="public-hero-business-card-empty">명함을 등록하지 않았습니다.</div>
+        )}
+      </div>
       <div className="public-hero-body stack">
         <div className="public-hero-main">
           <div className="avatar public-hero-avatar">{profile?.profile_image_url ? <img src={profile.profile_image_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}</div>
