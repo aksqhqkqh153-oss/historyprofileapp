@@ -5169,56 +5169,97 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
   const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필'
   const businessCardImageUrl = (profile?.cover_image_url || '').trim()
   const hasBusinessCardImage = Boolean(businessCardImageUrl)
+  const [cardPreviewOpen, setCardPreviewOpen] = useState(false)
   const quickTags = [
     profile?.current_work || '현재 하는 일 미입력',
     profile?.industry_category || '업종 미입력',
     profile?.location || '지역 미입력',
   ].filter(Boolean)
+  const quickButtons = [
+    { label: '경력', value: profile?.careers?.length || 0, targetId: 'public-career-section' },
+    { label: '링크', value: profile?.links?.length || 0, targetId: 'public-links-section' },
+    { label: 'QR', value: profile?.qrs?.length || 0, targetId: 'public-qr-section' },
+    { label: '소개서', value: profile?.introductions?.length || 0, targetId: 'public-intro-section' },
+    { label: '방문', value: analytics.visits, targetId: 'public-conversion-section' },
+    { label: '클릭', value: analytics.linkClicks + analytics.qrClicks + analytics.ctaClicks, targetId: 'public-conversion-section' },
+  ]
+
+  function handleQuickButtonClick(targetId) {
+    const target = document.getElementById(targetId)
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
-    <section className="public-hero-card" style={{ '--public-accent': profile?.theme_color || '#facc15' }}>
-      <div className={`public-hero-cover public-hero-business-card-stage ${hasBusinessCardImage ? 'has-card' : 'empty-card'}`}>
-        {hasBusinessCardImage ? (
-          <img className="public-hero-business-card-image" src={businessCardImageUrl} alt={`${profileName} 명함`} />
-        ) : (
-          <div className="public-hero-business-card-empty">명함을 등록하지 않았습니다.</div>
-        )}
-      </div>
-      <div className="public-hero-body stack">
-        <div className="public-hero-main">
-          <div className="avatar public-hero-avatar">{profile?.profile_image_url ? <img src={profile.profile_image_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}</div>
-          <div className="stack gap-6 public-hero-copy">
-            <div className="chip-row">
-              <span className="chip accent-chip">프토리 공개 프로필</span>
-              <span className="chip light-chip">/{profile?.slug}</span>
+    <>
+      <section className="public-hero-card public-mobile-snap-section" style={{ '--public-accent': profile?.theme_color || '#facc15' }}>
+        <button
+          type="button"
+          className={`public-hero-cover public-hero-business-card-stage ${hasBusinessCardImage ? 'has-card is-clickable' : 'empty-card'}`}
+          onClick={() => hasBusinessCardImage ? setCardPreviewOpen(true) : undefined}
+          disabled={!hasBusinessCardImage}
+          aria-label={hasBusinessCardImage ? `${profileName} 명함 원본 보기` : '명함 미등록'}
+        >
+          {hasBusinessCardImage ? (
+            <img className="public-hero-business-card-image" src={businessCardImageUrl} alt={`${profileName} 명함`} />
+          ) : (
+            <div className="public-hero-business-card-empty">명함을 등록하지 않았습니다.</div>
+          )}
+        </button>
+        <div className="public-hero-body stack">
+          <div className="public-hero-main">
+            <div className="avatar public-hero-avatar">{profile?.profile_image_url ? <img src={profile.profile_image_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}</div>
+            <div className="stack gap-6 public-hero-copy">
+              <div className="chip-row">
+                <span className="chip accent-chip">프토리 공개 프로필</span>
+                <span className="chip light-chip">/{profile?.slug}</span>
+              </div>
+              <h1>{profileName}</h1>
+              <div className="public-hero-headline">{profile?.headline || '한 줄 소개가 아직 등록되지 않았습니다.'}</div>
+              <div className="muted public-hero-bio">{profile?.bio || '프로필 소개가 아직 등록되지 않았습니다.'}</div>
+              <div className="chip-row wrap-row">
+                {quickTags.map(item => <span key={item} className="chip light-chip">{item}</span>)}
+              </div>
             </div>
-            <h1>{profileName}</h1>
-            <div className="public-hero-headline">{profile?.headline || '한 줄 소개가 아직 등록되지 않았습니다.'}</div>
-            <div className="muted public-hero-bio">{profile?.bio || '프로필 소개가 아직 등록되지 않았습니다.'}</div>
-            <div className="chip-row wrap-row">
-              {quickTags.map(item => <span key={item} className="chip light-chip">{item}</span>)}
+          </div>
+          <div className="public-hero-side stack gap-12">
+            <div className="public-mobile-hero-button-grid" aria-label="프로필 요약 바로가기">
+              {quickButtons.map(item => (
+                <button key={item.label} type="button" className="public-mobile-stat-button" onClick={() => handleQuickButtonClick(item.targetId)}>
+                  <span className="public-mobile-stat-label">{item.label}</span>
+                  <strong>{item.value}</strong>
+                </button>
+              ))}
+            </div>
+            <div className="action-wrap wrap-row public-hero-actions">
+              <button type="button" className="ghost" onClick={onCopyUrl}>주소 복사</button>
+              <button type="button" onClick={onShareUrl}>공유</button>
+              <a className="button-link" href={publicUrl} target="_blank" rel="noreferrer">새 탭 열기</a>
             </div>
           </div>
         </div>
-        <div className="public-hero-side stack gap-12">
-          <div className="grid-2 metric-grid-tight">
-            <Metric label="경력" value={profile?.careers?.length || 0} />
-            <Metric label="링크" value={profile?.links?.length || 0} />
-            <Metric label="QR" value={profile?.qrs?.length || 0} />
-            <Metric label="소개서" value={profile?.introductions?.length || 0} />
-          </div>
-          <div className="grid-2 metric-grid-tight public-hero-analytics">
-            <Metric label="방문" value={analytics.visits} />
-            <Metric label="클릭" value={analytics.linkClicks + analytics.qrClicks + analytics.ctaClicks} />
-          </div>
-          <div className="action-wrap wrap-row public-hero-actions">
-            <button type="button" className="ghost" onClick={onCopyUrl}>주소 복사</button>
-            <button type="button" onClick={onShareUrl}>공유</button>
-            <a className="button-link" href={publicUrl} target="_blank" rel="noreferrer">새 탭 열기</a>
+      </section>
+      {cardPreviewOpen ? (
+        <div className="business-card-preview-lightbox public-business-card-lightbox" role="dialog" aria-modal="true">
+          <div className="business-card-preview-lightbox-backdrop" onClick={() => setCardPreviewOpen(false)} />
+          <div className="business-card-preview-lightbox-card card stack">
+            <div className="business-card-preview-lightbox-head">
+              <div>
+                <strong>{profileName} 명함 원본</strong>
+                <div className="muted small-text">원본 크기로 확대해서 볼 수 있습니다.</div>
+              </div>
+              <button type="button" className="ghost small-button" onClick={() => setCardPreviewOpen(false)}>닫기</button>
+            </div>
+            <div className="business-card-preview-lightbox-stage public-business-card-lightbox-stage">
+              <img className="public-business-card-lightbox-image" src={businessCardImageUrl} alt={`${profileName} 명함 원본`} />
+            </div>
+            <div className="business-card-preview-lightbox-actions">
+              <a className="button-link" href={businessCardImageUrl} target="_blank" rel="noreferrer">원본 열기</a>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      ) : null}
+    </>
   )
 }
 
@@ -5309,7 +5350,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
   const compactQrs = Array.isArray(profile?.qrs) ? profile.qrs.slice(0, 3) : []
 
   return (
-    <section className="public-unified-shell">
+    <section className="public-unified-shell public-mobile-snap-section">
       <div className="public-unified-main stack gap-16">
         <section className="card stack public-focus-card">
           <div className="split-row responsive-row">
@@ -5346,7 +5387,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
           </div>
         </section>
 
-        <section className="card stack public-story-career-card">
+        <section id="public-career-section" className="card stack public-story-career-card">
           <div className="split-row responsive-row">
             <div>
               <h3>스토리 · 역사 · 경력</h3>
@@ -5364,7 +5405,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
         </section>
 
         <section className="grid-2 public-content-split">
-          <div className="card stack public-intro-card">
+          <div id="public-intro-section" className="card stack public-intro-card">
             <div className="split-row responsive-row">
               <h3>소개서</h3>
               <span className="muted small-text">중요 내용 우선</span>
@@ -5396,7 +5437,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
       </div>
 
       <aside className="public-unified-side stack gap-16">
-        <section className="card stack public-side-card compact-side-card">
+        <section id="public-links-section" className="card stack public-side-card compact-side-card">
           <div className="split-row responsive-row">
             <h3>링크</h3>
             <span className="muted small-text">보조 영역</span>
@@ -5413,7 +5454,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
           ) : <div className="muted">공개 링크가 없습니다.</div>}
         </section>
 
-        <section className="card stack public-side-card compact-side-card">
+        <section id="public-qr-section" className="card stack public-side-card compact-side-card">
           <div className="split-row responsive-row">
             <h3>QR</h3>
             <span className="muted small-text">빠른 공유</span>
@@ -5438,7 +5479,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
           <PublicProfileQuestionDigest items={profile?.questions || []} />
         </section>
 
-        <section className="card stack public-side-card compact-side-card">
+        <section id="public-conversion-section" className="card stack public-side-card compact-side-card">
           <div className="split-row responsive-row">
             <h3>전환</h3>
             <span className="muted small-text">작게 배치</span>
@@ -5584,7 +5625,7 @@ function PublicProfilePage() {
 
   return (
     <div className="public-shell">
-      <div className="public-container public-container-expanded">
+      <div className="public-container public-container-expanded public-page-scroll-shell">
         <PublicProfileHeroCard profile={profile} owner={owner} analytics={analytics} onCopyUrl={handleCopyUrl} onShareUrl={handleShareUrl} />
         <PublicProfileUnifiedLayout
           profile={profile}
