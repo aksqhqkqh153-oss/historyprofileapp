@@ -2680,3 +2680,31 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .public-compact-qr-grid,.public-evidence-grid,.public-context-cta-grid{grid-template-columns:1fr}
   .public-mobile-bottom-nav{display:grid}
 }
+
+
+/* 2026-04-03 mobile public profile identity/detail panel refresh */
+.public-hero-business-card-stage,.public-hero-business-card-empty,.public-hero-business-card-image{border-radius:0!important}
+.public-hero-main-identity{align-items:start}
+.public-hero-idline{font-size:13px;font-weight:700;color:#64748b;line-height:1.4}
+.public-mobile-hero-button-grid-five{grid-template-columns:repeat(3,minmax(0,1fr))}
+.public-detail-overlay{position:fixed;inset:0;z-index:95;display:flex;align-items:flex-end;justify-content:center}
+.public-detail-overlay-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.48)}
+.public-detail-overlay-card{position:relative;z-index:1;width:min(100%,720px);max-height:min(78vh,760px);border-radius:24px 24px 0 0;padding:18px 16px 20px;overflow:hidden;background:#fff}
+.public-detail-overlay-body{overflow:auto;padding-right:2px}
+.public-detail-item{padding:14px;border:1px solid #e2e8f0;border-radius:16px;background:#fff}
+.public-detail-link{display:inline-flex;align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.public-detail-text-preview{max-height:180px;overflow:auto;line-height:1.65}
+.public-detail-qr-item{align-items:center;text-align:center}
+.public-detail-qr-image{width:164px;max-width:100%;aspect-ratio:1/1;object-fit:contain;padding:8px;border-radius:14px;background:#fff;border:1px solid #e2e8f0;margin:0 auto}
+
+@media (max-width:720px){
+  .public-mobile-hero-button-grid-five{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .public-mobile-hero-button-grid-five .public-mobile-stat-button:last-child{grid-column:2/span 1}
+  .public-hero-business-card-stage{padding:12px 12px 8px}
+  .public-hero-business-card-empty{min-height:164px}
+  .public-hero-copy h1{font-size:22px;line-height:1.2}
+  .public-hero-idline{font-size:12px}
+  .public-hero-bio{display:block;max-height:3.2em;overflow:hidden}
+  .public-detail-overlay{align-items:flex-end}
+  .public-detail-overlay-card{width:100%;max-height:76svh;border-radius:22px 22px 0 0;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+}

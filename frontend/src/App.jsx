@@ -5344,34 +5344,102 @@ function ProfileBrandingHubCard({ profile }) {
 function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUrl }) {
   const publicUrl = getPublicProfileUrl(profile?.slug)
   const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필'
+  const profileIdLabel = owner?.login_id || owner?.email || `/${profile?.slug || ''}`
   const businessCardImageUrl = (profile?.cover_image_url || '').trim()
   const hasBusinessCardImage = Boolean(businessCardImageUrl)
   const [cardPreviewOpen, setCardPreviewOpen] = useState(false)
+  const [detailView, setDetailView] = useState('')
   const quickTags = [
     profile?.current_work || '현재 하는 일 미입력',
     profile?.industry_category || '업종 미입력',
     profile?.location || '지역 미입력',
   ].filter(Boolean)
+  const proofCount = (Array.isArray(profile?.uploads) ? profile.uploads.length : 0) + (Array.isArray(profile?.careers) ? profile.careers.reduce((sum, item) => sum + ((item?.media_items || []).length), 0) : 0)
   const quickButtons = [
-    { label: '경력', value: profile?.careers?.length || 0, targetId: 'public-career-section' },
-    { label: '링크', value: profile?.links?.length || 0, targetId: 'public-links-section' },
-    { label: 'QR', value: profile?.qrs?.length || 0, targetId: 'public-qr-section' },
-    { label: '소개서', value: profile?.introductions?.length || 0, targetId: 'public-intro-section' },
-    { label: '방문', value: analytics.visits, targetId: 'public-conversion-section' },
-    { label: '클릭', value: analytics.linkClicks + analytics.qrClicks + analytics.ctaClicks, targetId: 'public-conversion-section' },
+    { label: '경력', value: profile?.careers?.length || 0, view: 'career' },
+    { label: '링크', value: profile?.links?.length || 0, view: 'links' },
+    { label: 'QR', value: profile?.qrs?.length || 0, view: 'qr' },
+    { label: '소개서', value: profile?.introductions?.length || 0, view: 'intro' },
+    { label: '증빙', value: proofCount, view: 'proof' },
   ]
   const salesHighlights = [
-    { label: '경력', value: `${profile?.careers?.length || 0}건` },
-    { label: '증빙', value: `${(profile?.attachments?.length || 0) + (profile?.feeds?.length || 0)}개` },
-    { label: '링크 클릭', value: `${analytics.linkClicks || 0}회` },
-    { label: '문의 전환', value: `${analytics.ctaClicks || 0}회` },
+    { label: '방문', value: `${analytics.visits || 0}회` },
+    { label: '링크클릭', value: `${analytics.linkClicks || 0}회` },
+    { label: '문의전환', value: `${analytics.leads || analytics.ctaClicks || 0}회` },
+    { label: 'QR클릭', value: `${analytics.qrClicks || 0}회` },
   ]
 
-  function handleQuickButtonClick(targetId) {
-    const target = document.getElementById(targetId)
-    if (!target) return
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const detailConfig = {
+    career: {
+      title: '경력 목록',
+      description: '등록된 경력과 역할, 기간, 한 줄 요약을 확인할 수 있습니다.',
+      empty: '등록된 경력이 없습니다.',
+      items: Array.isArray(profile?.careers) ? profile.careers : [],
+      render: item => (
+        <article key={item.id} className="public-detail-item stack gap-6">
+          <strong>{item.title}</strong>
+          <div className="muted small-text">{[item.period, item.role_name].filter(Boolean).join(' · ') || '세부 기간 미입력'}</div>
+          <div>{item.one_line || item.description || '설명이 아직 없습니다.'}</div>
+        </article>
+      ),
+    },
+    links: {
+      title: '링크 목록',
+      description: '공개된 링크 자산을 목록 형태로 확인할 수 있습니다.',
+      empty: '등록된 링크가 없습니다.',
+      items: Array.isArray(profile?.links) ? profile.links : [],
+      render: item => (
+        <article key={item.id} className="public-detail-item stack gap-6">
+          <strong>{item.title || item.display_host || '링크'}</strong>
+          <div className="muted small-text">{item.link_type_label || item.link_type || '외부 링크'}</div>
+          <a href={item.original_url || item.full_short_url} target="_blank" rel="noreferrer" className="button-link public-detail-link">{item.original_url || item.full_short_url}</a>
+        </article>
+      ),
+    },
+    qr: {
+      title: 'QR 목록',
+      description: '프로필 유입을 만드는 QR 자산을 확인할 수 있습니다.',
+      empty: '등록된 QR이 없습니다.',
+      items: Array.isArray(profile?.qrs) ? profile.qrs : [],
+      render: item => (
+        <article key={item.id} className="public-detail-item stack gap-8 public-detail-qr-item">
+          {item.image_url ? <img src={item.image_url} alt={item.title} className="public-detail-qr-image" /> : null}
+          <strong>{item.title}</strong>
+        </article>
+      ),
+    },
+    intro: {
+      title: '소개서 목록',
+      description: '공개 프로필에 연결된 소개서와 제안 문구를 볼 수 있습니다.',
+      empty: '등록된 소개서가 없습니다.',
+      items: Array.isArray(profile?.introductions) ? profile.introductions : [],
+      render: item => (
+        <article key={item.id} className="public-detail-item stack gap-6">
+          <strong>{item.title || '소개서'}</strong>
+          {item.category ? <div className="muted small-text">{item.category}</div> : null}
+          <div className="pre-wrap public-detail-text-preview">{item.content || '내용이 없습니다.'}</div>
+        </article>
+      ),
+    },
+    proof: {
+      title: '증빙자료 목록',
+      description: '업로드된 자료와 경력에 연결된 증빙자료를 함께 확인할 수 있습니다.',
+      empty: '등록된 증빙자료가 없습니다.',
+      items: [
+        ...(Array.isArray(profile?.uploads) ? profile.uploads.map(item => ({ ...item, _source: 'upload' })) : []),
+        ...(Array.isArray(profile?.careers) ? profile.careers.flatMap(career => (career?.media_items || []).map((media, index) => ({ ...media, id: media.id || `${career.id}-${index}`, _source: 'career', _careerTitle: career.title }))) : []),
+      ],
+      render: item => (
+        <article key={item.id} className="public-detail-item stack gap-6">
+          <strong>{item.name || item.title || item.original_name || '증빙자료'}</strong>
+          <div className="muted small-text">{[item._careerTitle, item.category, item.media_kind, item.created_at ? formatDateLabel(item.created_at) : ''].filter(Boolean).join(' · ')}</div>
+          {(item.preview_url || item.url) ? <a href={item.url || item.preview_url} target="_blank" rel="noreferrer" className="button-link public-detail-link">자료 열기</a> : <div className="muted small-text">열 수 있는 URL이 없습니다.</div>}
+        </article>
+      ),
+    },
   }
+
+  const activeDetail = detailView ? detailConfig[detailView] : null
 
   return (
     <>
@@ -5390,14 +5458,11 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
           )}
         </button>
         <div className="public-hero-body stack">
-          <div className="public-hero-main">
+          <div className="public-hero-main public-hero-main-identity">
             <div className="avatar public-hero-avatar">{profile?.profile_image_url ? <img src={profile.profile_image_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}</div>
             <div className="stack gap-6 public-hero-copy">
-              <div className="chip-row">
-                <span className="chip accent-chip">프토리 공개 프로필</span>
-                <span className="chip light-chip">/{profile?.slug}</span>
-              </div>
               <h1>{profileName}</h1>
+              <div className="public-hero-idline">{profileIdLabel}</div>
               <div className="public-hero-headline">{profile?.headline || '한 줄 소개가 아직 등록되지 않았습니다.'}</div>
               <div className="muted public-hero-bio">{profile?.bio || '프로필 소개가 아직 등록되지 않았습니다.'}</div>
               <div className="chip-row wrap-row">
@@ -5414,9 +5479,9 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
             </div>
           </div>
           <div className="public-hero-side stack gap-12">
-            <div className="public-mobile-hero-button-grid" aria-label="프로필 요약 바로가기">
+            <div className="public-mobile-hero-button-grid public-mobile-hero-button-grid-five" aria-label="프로필 요약 바로가기">
               {quickButtons.map(item => (
-                <button key={item.label} type="button" className="public-mobile-stat-button" onClick={() => handleQuickButtonClick(item.targetId)}>
+                <button key={item.label} type="button" className="public-mobile-stat-button" onClick={() => setDetailView(item.view)}>
                   <span className="public-mobile-stat-label">{item.label}</span>
                   <strong>{item.value}</strong>
                 </button>
@@ -5430,6 +5495,23 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
           </div>
         </div>
       </section>
+      {activeDetail ? (
+        <div className="public-detail-overlay" role="dialog" aria-modal="true">
+          <div className="public-detail-overlay-backdrop" onClick={() => setDetailView('')} />
+          <div className="public-detail-overlay-card card stack">
+            <div className="split-row responsive-row public-detail-overlay-head">
+              <div>
+                <strong>{activeDetail.title}</strong>
+                <div className="muted small-text">{activeDetail.description}</div>
+              </div>
+              <button type="button" className="ghost small-button" onClick={() => setDetailView('')}>닫기</button>
+            </div>
+            <div className="public-detail-overlay-body stack compact-list">
+              {activeDetail.items.length ? activeDetail.items.map(activeDetail.render) : <div className="muted">{activeDetail.empty}</div>}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {cardPreviewOpen ? (
         <div className="business-card-preview-lightbox public-business-card-lightbox" role="dialog" aria-modal="true">
           <div className="business-card-preview-lightbox-backdrop" onClick={() => setCardPreviewOpen(false)} />
