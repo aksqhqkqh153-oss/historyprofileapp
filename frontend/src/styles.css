@@ -2442,6 +2442,8 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   border: 4px solid rgba(15, 23, 42, 0.92);
   background: rgba(15, 23, 42, 0.92);
   font-size: 32px;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .public-hero-copy h1 {
@@ -2570,6 +2572,34 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 @media (max-width:720px){.public-unified-shell{gap:14px}.public-evidence-grid,.public-compact-qr-grid,.public-proof-flow-grid,.public-proof-storage-summary,.public-context-cta-grid{grid-template-columns:1fr}.public-evidence-preview img,.public-evidence-preview video,.public-evidence-placeholder{height:180px}.public-story-summary{font-size:16px}.public-mini-cta-wrap button{flex:1 1 100%}.public-secondary-actions{width:100%}.public-secondary-actions button{flex:1 1 auto}.public-sales-highlight-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 
+
+.public-hero-meta-list{margin-top:2px}
+.public-hero-meta-row{padding:8px 10px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+.public-hero-meta-row strong{font-size:12px;color:#0f172a}
+.public-proof-gallery-card{background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%)}
+.public-career-proof-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.public-horizontal-proof-row{padding:12px 0;border-top:1px solid #edf2f7}
+.public-horizontal-proof-row:first-of-type{border-top:0}
+.public-horizontal-proof-head strong{font-size:15px;color:#0f172a}
+.public-horizontal-proof-scroller{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(104px,104px);gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+.public-horizontal-proof-item{display:flex;flex-direction:column;gap:8px;min-width:0;scroll-snap-align:start}
+.public-horizontal-proof-thumb{width:104px;height:104px;border:1px solid #e2e8f0;background:#fff;overflow:hidden}
+.public-horizontal-proof-thumb img,.public-horizontal-proof-thumb video{display:block;width:100%;height:100%;object-fit:cover;background:#f8fafc}
+.public-horizontal-proof-fallback{display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:#f8fafc;color:#64748b;font-weight:800;font-size:18px}
+.public-horizontal-proof-caption{display:flex;flex-direction:column;gap:2px;min-width:0}
+.public-horizontal-proof-caption strong{font-size:12px;line-height:1.35;color:#0f172a;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.public-horizontal-proof-caption span{font-size:11px;line-height:1.35;color:#64748b;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.public-horizontal-proof-link{padding:6px 8px;font-size:11px;justify-content:center}
+.public-horizontal-proof-empty{padding:18px 14px;border:1px dashed #cbd5e1;background:#fff;color:#64748b}
+.public-career-timeline-compact .bordered-box{border-radius:16px}
+@media (max-width:720px){
+  .public-career-proof-summary-grid{grid-template-columns:1fr 1fr}
+  .public-horizontal-proof-row{padding:10px 0}
+  .public-horizontal-proof-scroller{grid-auto-columns:minmax(96px,96px)}
+  .public-horizontal-proof-thumb{width:96px;height:96px}
+  .public-hero-meta-row{padding:7px 9px}
+}
+
 /* 2026-04-03 mobile public business card hero flow */
 .public-hero-business-card-stage{border:0;width:100%;text-align:inherit}
 .public-hero-business-card-stage.is-clickable{cursor:zoom-in}
@@ -2591,7 +2621,7 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .public-hero-business-card-empty{width:min(100%,420px);min-height:172px}
   .public-hero-body{margin-top:0;padding:14px 14px 18px;gap:14px;display:flex;flex:1 1 auto;justify-content:space-between}
   .public-hero-main{gap:12px;grid-template-columns:72px minmax(0,1fr);align-items:center}
-  .public-hero-avatar{width:72px;height:72px;border-width:3px;font-size:24px}
+  .public-hero-avatar{width:72px;height:72px;border-width:3px;font-size:24px;border-radius:14px}
   .public-hero-copy h1{font-size:24px}
   .public-hero-headline{font-size:14px}
   .public-hero-bio{font-size:13px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}

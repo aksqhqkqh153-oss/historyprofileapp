@@ -5344,15 +5344,15 @@ function ProfileBrandingHubCard({ profile }) {
 function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUrl }) {
   const publicUrl = getPublicProfileUrl(profile?.slug)
   const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필'
-  const profileIdLabel = owner?.login_id || owner?.email || `/${profile?.slug || ''}`
+  const profileIdLabel = owner?.login_id || owner?.email || `@${profile?.slug || ''}`
   const businessCardImageUrl = (profile?.cover_image_url || '').trim()
   const hasBusinessCardImage = Boolean(businessCardImageUrl)
   const [cardPreviewOpen, setCardPreviewOpen] = useState(false)
   const [detailView, setDetailView] = useState('')
-  const quickTags = [
-    profile?.current_work || '현재 하는 일 미입력',
-    profile?.industry_category || '업종 미입력',
-    profile?.location || '지역 미입력',
+  const profileMetaRows = [
+    profile?.current_work ? { label: '현재 활동', value: profile.current_work } : null,
+    profile?.industry_category ? { label: '분야', value: profile.industry_category } : null,
+    profile?.location ? { label: '활동 지역', value: profile.location } : null,
   ].filter(Boolean)
   const proofCount = (Array.isArray(profile?.uploads) ? profile.uploads.length : 0) + (Array.isArray(profile?.careers) ? profile.careers.reduce((sum, item) => sum + ((item?.media_items || []).length), 0) : 0)
   const quickButtons = [
@@ -5465,9 +5465,13 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
               <div className="public-hero-idline">{profileIdLabel}</div>
               <div className="public-hero-headline">{profile?.headline || '한 줄 소개가 아직 등록되지 않았습니다.'}</div>
               <div className="muted public-hero-bio">{profile?.bio || '프로필 소개가 아직 등록되지 않았습니다.'}</div>
-              <div className="chip-row wrap-row">
-                {quickTags.map(item => <span key={item} className="chip light-chip">{item}</span>)}
-              </div>
+              {profileMetaRows.length ? (
+                <div className="stack compact-list public-hero-meta-list">
+                  {profileMetaRows.map(item => (
+                    <div key={item.label} className="growth-summary-row public-hero-meta-row"><strong>{item.label}</strong><span className="muted small-text">{item.value}</span></div>
+                  ))}
+                </div>
+              ) : null}
               <div className="public-sales-highlight-row" aria-label="핵심 성과 요약">
                 {salesHighlights.map(item => (
                   <div key={item.label} className="public-sales-highlight-pill">
@@ -5488,7 +5492,7 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
               ))}
             </div>
             <div className="action-wrap wrap-row public-hero-actions">
-              <button type="button" className="ghost" onClick={onCopyUrl}>주소 복사</button>
+              <button type="button" className="ghost" onClick={onCopyUrl}>프로필 링크 복사</button>
               <button type="button" onClick={onShareUrl}>공유</button>
               <a className="button-link" href={publicUrl} target="_blank" rel="noreferrer">새 탭 열기</a>
             </div>
@@ -5618,6 +5622,17 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
   const storyHighlights = [profile?.headline, profile?.bio, profile?.current_work ? `현재 ${profile.current_work}` : '', profile?.location ? `${profile.location} 기반` : ''].filter(Boolean)
   const primaryIntroduction = profile?.introductions?.[0] || null
   const uploadItems = Array.isArray(profile?.uploads) ? profile.uploads : []
+  const mediaFromCareers = Array.isArray(profile?.careers) ? profile.careers.flatMap(career => (career?.media_items || []).map((media, index) => ({ ...media, id: media.id || `${career.id}-media-${index}`, _careerTitle: career.title || '경력' }))) : []
+  const proofMediaItems = [...mediaFromCareers, ...uploadItems]
+  const qualificationItems = proofMediaItems.filter(item => /자격|면허|인증|certificate|license/i.test(String(item?.category || item?.name || item?.title || '')))
+  const evidenceItems = proofMediaItems.filter(item => !qualificationItems.includes(item))
+  const careerGalleryItems = Array.isArray(profile?.careers) ? profile.careers.map((career, index) => ({
+    id: career.id || `career-${index}`,
+    title: career.title || '경력',
+    subtitle: [career.period, career.role_name].filter(Boolean).join(' · '),
+    preview_url: career.image_url || career.media_items?.[0]?.preview_url || career.media_items?.[0]?.url || '',
+    media_kind: career.media_items?.[0]?.media_kind || (career.image_url ? 'image' : 'text'),
+  })) : []
   const feedHighlightItems = uploadItems.slice(0, 6)
   const compactLinks = Array.isArray(profile?.links) ? profile.links.slice(0, 5) : []
   const compactQrs = Array.isArray(profile?.qrs) ? profile.qrs.slice(0, 3) : []
@@ -5647,6 +5662,47 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
     { title: '소통', desc: '채팅·질문으로 바로 연결' },
   ]
 
+  function renderHorizontalEvidenceRow(title, items, options = {}) {
+    const emptyLabel = options.emptyLabel || '등록된 이미지가 없습니다.'
+    const countLabel = `${items.length}개`
+    return (
+      <div className="public-horizontal-proof-row stack gap-10">
+        <div className="split-row responsive-row public-horizontal-proof-head">
+          <strong>{title}</strong>
+          <span className="muted small-text">{countLabel}</span>
+        </div>
+        {items.length ? (
+          <div className="public-horizontal-proof-scroller" role="list" aria-label={`${title} 이미지 목록`}>
+            {items.map(item => {
+              const previewUrl = item?.preview_url || item?.url || ''
+              const itemTitle = item?.title || item?.name || item?.original_name || title
+              const itemSub = item?.subtitle || item?._careerTitle || item?.category || item?.media_kind || ''
+              const href = item?.url || item?.preview_url || ''
+              return (
+                <article key={item.id || `${title}-${itemTitle}`} className="public-horizontal-proof-item" role="listitem">
+                  <div className="public-horizontal-proof-thumb">
+                    {previewUrl ? (
+                      item?.media_kind === 'video' ? <video src={previewUrl} muted playsInline preload="metadata" /> : <img src={previewUrl} alt={itemTitle} />
+                    ) : (
+                      <div className="public-horizontal-proof-fallback">{itemTitle.slice(0, 2)}</div>
+                    )}
+                  </div>
+                  <div className="public-horizontal-proof-caption">
+                    <strong>{itemTitle}</strong>
+                    {itemSub ? <span>{itemSub}</span> : null}
+                  </div>
+                  {href ? <a className="button-link public-horizontal-proof-link" href={href} target="_blank" rel="noreferrer">열기</a> : null}
+                </article>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="public-horizontal-proof-empty">{emptyLabel}</div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="public-mobile-pages-stack">
       <section className="public-unified-shell public-mobile-snap-section public-mobile-page public-mobile-page-sales">
@@ -5655,7 +5711,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
             <div className="split-row responsive-row">
               <div>
                 <h3>영업용 프로필</h3>
-                <div className="muted small-text">상대방이 이 프로필 하나만 보고도 가치, 전문성, 연락 포인트를 바로 이해하도록 구성했습니다.</div>
+                
               </div>
               <div className="action-wrap wrap-row public-secondary-actions">
                 <button type="button" className="ghost small-button" onClick={onCopyUrl}>주소 복사</button>
@@ -5700,21 +5756,34 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
       </section>
 
       <section id="public-career-section" className="public-mobile-snap-section public-mobile-page public-mobile-page-proof">
-        <div className="card stack public-story-career-card public-proof-career-card">
+        <div className="card stack public-story-career-card public-proof-career-card public-proof-gallery-card">
           <div className="split-row responsive-row">
             <div>
-              <h3>증빙 기반 경력</h3>
-              <div className="muted small-text">텍스트만 보여주는 이력이 아니라 역할, 설명, 리뷰, 미디어 자료까지 함께 보여줍니다.</div>
+              <h3>경력 / 증빙 프로필</h3>
+              <div className="muted small-text">핵심 경력, 증빙 자료, 자격 이미지를 한 줄 흐름으로 빠르게 확인할 수 있습니다.</div>
             </div>
-            <span className="chip light-chip">{profile?.careers?.length || 0}개 경력</span>
+            <span className="chip light-chip">경력 {profile?.careers?.length || 0}개 · 증빙 {totalProofCount}개</span>
           </div>
-          {profile?.careers?.length ? (
-            <div className="stack compact-list public-career-timeline">
-              {profile.careers.map(item => <CareerCard key={item.id} item={item} />)}
+          <div className="public-career-proof-summary-grid">
+            <div className="public-sales-metric-card">
+              <span>대표 경력</span>
+              <strong>{profile?.careers?.[0]?.title || '등록 대기'}</strong>
+              <small>{profile?.careers?.[0]?.one_line || '대표 경력 한 줄 소개를 등록해보세요.'}</small>
             </div>
-          ) : (
-            <div className="muted">등록된 스토리/경력이 없습니다.</div>
-          )}
+            <div className="public-sales-metric-card">
+              <span>누적 증빙</span>
+              <strong>{totalProofCount}건</strong>
+              <small>사진, 영상, 문서, 리뷰 링크를 함께 제시</small>
+            </div>
+          </div>
+          {renderHorizontalEvidenceRow('이력', careerGalleryItems, { emptyLabel: '등록된 경력 이미지가 없습니다.' })}
+          {renderHorizontalEvidenceRow('증빙', evidenceItems, { emptyLabel: '등록된 증빙 자료가 없습니다.' })}
+          {renderHorizontalEvidenceRow('자격', qualificationItems, { emptyLabel: '등록된 자격 이미지가 없습니다.' })}
+          {profile?.careers?.length ? (
+            <div className="stack compact-list public-career-timeline public-career-timeline-compact">
+              {profile.careers.slice(0, 3).map(item => <CareerCard key={item.id} item={item} />)}
+            </div>
+          ) : null}
         </div>
       </section>
 
