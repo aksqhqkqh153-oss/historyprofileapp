@@ -284,7 +284,7 @@ function useDismissLayer(isOpen, onClose) {
 }
 
 
-function AnchoredPopup({ anchorRef, open, align = 'left', className = '', children }) {
+function AnchoredPopup({ anchorRef, open, align = 'left', placement = 'auto', className = '', children }) {
   const [style, setStyle] = useState({})
 
   useLayoutEffect(() => {
@@ -302,7 +302,8 @@ function AnchoredPopup({ anchorRef, open, align = 'left', className = '', childr
       const baseLeft = preferSide ? sideLeft : fallbackLeft
       const sideTop = rect.top
       const fallbackTop = rect.bottom + gap
-      const baseTop = preferSide ? sideTop : fallbackTop
+      const forcedBelowTop = rect.bottom + gap
+      const baseTop = placement === 'bottom' ? forcedBelowTop : (preferSide ? sideTop : fallbackTop)
       const nextLeft = Math.max(8, Math.min(baseLeft, viewportWidth - popupWidth - 8))
       const nextTop = Math.max(8, Math.min(baseTop, viewportHeight - 80))
       setStyle({
@@ -320,7 +321,7 @@ function AnchoredPopup({ anchorRef, open, align = 'left', className = '', childr
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [align, anchorRef, open])
+  }, [align, anchorRef, open, placement])
 
   if (!open || typeof document === 'undefined') return null
   return createPortal(
@@ -474,7 +475,13 @@ function AppShell({ user, setUser }) {
             <button ref={profileSwitchButtonRef} type="button" className="ghost topbar-profile-switch topbar-text-trigger" onClick={async () => { await loadMultiProfiles(); togglePopup('profiles') }} aria-expanded={activePopup === 'profiles'} aria-label="계정 전환">
               <span className="topbar-profile-name">계정전환</span>
             </button>
-            <AnchoredPopup anchorRef={profileSwitchButtonRef} open={activePopup === 'profiles'} className="dropdown-popup profile-switch-popup stack">
+            <AnchoredPopup anchorRef={profileSwitchButtonRef} open={activePopup === 'profiles'} placement="bottom" className="dropdown-popup profile-switch-popup stack">
+              <div className="dropdown-list profile-shortcuts-list">
+                <button type="button" className="dropdown-item ghost dropdown-item-with-icon active-profile-dropdown-item" onClick={() => closePopupAndNavigate('/profile')}>
+                  <IconGlyph name="profile" label="내 프로필" />
+                  <span>내 프로필</span>
+                </button>
+              </div>
               <div className="dropdown-list profile-switch-list">
                 {multiProfiles.length ? multiProfiles.map(item => {
                   const selected = Number(item.id) === Number(activeProfile?.id)

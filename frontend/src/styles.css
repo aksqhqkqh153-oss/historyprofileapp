@@ -2490,3 +2490,8 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
     font-size: 26px;
   }
 }
+
+/* 2026-04-03 account switch popup visibility fix */
+.profile-shortcuts-list{padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.anchored-popup{z-index:72!important}
+.profile-switch-popup{max-height:min(72vh,560px);overflow:auto}
