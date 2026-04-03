@@ -5360,6 +5360,12 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
     { label: '방문', value: analytics.visits, targetId: 'public-conversion-section' },
     { label: '클릭', value: analytics.linkClicks + analytics.qrClicks + analytics.ctaClicks, targetId: 'public-conversion-section' },
   ]
+  const salesHighlights = [
+    { label: '경력', value: `${profile?.careers?.length || 0}건` },
+    { label: '증빙', value: `${(profile?.attachments?.length || 0) + (profile?.feeds?.length || 0)}개` },
+    { label: '링크 클릭', value: `${analytics.linkClicks || 0}회` },
+    { label: '문의 전환', value: `${analytics.ctaClicks || 0}회` },
+  ]
 
   function handleQuickButtonClick(targetId) {
     const target = document.getElementById(targetId)
