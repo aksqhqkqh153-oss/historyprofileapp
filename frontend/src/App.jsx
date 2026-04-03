@@ -16,6 +16,7 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/community')) return '대화'
   if (pathname.startsWith('/questions')) return '질문'
   if (pathname.startsWith('/profile')) return '프로필'
+  if (pathname.startsWith('/mvp')) return 'MVP센터'
   if (pathname.startsWith('/vault')) return '저장함'
   if (pathname.startsWith('/workspace')) return '종합관리'
   if (pathname.startsWith('/introductions-manager')) return '자기소개서관리'
@@ -577,6 +578,7 @@ function AppShell({ user, setUser }) {
           <Route path="/questions/:profileId" element={<QuestionProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/mvp" element={<MvpSuccessPage />} />
           <Route path="/more" element={<MorePage onOpenSheet={openMoreSheet} isAdmin={isAdmin} />} />
           <Route path="/vault" element={<StorageVaultPage />} />
           <Route path="/workspace" element={<WorkspacePage />} />
@@ -636,6 +638,7 @@ function MorePage({ onOpenSheet, isAdmin }) {
   const analyticsSummary = summarizeAnalyticsEvents(analyticsEvents)
 
   const shortcuts = [
+    { path: '/mvp', label: 'MVP 성장센터', desc: '실제 성공용 MVP 순서대로 프로필 · QR · 링크 · 소개서 · 저장소를 정리', icon: 'star' },
     { path: '/workspace', label: '수익화 운영센터', desc: '구독 · 템플릿 · SEO · AI · 채용 · 거래 운영', icon: 'briefcase' },
     { path: '/business-card', label: '명함/폼상점', desc: '유료 폼 적용, 판매 폼 확인, QR/링크 전환 최적화', icon: 'businessCard' },
     { path: '/profile', label: '프로필/공개URL', desc: '공개 노출용 프로필과 SEO 슬러그 관리', icon: 'profile' },
@@ -1629,6 +1632,7 @@ function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
 
   if (!open) return null
   const items = [
+    { path: '/mvp', label: 'MVP센터', desc: '실제 성공용 우선순위 흐름으로 프로필 · QR · 링크를 먼저 완성', icon: 'star' },
     { path: '/vault', label: '저장함', desc: '이력서 · 포트폴리오 · 증빙자료 태그/폴더/즐겨찾기 관리', icon: 'folder' },
     { path: '/workspace', label: '종합관리', desc: '저장함 · 자기소개서 · 링크 데이터를 한 번에 정리', icon: 'briefcase' },
     { path: '/introductions-manager', label: '자기소개서관리', desc: '회사/직무별 문항 세트 저장 · 비교 · 복원', icon: 'document' },
@@ -2634,6 +2638,160 @@ function ShareLinksManagerPage() {
 }
 
 
+
+function MvpSuccessPage() {
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const activeProfileId = getStoredActiveProfileId()
+  const links = readLocalItems(LOCAL_STORAGE_KEYS.shareLinks, [])
+  const introItems = readLocalItems(LOCAL_STORAGE_KEYS.introManager, [])
+  const vaultItems = readLocalItems(LOCAL_STORAGE_KEYS.vault, [])
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        setLoading(true)
+        const data = await api('/api/profiles')
+        if (!alive) return
+        setProfiles(data.items || [])
+        setError('')
+      } catch (err) {
+        if (!alive) return
+        setError(err.message)
+      } finally {
+        if (alive) setLoading(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const selected = profiles.find(item => Number(item.id) === Number(activeProfileId)) || profiles[0] || null
+  const selectedLinkCount = selected ? links.filter(item => Number(item.profile_id || 0) === Number(selected.id)).length : links.length
+  const selectedVaultCount = vaultItems.length
+  const selectedAnalytics = selected ? getProfileLocalAnalyticsSummary(selected) : { visits: 0, linkClicks: 0, qrClicks: 0, ctaClicks: 0, leads: 0 }
+  const publicUrl = selected?.slug ? getPublicProfileUrl(selected.slug) : ''
+  const readiness = [
+    Boolean(selected?.display_name || selected?.title),
+    Boolean(selected?.slug),
+    selectedLinkCount > 0,
+    Boolean(selected?.qrs?.length),
+    Boolean(selected?.introductions?.length || introItems.length),
+    Boolean(selected?.careers?.length),
+    selectedVaultCount > 0,
+  ].filter(Boolean).length
+  const readinessPercent = Math.round((readiness / 7) * 100)
+
+  const steps = [
+    {
+      stage: '1단계',
+      title: '정리 MVP',
+      subtitle: '프로필 허브 + QR + 링크',
+      desc: '광고와 실제 전환에 직결되는 가장 중요한 최소 기능입니다.',
+      rows: [
+        { label: '통합 허브', value: selected ? '준비됨' : '프로필 생성 필요', to: '/profile?tab=hub' },
+        { label: '프로필', value: selected?.display_name || selected?.title || '미등록', to: '/profile?tab=profile' },
+        { label: '공개 URL', value: selected?.slug ? `/${selected.slug}` : '슬러그 미등록', to: '/profile?tab=profile' },
+        { label: 'QR 공유', value: `${selected?.qrs?.length || 0}개`, to: '/profile?tab=qr' },
+        { label: '링크 자산', value: `${selected?.links?.length || selectedLinkCount || 0}개`, to: '/profile?tab=link' },
+      ],
+    },
+    {
+      stage: '2단계',
+      title: '신뢰 자산 MVP',
+      subtitle: '소개서 + 경력 + 자료 저장',
+      desc: '상대방이 이 사람을 믿고 연락할 수 있게 만드는 증빙 레이어입니다.',
+      rows: [
+        { label: '소개서', value: `${selected?.introductions?.length || introItems.length || 0}개`, to: '/profile?tab=intro' },
+        { label: '경력', value: `${selected?.careers?.length || 0}개`, to: '/profile?tab=career' },
+        { label: '자료/저장소', value: `${selectedVaultCount}개`, to: '/vault' },
+        { label: '공개 프로필', value: publicUrl ? '열기 가능' : 'URL 준비 필요', to: publicUrl || '/profile?tab=profile', external: Boolean(publicUrl) },
+      ],
+    },
+    {
+      stage: '3단계',
+      title: '성장 MVP',
+      subtitle: '분석 + 채팅 + 커뮤니티',
+      desc: '정리된 프로필이 실제로 연결과 재방문을 만드는지 확인하는 단계입니다.',
+      rows: [
+        { label: '방문', value: `${selectedAnalytics.visits || 0}`, to: '/workspace' },
+        { label: '링크 클릭', value: `${selectedAnalytics.linkClicks || 0}`, to: '/workspace' },
+        { label: 'QR 클릭', value: `${selectedAnalytics.qrClicks || 0}`, to: '/workspace' },
+        { label: '채팅', value: '연결 채널', to: '/chats' },
+        { label: '커뮤니티', value: '재방문 채널', to: '/community' },
+      ],
+    },
+  ]
+
+  return (
+    <section className="page-stack">
+      <div className="card stack mvp-hero-card">
+        <div className="split-row responsive-row">
+          <div className="stack gap-8">
+            <strong>MVP 성공 구조</strong>
+            <div className="muted small-text">정리 → 공유 → 연결 → 소통 → 재방문 흐름에 맞춰 지금 앱에 이미 있는 기능을 실제 사업형 우선순위로 다시 묶었습니다.</div>
+          </div>
+          <div className="chip-row wrap-row">
+            <span className="chip accent-chip">준비도 {readinessPercent}%</span>
+            <span className="chip light-chip">프로필 {profiles.length}개</span>
+          </div>
+        </div>
+        <div className="grid-4">
+          <Metric label="공개 URL" value={selected?.slug ? '완료' : '미완료'} />
+          <Metric label="링크" value={selected?.links?.length || selectedLinkCount || 0} />
+          <Metric label="QR" value={selected?.qrs?.length || 0} />
+          <Metric label="자료" value={selectedVaultCount} />
+        </div>
+        {loading ? <div className="muted">프로필을 불러오는 중...</div> : null}
+        {error ? <div className="error card">{error}</div> : null}
+      </div>
+
+      <div className="mvp-stage-grid">
+        {steps.map(step => (
+          <section key={step.stage} className="card stack mvp-stage-card">
+            <div className="stack gap-6">
+              <span className="chip light-chip">{step.stage}</span>
+              <h3>{step.title}</h3>
+              <div className="muted small-text">{step.subtitle}</div>
+              <div className="muted small-text">{step.desc}</div>
+            </div>
+            <div className="stack compact-list">
+              {step.rows.map(row => (
+                <div key={`${step.stage}-${row.label}`} className="mvp-row-card">
+                  <div className="mvp-row-copy">
+                    <strong>{row.label}</strong>
+                    <span className="muted small-text">{row.value}</span>
+                  </div>
+                  {row.external ? (
+                    <a className="button-link" href={row.to} target="_blank" rel="noreferrer">열기</a>
+                  ) : (
+                    <Link className="button-link" to={row.to}>이동</Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <section className="card stack">
+        <div className="split-row responsive-row">
+          <div>
+            <strong>운영 판단</strong>
+            <div className="muted small-text">저장소·커뮤니티·채팅을 먼저 키우는 구조가 아니라, 먼저 상대방이 보고 바로 이해되는 프로필/공유 흐름을 완성하는 설계입니다.</div>
+          </div>
+          <Link className="button-link" to="/workspace">운영 수치 보기</Link>
+        </div>
+        <div className="grid-3">
+          <div className="mini-card stack gap-8"><strong>핵심 1</strong><div className="muted small-text">프로필 허브 완성도</div></div>
+          <div className="mini-card stack gap-8"><strong>핵심 2</strong><div className="muted small-text">QR/링크 공유 전환</div></div>
+          <div className="mini-card stack gap-8"><strong>핵심 3</strong><div className="muted small-text">소개서/경력/자료 신뢰도</div></div>
+        </div>
+      </section>
+    </section>
+  )
+}
 
 function WorkspacePage() {
   const vault = readLocalItems(LOCAL_STORAGE_KEYS.vault, [])
@@ -4799,8 +4957,26 @@ function ProfilePage() {
             <div>추가 슬롯 권장가: 1개당 월 {Number(plan.recommended_extra_profile_price_krw).toLocaleString()}원, 3개 번들 월 {Number(plan.recommended_extra_profile_bundle_price_krw).toLocaleString()}원</div>
           </div>
         ) : null}
-        <div className="tab-row wrap-row">
-          {['hub', 'profile', 'career', 'intro', 'link', 'qr', 'media'].map(name => <button key={name} type="button" className={tab === name ? 'tab active' : 'tab'} onClick={() => setTab(name)}>{tabLabel(name)}</button>)}
+        <div className="bordered-box stack gap-10 profile-mvp-priority-card">
+          <div className="split-row responsive-row">
+            <div>
+              <strong>실전 MVP 우선순위</strong>
+              <div className="muted small-text">성공 확률이 높은 순서대로 정리 → 공유 → 연결 → 신뢰 자산 → 분석 흐름을 배치했습니다.</div>
+            </div>
+            <Link className="button-link" to="/mvp">MVP센터 열기</Link>
+          </div>
+          <div className="mvp-priority-strip">
+            <button type="button" className={tab === 'hub' ? 'mvp-priority-chip active' : 'mvp-priority-chip'} onClick={() => setTab('hub')}><span>1</span><strong>통합 허브</strong></button>
+            <button type="button" className={tab === 'profile' ? 'mvp-priority-chip active' : 'mvp-priority-chip'} onClick={() => setTab('profile')}><span>2</span><strong>프로필</strong></button>
+            <button type="button" className={tab === 'qr' ? 'mvp-priority-chip active' : 'mvp-priority-chip'} onClick={() => setTab('qr')}><span>3</span><strong>QR 공유</strong></button>
+            <button type="button" className={tab === 'link' ? 'mvp-priority-chip active' : 'mvp-priority-chip'} onClick={() => setTab('link')}><span>4</span><strong>링크</strong></button>
+            <button type="button" className={tab === 'intro' ? 'mvp-priority-chip active' : 'mvp-priority-chip'} onClick={() => setTab('intro')}><span>5</span><strong>소개서</strong></button>
+            <button type="button" className={tab === 'career' ? 'mvp-priority-chip active' : 'mvp-priority-chip'} onClick={() => setTab('career')}><span>6</span><strong>경력</strong></button>
+            <button type="button" className={tab === 'media' ? 'mvp-priority-chip active' : 'mvp-priority-chip'} onClick={() => setTab('media')}><span>7</span><strong>자료</strong></button>
+          </div>
+          <div className="tab-row wrap-row">
+            {['hub', 'profile', 'qr', 'link', 'intro', 'career', 'media'].map(name => <button key={name} type="button" className={tab === name ? 'tab active' : 'tab'} onClick={() => setTab(name)}>{tabLabel(name)}</button>)}
+          </div>
         </div>
       </section>
 

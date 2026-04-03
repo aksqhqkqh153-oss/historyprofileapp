@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
 ]
 
 export const MENU_ITEMS = [
+  { path: '/mvp', label: 'MVP센터', icon: 'star' },
   { path: '/schedule', label: '일정', icon: 'calendar' },
   { path: '/business-card', label: '명함만들기', icon: 'businessCard' },
   { path: '/url-shortener', label: 'URL단축', icon: 'link' },

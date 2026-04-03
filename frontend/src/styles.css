@@ -2583,3 +2583,23 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .public-unified-side{display:grid;grid-template-columns:1fr;gap:14px}
   .public-focus-card,.public-story-career-card,.public-intro-card,.public-feed-card,.public-side-card,.public-mini-business-card{border-radius:20px}
 }
+
+.mvp-hero-card{background:linear-gradient(180deg,#fffbea 0%,#ffffff 100%);border:1px solid #f3e3a2}
+.mvp-stage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.mvp-stage-card h3{margin:0}
+.mvp-row-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:14px;background:#fff}
+.mvp-row-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+.profile-mvp-priority-card{background:linear-gradient(180deg,#fffdf5 0%,#ffffff 100%);border-color:#efe2a8}
+.mvp-priority-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.mvp-priority-chip{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;padding:12px;border-radius:14px;border:1px solid #e5e7eb;background:#fff;color:#111827}
+.mvp-priority-chip span{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:#f3f4f6;font-size:12px;font-weight:700}
+.mvp-priority-chip strong{font-size:13px;line-height:1.35;text-align:left}
+.mvp-priority-chip.active{border-color:#d4af37;background:#fff8db;box-shadow:0 10px 24px rgba(212,175,55,.16)}
+@media (max-width: 960px){
+  .mvp-stage-grid{grid-template-columns:1fr}
+  .mvp-priority-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width: 640px){
+  .mvp-row-card{flex-direction:column;align-items:flex-start}
+  .mvp-priority-strip{grid-template-columns:1fr 1fr}
+}

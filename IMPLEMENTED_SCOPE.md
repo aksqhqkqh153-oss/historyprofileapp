@@ -1,6 +1,6 @@
 # Implemented Scope
 
-- Added a new 프로필 허브 tab focused on the product growth MVP flow: 정리 → 연결 → 소통.
-- Added a branding hub card with completion checklist, public profile card preview, quick share actions, and local analytics summary.
-- Upgraded the public profile page hero to better match the ad direction: integrated intro, links, QR, and conversion funnel presentation.
-- Kept existing profile, intro, link, QR, media, questions, and workspace features intact.
+- Added a new MVP 성장센터 page that arranges the app into the real launch order: 통합 프로필 → QR 공유 → 링크 → 소개서/경력 → 저장소 → 분석/채팅/커뮤니티.
+- Added MVP shortcuts to the menu, More page, and bottom sheet so the priority flow is reachable from the main app shell.
+- Reworked the 프로필 page tab order and added an MVP priority strip so profile editing follows the business-first order instead of a mixed feature order.
+- Rebuilt the frontend bundle and synced the latest build output into backend/static for deployment consistency.
