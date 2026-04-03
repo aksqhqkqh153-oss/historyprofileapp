@@ -2629,3 +2629,54 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .mvp-row-card{flex-direction:column;align-items:flex-start}
   .mvp-priority-strip{grid-template-columns:1fr 1fr}
 }
+
+
+/* 2026-04-03 mobile public profile sales pagination refresh */
+.public-shell{background:#ffffff}
+.public-hero-card{background:#ffffff;color:#0f172a;box-shadow:0 18px 40px rgba(15,23,42,.08)}
+.public-hero-copy h1,.public-hero-headline,.public-hero-bio{color:#0f172a}
+.public-hero-side{background:#f8fafc;border:1px solid #e2e8f0}
+.public-mobile-stat-button{background:#ffffff;color:#0f172a;border:1px solid #dbe4ee}
+.public-mobile-stat-button strong,.public-mobile-stat-label{color:#0f172a}
+.public-sales-highlight-pill{background:#ffffff;border:1px solid #e2e8f0}
+.public-sales-highlight-pill span{color:#64748b}
+.public-sales-highlight-pill strong{color:#0f172a}
+.public-hero-actions .button-link,.public-hero-actions button{background:#ffffff;color:#0f172a;border:1px solid #dbe4ee}
+.public-hero-business-card-stage,.public-hero-business-card-stage.empty-card,.public-hero-business-card-stage.has-card{background:#ffffff}
+.public-hero-business-card-image{border-radius:0}
+.public-hero-business-card-empty{border-radius:0;border-style:solid;color:#475569;background:#ffffff}
+.public-mobile-pages-stack{display:block}
+.public-mobile-page{padding:14px;background:#ffffff}
+.public-sales-info-rows .growth-summary-row{padding:12px 14px;border:1px solid #e2e8f0;border-radius:14px;background:#ffffff}
+.public-unified-side-mobile-fill{max-width:100%}
+.public-identity-last-page{min-height:100%}
+.public-identity-guide-card{background:linear-gradient(180deg,#fffef7 0%,#ffffff 100%)}
+.public-identity-guide-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.public-identity-guide-item{padding:14px;border:1px solid #e2e8f0;background:#fff;border-radius:16px}
+.public-identity-guide-item strong{display:block;margin-bottom:6px;font-size:14px;color:#0f172a}
+.public-identity-guide-item p{margin:0;font-size:13px;line-height:1.55;color:#64748b}
+.public-mobile-bottom-nav{display:none}
+
+@media (max-width:720px){
+  .public-shell{background:#ffffff;min-height:100svh;padding:0 0 74px}
+  .public-container-expanded.public-page-scroll-shell{background:#ffffff;max-height:calc(100svh - 64px);padding-bottom:96px}
+  .public-hero-card{min-height:calc(100svh - 64px);border:0;border-radius:0;box-shadow:none;background:#ffffff}
+  .public-hero-body{background:#ffffff}
+  .public-hero-main{grid-template-columns:72px minmax(0,1fr);align-items:start}
+  .public-mobile-page{min-height:calc(100svh - 64px);padding:14px 14px 24px;display:flex;flex-direction:column;justify-content:flex-start}
+  .public-mobile-page-sales{padding-top:14px}
+  .public-mobile-page-proof .public-story-career-card,
+  .public-mobile-page-assets .public-content-split,
+  .public-mobile-page-connect .public-unified-side,
+  .public-mobile-page-identity .public-identity-last-page{height:100%}
+  .public-mobile-page-connect .public-unified-side{display:grid;grid-template-columns:1fr;gap:14px}
+  .public-mobile-page-identity .public-side-card{border-radius:18px}
+  .public-unified-shell.public-mobile-snap-section{min-height:calc(100svh - 64px);padding:0;background:#ffffff}
+  .public-content-split{grid-template-columns:1fr}
+  .public-identity-guide-grid{grid-template-columns:1fr}
+  .public-proof-flow-grid{grid-template-columns:1fr}
+  .public-sales-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .public-proof-storage-summary{grid-template-columns:1fr}
+  .public-compact-qr-grid,.public-evidence-grid,.public-context-cta-grid{grid-template-columns:1fr}
+  .public-mobile-bottom-nav{display:grid}
+}

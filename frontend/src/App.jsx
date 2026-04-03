@@ -5553,61 +5553,76 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
     { title: '증빙', desc: '사진, 영상, PDF, 링크 리뷰를 붙여 신뢰를 만듭니다.' },
     { title: '결과', desc: '후기·성과·수치를 보여줘 상담·의뢰로 연결합니다.' },
   ]
+  const salesInfoRows = [
+    { label: '핵심 가치', value: profile?.headline || '한 줄 가치 제안을 등록해보세요.' },
+    { label: '현재 집중 분야', value: profile?.current_work || '현재 하는 일 미입력' },
+    { label: '활동 지역', value: profile?.location || '지역 미입력' },
+    { label: '업종/분야', value: profile?.industry_category || '업종 미입력' },
+  ]
+  const identitySteps = [
+    { title: '프로필', desc: '누구인지 한 화면에서 이해' },
+    { title: '경력', desc: '무엇을 해왔는지 증빙으로 확인' },
+    { title: '소통', desc: '채팅·질문으로 바로 연결' },
+  ]
 
   return (
-    <section className="public-unified-shell public-mobile-snap-section">
-      <div className="public-unified-main stack gap-16">
-        <section className="card stack public-focus-card public-sales-page-card">
-          <div className="split-row responsive-row">
-            <div>
-              <h3>영업용 프로필 핵심 요약</h3>
-              <div className="muted small-text">이 프로필은 정보 나열이 아니라, 가치를 증명하고 연락으로 연결하는 영업 페이지로 구성됩니다.</div>
-            </div>
-            <div className="action-wrap wrap-row public-secondary-actions">
-              <button type="button" className="ghost small-button" onClick={onCopyUrl}>주소 복사</button>
-              <button type="button" className="ghost small-button" onClick={onShareUrl}>공유</button>
-              <button type="button" className="ghost small-button" onClick={onReport}>신고</button>
-            </div>
-          </div>
-          <div className="public-identity-panel public-sales-identity-panel">
-            <div className="public-identity-copy stack gap-8">
-              <div className="chip-row wrap-row">
-                <span className="chip accent-chip">{profileName}</span>
-                {profile?.industry_category ? <span className="chip light-chip">{profile.industry_category}</span> : null}
-                {profile?.current_work ? <span className="chip light-chip">{profile.current_work}</span> : null}
+    <div className="public-mobile-pages-stack">
+      <section className="public-unified-shell public-mobile-snap-section public-mobile-page public-mobile-page-sales">
+        <div className="public-unified-main stack gap-16">
+          <section className="card stack public-focus-card public-sales-page-card">
+            <div className="split-row responsive-row">
+              <div>
+                <h3>영업용 프로필</h3>
+                <div className="muted small-text">상대방이 이 프로필 하나만 보고도 가치, 전문성, 연락 포인트를 바로 이해하도록 구성했습니다.</div>
               </div>
-              <div className="public-story-summary">{storyHighlights[0] || '소개 문구가 아직 등록되지 않았습니다.'}</div>
-              {storyHighlights.length > 1 ? (
-                <div className="stack compact-list public-story-points">
-                  {storyHighlights.slice(1, 4).map((item, idx) => <div key={`${item}-${idx}`} className="growth-summary-row"><strong>핵심</strong><span className="muted small-text">{item}</span></div>)}
+              <div className="action-wrap wrap-row public-secondary-actions">
+                <button type="button" className="ghost small-button" onClick={onCopyUrl}>주소 복사</button>
+                <button type="button" className="ghost small-button" onClick={onShareUrl}>공유</button>
+                <button type="button" className="ghost small-button" onClick={onReport}>신고</button>
+              </div>
+            </div>
+            <div className="public-identity-panel public-sales-identity-panel">
+              <div className="public-identity-copy stack gap-10">
+                <div className="chip-row wrap-row">
+                  <span className="chip accent-chip">{profileName}</span>
+                  {profile?.industry_category ? <span className="chip light-chip">{profile.industry_category}</span> : null}
+                  {profile?.current_work ? <span className="chip light-chip">{profile.current_work}</span> : null}
                 </div>
-              ) : null}
-              <div className="public-proof-flow-grid">
-                {proofFlow.map(item => (
-                  <article key={item.title} className="public-proof-flow-card">
-                    <strong>{item.title}</strong>
-                    <p>{item.desc}</p>
-                  </article>
+                <div className="public-story-summary">{storyHighlights[0] || '소개 문구가 아직 등록되지 않았습니다.'}</div>
+                <div className="stack compact-list public-story-points public-sales-info-rows">
+                  {salesInfoRows.map(item => (
+                    <div key={item.label} className="growth-summary-row"><strong>{item.label}</strong><span className="muted small-text">{item.value}</span></div>
+                  ))}
+                </div>
+                <div className="public-proof-flow-grid">
+                  {proofFlow.map(item => (
+                    <article key={item.title} className="public-proof-flow-card">
+                      <strong>{item.title}</strong>
+                      <p>{item.desc}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+              <div className="public-identity-stats public-sales-metric-grid">
+                {conversionBlueprint.map(item => (
+                  <div key={item.label} className="public-sales-metric-card">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <small>{item.helper}</small>
+                  </div>
                 ))}
               </div>
             </div>
-            <div className="public-identity-stats public-sales-metric-grid">
-              {conversionBlueprint.map(item => (
-                <div key={item.label} className="public-sales-metric-card">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                  <small>{item.helper}</small>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
+      </section>
 
-        <section id="public-career-section" className="card stack public-story-career-card public-proof-career-card">
+      <section id="public-career-section" className="public-mobile-snap-section public-mobile-page public-mobile-page-proof">
+        <div className="card stack public-story-career-card public-proof-career-card">
           <div className="split-row responsive-row">
             <div>
               <h3>증빙 기반 경력</h3>
-              <div className="muted small-text">텍스트 경력이 아니라 역할, 설명, 리뷰, 미디어 자료까지 함께 보여줍니다.</div>
+              <div className="muted small-text">텍스트만 보여주는 이력이 아니라 역할, 설명, 리뷰, 미디어 자료까지 함께 보여줍니다.</div>
             </div>
             <span className="chip light-chip">{profile?.careers?.length || 0}개 경력</span>
           </div>
@@ -5618,13 +5633,15 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
           ) : (
             <div className="muted">등록된 스토리/경력이 없습니다.</div>
           )}
-        </section>
+        </div>
+      </section>
 
-        <section className="grid-2 public-content-split public-business-proof-split">
+      <section className="public-mobile-snap-section public-mobile-page public-mobile-page-assets">
+        <div className="grid-2 public-content-split public-business-proof-split">
           <div id="public-intro-section" className="card stack public-intro-card">
             <div className="split-row responsive-row">
-              <h3>소개서 및 영업 문구</h3>
-              <span className="muted small-text">중요 내용 우선</span>
+              <h3>소개서 및 제안 문구</h3>
+              <span className="muted small-text">영업 문구</span>
             </div>
             {primaryIntroduction ? (
               <article className="bordered-box stack gap-10 public-intro-feature public-sales-script-card">
@@ -5639,7 +5656,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
             <div className="split-row responsive-row">
               <div>
                 <h3>저장소 = 경력 근거 데이터</h3>
-                <div className="muted small-text">업로드한 자료를 그냥 쌓아두는 것이 아니라, 경력을 증명하는 피드로 전환합니다.</div>
+                <div className="muted small-text">업로드한 자료를 단순 보관이 아니라 포트폴리오/증빙 피드로 활용합니다.</div>
               </div>
               <span className="chip light-chip">{totalProofCount}개 근거</span>
             </div>
@@ -5654,70 +5671,107 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
               </div>
             ) : <div className="muted">등록된 근거자료가 없습니다.</div>}
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
-      <aside className="public-unified-side stack gap-16">
-        <section id="public-links-section" className="card stack public-side-card compact-side-card">
-          <div className="split-row responsive-row">
-            <h3>링크 자산</h3>
-            <span className="muted small-text">보조 영역</span>
-          </div>
-          {compactLinks.length ? (
-            <div className="stack compact-list public-link-stack">
-              {compactLinks.map(item => (
-                <a key={item.id} className="social-link-chip compact-link-chip" href={item.original_url || item.full_short_url} target="_blank" rel="noreferrer" onClick={() => onLinkClick(item)}>
-                  <span className="link-type-chip">{item.link_type_label || item.link_type || '링크'}</span>
-                  <span className="link-title-text">{item.title || item.display_host || item.original_url}</span>
-                </a>
-              ))}
+      <section className="public-mobile-snap-section public-mobile-page public-mobile-page-connect">
+        <div className="public-unified-side stack gap-16 public-unified-side-mobile-fill">
+          <section id="public-links-section" className="card stack public-side-card compact-side-card">
+            <div className="split-row responsive-row">
+              <h3>링크 자산</h3>
+              <span className="muted small-text">빠른 이동</span>
             </div>
-          ) : <div className="muted">공개 링크가 없습니다.</div>}
-        </section>
+            {compactLinks.length ? (
+              <div className="stack compact-list public-link-stack">
+                {compactLinks.map(item => (
+                  <a key={item.id} className="social-link-chip compact-link-chip" href={item.original_url || item.full_short_url} target="_blank" rel="noreferrer" onClick={() => onLinkClick(item)}>
+                    <span className="link-type-chip">{item.link_type_label || item.link_type || '링크'}</span>
+                    <span className="link-title-text">{item.title || item.display_host || item.original_url}</span>
+                  </a>
+                ))}
+              </div>
+            ) : <div className="muted">공개 링크가 없습니다.</div>}
+          </section>
 
-        <section id="public-qr-section" className="card stack public-side-card compact-side-card">
-          <div className="split-row responsive-row">
-            <h3>QR 공유 진입점</h3>
-            <span className="muted small-text">빠른 공유</span>
-          </div>
-          {compactQrs.length ? (
-            <div className="public-compact-qr-grid">
-              {compactQrs.map(item => (
-                <button type="button" key={item.id} className="qr-card ghost public-compact-qr-card" onClick={() => onQrClick(item)}>
-                  <img src={item.image_url} alt={item.title} />
+          <section id="public-qr-section" className="card stack public-side-card compact-side-card">
+            <div className="split-row responsive-row">
+              <h3>QR 공유 진입점</h3>
+              <span className="muted small-text">프로필 유입</span>
+            </div>
+            {compactQrs.length ? (
+              <div className="public-compact-qr-grid">
+                {compactQrs.map(item => (
+                  <button type="button" key={item.id} className="qr-card ghost public-compact-qr-card" onClick={() => onQrClick(item)}>
+                    <img src={item.image_url} alt={item.title} />
+                    <strong>{item.title}</strong>
+                  </button>
+                ))}
+              </div>
+            ) : <div className="muted">등록된 QR이 없습니다.</div>}
+          </section>
+        </div>
+      </section>
+
+      <section id="public-conversion-section" className="public-mobile-snap-section public-mobile-page public-mobile-page-identity">
+        <div className="stack gap-16 public-identity-last-page">
+          <section className="card stack public-side-card compact-side-card">
+            <div className="split-row responsive-row">
+              <h3>컨텍스트 기반 Q&A</h3>
+              <span className="muted small-text">소통 요약</span>
+            </div>
+            <PublicProfileQuestionDigest items={profile?.questions || []} />
+          </section>
+
+          <section className="card stack public-side-card compact-side-card public-contact-sales-card">
+            <div className="split-row responsive-row">
+              <h3>연락 및 전환</h3>
+              <span className="muted small-text">바로 연결</span>
+            </div>
+            <div className="grid-2 metric-grid-tight public-side-metrics">
+              <Metric label="링크" value={analytics?.linkClicks || 0} />
+              <Metric label="QR" value={analytics?.qrClicks || 0} />
+              <Metric label="문의" value={analytics?.leads || 0} />
+              <Metric label="CTA" value={analytics?.ctaClicks || 0} />
+            </div>
+            <div className="action-wrap wrap-row public-mini-cta-wrap public-context-cta-grid">
+              {publicCtas.map(item => <button key={item.label} type="button" className="ghost small-button" onClick={() => onCtaClick(item)}>{item.label}</button>)}
+            </div>
+            <div className="muted small-text">근거 자료나 포트폴리오를 보고 바로 대화로 이어지는 흐름을 의도한 CTA입니다.</div>
+          </section>
+
+          <section className="card stack public-side-card compact-side-card public-identity-guide-card">
+            <div className="split-row responsive-row">
+              <h3>프토리 아이덴티티</h3>
+              <span className="muted small-text">정리 → 연결 → 소통</span>
+            </div>
+            <div className="public-identity-guide-grid">
+              {identitySteps.map(item => (
+                <article key={item.title} className="public-identity-guide-item">
                   <strong>{item.title}</strong>
-                </button>
+                  <p>{item.desc}</p>
+                </article>
               ))}
             </div>
-          ) : <div className="muted">등록된 QR이 없습니다.</div>}
-        </section>
+            <div className="muted small-text">이 앱은 프로필, 경력, 자료 저장, 채팅, 질문을 각각 따로 두지 않고 하나의 사람 중심 흐름으로 연결합니다.</div>
+          </section>
+        </div>
+      </section>
+    </div>
+  )
+}
 
-        <section className="card stack public-side-card compact-side-card">
-          <div className="split-row responsive-row">
-            <h3>컨텍스트 기반 Q&A</h3>
-            <span className="muted small-text">소통 요약</span>
-          </div>
-          <PublicProfileQuestionDigest items={profile?.questions || []} />
-        </section>
-
-        <section id="public-conversion-section" className="card stack public-side-card compact-side-card public-contact-sales-card">
-          <div className="split-row responsive-row">
-            <h3>연락 및 전환</h3>
-            <span className="muted small-text">작게 배치</span>
-          </div>
-          <div className="grid-2 metric-grid-tight public-side-metrics">
-            <Metric label="링크" value={analytics?.linkClicks || 0} />
-            <Metric label="QR" value={analytics?.qrClicks || 0} />
-            <Metric label="문의" value={analytics?.leads || 0} />
-            <Metric label="CTA" value={analytics?.ctaClicks || 0} />
-          </div>
-          <div className="action-wrap wrap-row public-mini-cta-wrap public-context-cta-grid">
-            {publicCtas.map(item => <button key={item.label} type="button" className="ghost small-button" onClick={() => onCtaClick(item)}>{item.label}</button>)}
-          </div>
-          <div className="muted small-text">근거 자료나 포트폴리오를 보고 바로 대화로 이어지는 흐름을 의도한 CTA입니다.</div>
-        </section>
-      </aside>
-    </section>
+function PublicMobileBottomNav() {
+  return (
+    <nav className="bottom-nav public-mobile-bottom-nav" aria-label="공개 프로필 하단 메뉴">
+      {NAV_ITEMS.map(item => {
+        const className = 'nav-item nav-item-with-badge'
+        return (
+          <Link key={item.path} to={item.path} className={className}>
+            <span className="nav-item-label"><span className="nav-item-icon"><IconGlyph name={NAV_META[item.path]?.icon || 'home'} label={item.label} /></span><span className="nav-item-text">{item.label}</span></span>
+          </Link>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -5871,6 +5925,7 @@ function PublicProfilePage() {
         ) : null}
         <QuestionBoard profile={profile} ownerNickname={owner.nickname} isOwner={Boolean(getStoredUser()?.id && Number(getStoredUser()?.id) === Number(owner?.id))} canAsk={canAsk} onRefresh={async () => setData(await api(`/api/profile-public/${slug}`))} />
       </div>
+      <PublicMobileBottomNav />
     </div>
   )
 }
