@@ -5097,7 +5097,8 @@ function ProfilePage() {
 
       {selected && tab === 'career' && (
         <section className="card stack">
-          <h3>한줄 경력 / 필모그래픽</h3>
+          <h3>증빙 기반 경력 / 필모그래픽</h3>
+          <div className="muted small-text">경력 텍스트에 사진, 영상, 리뷰를 함께 붙여 신뢰를 증명하는 구조로 운영합니다.</div>
           <div className="grid-2">
             <TextField label="제목" value={careerForm.title} onChange={v => setCareerForm({ ...careerForm, title: v })} />
             <TextField label="기간" value={careerForm.period} onChange={v => setCareerForm({ ...careerForm, period: v })} />
@@ -5157,9 +5158,9 @@ function ProfilePage() {
 
       {selected && tab === 'media' && (
         <section className="card stack">
-          <h3>사진 / 영상 업로드</h3>
-          <div className="muted">사진은 신뢰도 보강용, 영상은 더 강한 증빙 자료용으로만 제한적으로 운영합니다. 영상은 계정당 하루 총 50MB, 전체 저장은 1GB까지입니다.</div>
-          <button type="button" onClick={() => uploadMedia(() => {}, 'portfolio', 'image/*,video/*')}>사진 또는 영상 업로드</button>
+          <h3>저장소 / 증빙 자료</h3>
+          <div className="muted">단순 파일 보관이 아니라 경력, 계약, 후기, 포트폴리오를 증명하는 근거 자료 저장소로 운영합니다. 영상은 계정당 하루 총 50MB, 전체 저장은 1GB까지입니다.</div>
+          <button type="button" onClick={() => uploadMedia(() => {}, 'portfolio', 'image/*,video/*,application/pdf')}>사진·영상·PDF 업로드</button>
           {selected.uploads?.length ? <MediaPreviewList items={selected.uploads.map(item => ({ ...item, url: item.url }))} /> : <div className="muted">업로드 내역이 없습니다.</div>}
         </section>
       )}
@@ -5396,6 +5397,14 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
               <div className="chip-row wrap-row">
                 {quickTags.map(item => <span key={item} className="chip light-chip">{item}</span>)}
               </div>
+              <div className="public-sales-highlight-row" aria-label="핵심 성과 요약">
+                {salesHighlights.map(item => (
+                  <div key={item.label} className="public-sales-highlight-pill">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div className="public-hero-side stack gap-12">
@@ -5524,15 +5533,29 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
   const feedHighlightItems = uploadItems.slice(0, 6)
   const compactLinks = Array.isArray(profile?.links) ? profile.links.slice(0, 5) : []
   const compactQrs = Array.isArray(profile?.qrs) ? profile.qrs.slice(0, 3) : []
+  const answeredQuestions = Array.isArray(profile?.questions) ? profile.questions.filter(item => item?.status === 'answered') : []
+  const totalProofCount = uploadItems.length + (Array.isArray(profile?.careers) ? profile.careers.reduce((sum, item) => sum + ((item?.media_items || []).length), 0) : 0)
+  const totalProofSizeMb = uploadItems.reduce((sum, item) => sum + Number(item?.size_mb || 0), 0)
+  const conversionBlueprint = [
+    { label: '증빙 경력', value: `${profile?.careers?.length || 0}건`, helper: '경력 수 + 상세 설명' },
+    { label: '저장된 근거', value: `${totalProofCount}건`, helper: '사진·영상·문서·링크' },
+    { label: '링크/QR 유입', value: `${(profile?.links?.length || 0) + (profile?.qrs?.length || 0)}개`, helper: '공유 진입점' },
+    { label: '연결 신호', value: `${analytics?.leads || 0}건`, helper: '문의·CTA 반응' },
+  ]
+  const proofFlow = [
+    { title: '이력', desc: '하나의 경력마다 미션, 역할, 기간을 정리합니다.' },
+    { title: '증빙', desc: '사진, 영상, PDF, 링크 리뷰를 붙여 신뢰를 만듭니다.' },
+    { title: '결과', desc: '후기·성과·수치를 보여줘 상담·의뢰로 연결합니다.' },
+  ]
 
   return (
     <section className="public-unified-shell public-mobile-snap-section">
       <div className="public-unified-main stack gap-16">
-        <section className="card stack public-focus-card">
+        <section className="card stack public-focus-card public-sales-page-card">
           <div className="split-row responsive-row">
             <div>
-              <h3>프로필 한눈에 보기</h3>
-              <div className="muted small-text">중요도가 높은 프로필 · 스토리 · 경력 · 링크 · 소개서를 한 화면에 묶었습니다.</div>
+              <h3>영업용 프로필 핵심 요약</h3>
+              <div className="muted small-text">이 프로필은 정보 나열이 아니라, 가치를 증명하고 연락으로 연결하는 영업 페이지로 구성됩니다.</div>
             </div>
             <div className="action-wrap wrap-row public-secondary-actions">
               <button type="button" className="ghost small-button" onClick={onCopyUrl}>주소 복사</button>
@@ -5540,7 +5563,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
               <button type="button" className="ghost small-button" onClick={onReport}>신고</button>
             </div>
           </div>
-          <div className="public-identity-panel">
+          <div className="public-identity-panel public-sales-identity-panel">
             <div className="public-identity-copy stack gap-8">
               <div className="chip-row wrap-row">
                 <span className="chip accent-chip">{profileName}</span>
@@ -5550,24 +5573,35 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
               <div className="public-story-summary">{storyHighlights[0] || '소개 문구가 아직 등록되지 않았습니다.'}</div>
               {storyHighlights.length > 1 ? (
                 <div className="stack compact-list public-story-points">
-                  {storyHighlights.slice(1, 4).map((item, idx) => <div key={`${item}-${idx}`} className="growth-summary-row"><strong>스토리</strong><span className="muted small-text">{item}</span></div>)}
+                  {storyHighlights.slice(1, 4).map((item, idx) => <div key={`${item}-${idx}`} className="growth-summary-row"><strong>핵심</strong><span className="muted small-text">{item}</span></div>)}
                 </div>
               ) : null}
+              <div className="public-proof-flow-grid">
+                {proofFlow.map(item => (
+                  <article key={item.title} className="public-proof-flow-card">
+                    <strong>{item.title}</strong>
+                    <p>{item.desc}</p>
+                  </article>
+                ))}
+              </div>
             </div>
-            <div className="public-identity-stats">
-              <Metric label="경력" value={profile?.careers?.length || 0} />
-              <Metric label="링크" value={profile?.links?.length || 0} />
-              <Metric label="자료" value={uploadItems.length} />
-              <Metric label="방문" value={analytics?.visits || 0} />
+            <div className="public-identity-stats public-sales-metric-grid">
+              {conversionBlueprint.map(item => (
+                <div key={item.label} className="public-sales-metric-card">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <small>{item.helper}</small>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        <section id="public-career-section" className="card stack public-story-career-card">
+        <section id="public-career-section" className="card stack public-story-career-card public-proof-career-card">
           <div className="split-row responsive-row">
             <div>
-              <h3>스토리 · 역사 · 경력</h3>
-              <div className="muted small-text">핵심 이력은 크게, 보조 정보는 접을 수 있게 구성했습니다.</div>
+              <h3>증빙 기반 경력</h3>
+              <div className="muted small-text">텍스트 경력이 아니라 역할, 설명, 리뷰, 미디어 자료까지 함께 보여줍니다.</div>
             </div>
             <span className="chip light-chip">{profile?.careers?.length || 0}개 경력</span>
           </div>
@@ -5580,14 +5614,14 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
           )}
         </section>
 
-        <section className="grid-2 public-content-split">
+        <section className="grid-2 public-content-split public-business-proof-split">
           <div id="public-intro-section" className="card stack public-intro-card">
             <div className="split-row responsive-row">
-              <h3>소개서</h3>
+              <h3>소개서 및 영업 문구</h3>
               <span className="muted small-text">중요 내용 우선</span>
             </div>
             {primaryIntroduction ? (
-              <article className="bordered-box stack gap-10 public-intro-feature">
+              <article className="bordered-box stack gap-10 public-intro-feature public-sales-script-card">
                 <strong>{primaryIntroduction.title}</strong>
                 {primaryIntroduction.category ? <div className="muted small-text">{primaryIntroduction.category}</div> : null}
                 <div className="pre-wrap public-intro-content">{primaryIntroduction.content}</div>
@@ -5595,13 +5629,18 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
               </article>
             ) : <div className="muted">공개된 자기소개서가 없습니다.</div>}
           </div>
-          <div className="card stack public-feed-card">
+          <div className="card stack public-feed-card public-proof-feed-card">
             <div className="split-row responsive-row">
               <div>
-                <h3>피드 · 근거자료 기록</h3>
-                <div className="muted small-text">사진과 자료를 함께 빠르게 훑어볼 수 있게 정리했습니다.</div>
+                <h3>저장소 = 경력 근거 데이터</h3>
+                <div className="muted small-text">업로드한 자료를 그냥 쌓아두는 것이 아니라, 경력을 증명하는 피드로 전환합니다.</div>
               </div>
-              <span className="chip light-chip">{uploadItems.length}개 자료</span>
+              <span className="chip light-chip">{totalProofCount}개 근거</span>
+            </div>
+            <div className="public-proof-storage-summary">
+              <div className="growth-summary-row"><strong>파일 자료</strong><span className="muted small-text">{uploadItems.length}개 업로드</span></div>
+              <div className="growth-summary-row"><strong>저장 용량</strong><span className="muted small-text">약 {Math.round(totalProofSizeMb * 10) / 10}MB</span></div>
+              <div className="growth-summary-row"><strong>Q&A 신뢰</strong><span className="muted small-text">답변 완료 {answeredQuestions.length}건</span></div>
             </div>
             {feedHighlightItems.length ? (
               <div className="public-evidence-grid">
@@ -5615,7 +5654,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
       <aside className="public-unified-side stack gap-16">
         <section id="public-links-section" className="card stack public-side-card compact-side-card">
           <div className="split-row responsive-row">
-            <h3>링크</h3>
+            <h3>링크 자산</h3>
             <span className="muted small-text">보조 영역</span>
           </div>
           {compactLinks.length ? (
@@ -5632,7 +5671,7 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
 
         <section id="public-qr-section" className="card stack public-side-card compact-side-card">
           <div className="split-row responsive-row">
-            <h3>QR</h3>
+            <h3>QR 공유 진입점</h3>
             <span className="muted small-text">빠른 공유</span>
           </div>
           {compactQrs.length ? (
@@ -5649,15 +5688,15 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
 
         <section className="card stack public-side-card compact-side-card">
           <div className="split-row responsive-row">
-            <h3>기록형 Q&A</h3>
+            <h3>컨텍스트 기반 Q&A</h3>
             <span className="muted small-text">소통 요약</span>
           </div>
           <PublicProfileQuestionDigest items={profile?.questions || []} />
         </section>
 
-        <section id="public-conversion-section" className="card stack public-side-card compact-side-card">
+        <section id="public-conversion-section" className="card stack public-side-card compact-side-card public-contact-sales-card">
           <div className="split-row responsive-row">
-            <h3>전환</h3>
+            <h3>연락 및 전환</h3>
             <span className="muted small-text">작게 배치</span>
           </div>
           <div className="grid-2 metric-grid-tight public-side-metrics">
@@ -5666,9 +5705,10 @@ function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onSh
             <Metric label="문의" value={analytics?.leads || 0} />
             <Metric label="CTA" value={analytics?.ctaClicks || 0} />
           </div>
-          <div className="action-wrap wrap-row public-mini-cta-wrap">
+          <div className="action-wrap wrap-row public-mini-cta-wrap public-context-cta-grid">
             {publicCtas.map(item => <button key={item.label} type="button" className="ghost small-button" onClick={() => onCtaClick(item)}>{item.label}</button>)}
           </div>
+          <div className="muted small-text">근거 자료나 포트폴리오를 보고 바로 대화로 이어지는 흐름을 의도한 CTA입니다.</div>
         </section>
       </aside>
     </section>
@@ -5767,8 +5807,10 @@ function PublicProfilePage() {
   const analytics = getProfileLocalAnalyticsSummary(profile)
   const publicUrl = getPublicProfileUrl(profile.slug)
   const publicCtas = [
-    { label: '명함 제작 문의', type: 'cta_click', source: 'business_card' },
-    { label: '브랜드 페이지 문의', type: 'cta_click', source: 'brand_page' },
+    { label: '경력 문의', type: 'cta_click', source: 'career_context' },
+    { label: '포트폴리오 요청', type: 'cta_click', source: 'portfolio_context' },
+    { label: '채팅 상담', type: 'cta_click', source: 'chat_context' },
+    { label: '커뮤니티 질문', type: 'cta_click', source: 'community_context' },
   ]
 
   async function handleCopyUrl() {

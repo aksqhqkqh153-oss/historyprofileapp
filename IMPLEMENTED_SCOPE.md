@@ -1,6 +1,3 @@
-# Implemented Scope
-
-- Added a new MVP 성장센터 page that arranges the app into the real launch order: 통합 프로필 → QR 공유 → 링크 → 소개서/경력 → 저장소 → 분석/채팅/커뮤니티.
-- Added MVP shortcuts to the menu, More page, and bottom sheet so the priority flow is reachable from the main app shell.
-- Reworked the 프로필 page tab order and added an MVP priority strip so profile editing follows the business-first order instead of a mixed feature order.
-- Rebuilt the frontend bundle and synced the latest build output into backend/static for deployment consistency.
+- 공개 프로필을 영업형 구조로 개편
+- 증빙 기반 경력/저장소 설명 및 CTA 강화
+- 경력/저장소 관리 문구를 사업형 방향으로 정리
