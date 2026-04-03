@@ -589,6 +589,7 @@ function AppShell({ user, setUser }) {
           <Route path="/url-shortener" element={<UrlShortenerPage />} />
           <Route path="/qr-generator" element={<QrGeneratorPage />} />
           <Route path="/music" element={isAdmin ? <MusicPage /> : <Navigate to="/" replace />} />
+          <Route path="/video-watch" element={<MusicPage pageTitle="영상시청" introLabel="영상시청" adminOnly={false} />} />
           <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -645,6 +646,7 @@ function MorePage({ onOpenSheet, isAdmin }) {
     { path: '/share-links-manager', label: '링크공유관리', desc: '영업/채용/소개 링크를 공개 페이지와 연결', icon: 'link' },
     { path: '/introductions-manager', label: 'AI 자기소개서', desc: 'AI 초안 생성 결과를 저장/복원/수정', icon: 'document' },
     { path: '/vault', label: '클라우드 저장함', desc: '요금제별 저장용량 전략과 보관 자산 관리', icon: 'folder' },
+    { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용 플레이어로 청취', icon: 'music' }] : []),
   ]
 
@@ -693,6 +695,7 @@ function MorePage({ onOpenSheet, isAdmin }) {
             <Link className="button-link" to="/profile?tab=link">공개 링크 추가</Link>
             <Link className="button-link" to="/profile?tab=qr">프로필 QR 연결</Link>
             <Link className="button-link" to="/url-shortener">단축 URL 생성</Link>
+            <Link className="button-link" to="/video-watch">영상시청 열기</Link>
             {isAdmin ? <Link className="button-link" to="/music">음악듣기 열기</Link> : null}
           </div>
           <div className="muted small-text">공개 URL → 링크 클릭 → QR 스캔 → 문의 전환 흐름을 바로 실행할 수 있게 연결했습니다.</div>
@@ -1099,7 +1102,7 @@ function serializeForInlineScript(value) {
   return JSON.stringify(value).replace(/</g, '\u003c').replace(/>/g, '\u003e').replace(/&/g, '\u0026')
 }
 
-function MusicPage() {
+function MusicPage({ pageTitle = '음악듣기', introLabel = '음악/영상 재생', adminOnly = true }) {
   const [playlists, setPlaylists] = useLocalCollection(LOCAL_STORAGE_KEYS.musicPlaylists, defaultMusicPlaylists())
   const [quickAddUrl, setQuickAddUrl] = useState('')
   const [playingId, setPlayingId] = useState('')
@@ -1282,7 +1285,7 @@ function MusicPage() {
 
         app.innerHTML = '<div class="app">' +
           '<div class="topbar">' +
-            '<div class="title">' + escapeHtml(item?.name || '음악듣기 백그라운드 실행') + '</div>' +
+            '<div class="title">' + escapeHtml(item?.name || (pageTitle + ' 백그라운드 실행')) + '</div>' +
             '<div class="sub">백그라운드 전용 플레이어 · 다른 창이나 앱을 사용해도 이 재생창이 유지되는 동안 계속 들을 수 있도록 구성했습니다.</div>' +
           '</div>' +
           '<div class="video-shell"><div class="video-frame">' + frameMarkup() + '</div></div>' +
@@ -1352,7 +1355,7 @@ function MusicPage() {
     setPlayNonce(current => current + 1)
     const popup = backgroundPlayerWindowRef.current && !backgroundPlayerWindowRef.current.closed
       ? backgroundPlayerWindowRef.current
-      : window.open('', 'historyprofileappMusicBackgroundPlayer', 'popup=yes,width=460,height=820,resizable=yes,scrollbars=no')
+      : window.open('', 'historyprofileappMediaBackgroundPlayer', 'popup=yes,width=460,height=820,resizable=yes,scrollbars=no')
     if (!popup) {
       window.alert('브라우저가 재생 새창을 차단했습니다. 팝업 허용 후 다시 시도해주세요.')
       return
@@ -1492,8 +1495,8 @@ function MusicPage() {
       <div className="card stack music-hero-card">
         <div className="split-row responsive-row">
           <div className="stack gap-6">
-            <strong>음악듣기</strong>
-            <div className="muted small-text">관리자 계정만 사용할 수 있는 YouTube 공식 임베드 플레이어입니다. 공개 재생목록 또는 공개 영상 링크를 붙여넣어 재생목록처럼 청취할 수 있으며, 백그라운드 재생 버튼으로 전용 재생창을 열면 상단 작은 영상, 이전곡/재생/정지/다음곡 버튼, 저장된 플레이리스트 목록을 함께 보면서 다른 창이나 앱을 사용해도 더 안정적으로 계속 들을 수 있습니다.</div>
+            <strong>{pageTitle}</strong>
+            <div className="muted small-text">{adminOnly ? '관리자 계정만 사용할 수 있는' : '로그인 사용자가 바로 사용할 수 있는'} YouTube 공식 임베드 플레이어입니다. 공개 재생목록 또는 공개 영상 링크를 붙여넣어 재생목록처럼 시청할 수 있으며, 백그라운드 재생 버튼으로 전용 재생창을 열면 상단 작은 영상, 이전곡/재생/정지/다음곡 버튼, 저장된 플레이리스트 목록을 함께 보면서 다른 창이나 앱을 사용해도 더 안정적으로 계속 볼 수 있습니다.</div>
           </div>
           <div className="music-hero-actions">
             <button type="button" className="ghost" onClick={handleAddPlaylist}>플레이리스트 추가</button>
@@ -1520,7 +1523,7 @@ function MusicPage() {
         <div className="card stack music-playlist-list-card">
           <div className="split-row responsive-row">
             <strong>재생목록 목록</strong>
-            <div className="muted small-text">관리자 전용</div>
+            <div className="muted small-text">{adminOnly ? '관리자 전용' : '로그인 사용자용'}</div>
           </div>
           <div className="stack compact-list music-playlist-list">
             {normalizedPlaylists.map(item => {
@@ -1637,6 +1640,7 @@ function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
     { path: '/workspace', label: '종합관리', desc: '저장함 · 자기소개서 · 링크 데이터를 한 번에 정리', icon: 'briefcase' },
     { path: '/introductions-manager', label: '자기소개서관리', desc: '회사/직무별 문항 세트 저장 · 비교 · 복원', icon: 'document' },
     { path: '/share-links-manager', label: '링크공유관리', desc: '채용용 · 영업용 · 소개용 공개 링크 생성', icon: 'link' },
+    { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용으로 재생', icon: 'music' }] : []),
     { path: '/more', label: '기타기능', desc: '업데이트 예정', icon: 'more', disabled: true },
   ]
