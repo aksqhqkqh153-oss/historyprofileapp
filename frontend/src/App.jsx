@@ -4570,7 +4570,7 @@ function QuestionsPage() {
 function ProfilePage() {
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(() => getStoredActiveProfileId())
-  const [tab, setTab] = useState('profile')
+  const [tab, setTab] = useState('hub')
   const [busy, setBusy] = useState(false)
   const [profileForm, setProfileForm] = useState(emptyProfile())
   const [careerForm, setCareerForm] = useState(emptyCareer())
@@ -4690,7 +4690,7 @@ function ProfilePage() {
       setSelectedId(createdId)
       setStoredActiveProfileId(createdId)
       setProfileForm(mapProfileToForm(data?.item || payload))
-      setTab('profile')
+      setTab('hub')
       setMultiProfileModalOpen(false)
     } catch (err) {
       window.alert(err.message)
@@ -4793,15 +4793,64 @@ function ProfilePage() {
           </div>
         ) : null}
         <div className="tab-row wrap-row">
-          {['profile', 'career', 'intro', 'link', 'qr', 'media'].map(name => <button key={name} type="button" className={tab === name ? 'tab active' : 'tab'} onClick={() => setTab(name)}>{tabLabel(name)}</button>)}
+          {['hub', 'profile', 'career', 'intro', 'link', 'qr', 'media'].map(name => <button key={name} type="button" className={tab === name ? 'tab active' : 'tab'} onClick={() => setTab(name)}>{tabLabel(name)}</button>)}
         </div>
       </section>
 
       {selected && plan ? <ProfileOverviewCard profile={selected} expanded /> : null}
+      {selected && plan ? <ProfileBrandingHubCard profile={selected} /> : null}
       {selected && plan ? <ProfileManagementSummary profile={selected} plan={plan} usage={usage} profiles={profiles} /> : null}
 
-      <section className="card stack">
-        <h3>프로필 기본 정보</h3>
+      {selected && tab === 'hub' && (
+        <section className="card stack">
+          <div className="split-row responsive-row">
+            <div className="stack gap-6">
+              <h3>통합 프로필 페이지</h3>
+              <div className="muted small-text">프로필 · 자기소개서 · 링크 · QR · 경력을 한 흐름으로 점검하고 공개 프로필 전환까지 연결하는 관리 탭입니다.</div>
+            </div>
+            <div className="chip-row">
+              <span className="chip">정리</span>
+              <span className="chip">연결</span>
+              <span className="chip">소통</span>
+            </div>
+          </div>
+          <div className="grid-3 profile-hub-summary-grid">
+            <div className="mini-card stack gap-8">
+              <strong>프로필 소개</strong>
+              <div className="muted small-text">{selected.headline || '한 줄 소개를 먼저 입력해 주세요.'}</div>
+              <div className="muted small-text">{selected.bio || '자기소개가 아직 없습니다.'}</div>
+              <div className="muted small-text">현재 하는 일: {selected.current_work || '미입력'} · 지역: {selected.location || '미입력'}</div>
+            </div>
+            <div className="mini-card stack gap-8">
+              <strong>공개 요소 현황</strong>
+              <div className="grid-2 metric-grid-tight">
+                <Metric label="자소서" value={selected.introductions.length} />
+                <Metric label="링크" value={selected.links.length} />
+                <Metric label="QR" value={selected.qrs.length} />
+                <Metric label="질문" value={selected.questions.length} />
+              </div>
+              <div className="muted small-text">공개 방식: {visibilityLabel(selected.visibility_mode)} · 질문 허용: {questionPermissionLabel(selected.question_permission)}</div>
+            </div>
+            <div className="mini-card stack gap-8">
+              <strong>빠른 실행</strong>
+              <div className="action-wrap wrap-row">
+                <button type="button" className="ghost" onClick={() => setTab('profile')}>기본정보 수정</button>
+                <button type="button" className="ghost" onClick={() => setTab('intro')}>자소서 추가</button>
+                <button type="button" className="ghost" onClick={() => setTab('link')}>링크 추가</button>
+                <button type="button" className="ghost" onClick={() => setTab('qr')}>QR 추가</button>
+              </div>
+              <div className="action-wrap wrap-row">
+                <a className="button-link" href={getPublicProfileUrl(selected.slug)} target="_blank" rel="noreferrer">공개 페이지 열기</a>
+                <button type="button" className="ghost" onClick={() => copyText(getPublicProfileUrl(selected.slug), '공개 프로필 주소를 복사했습니다.')}>주소 복사</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {selected && tab === 'profile' && (
+        <section className="card stack">
+          <h3>프로필 기본 정보</h3>
         <div className="grid-2">
           <TextField label="이름 / 닉네임" value={profileForm.display_name} onChange={v => setProfileForm({ ...profileForm, display_name: v, title: v })} />
           <TextField label="프로필 제목" value={profileForm.title} onChange={v => setProfileForm({ ...profileForm, title: v, display_name: profileForm.display_name || v })} />
@@ -4859,7 +4908,8 @@ function ProfilePage() {
           </div>
         </div>
         <button disabled={busy} type="button" onClick={saveProfile}>{busy ? '저장 중...' : '프로필 저장'}</button>
-      </section>
+        </section>
+      )}
 
       {selected && tab === 'career' && (
         <section className="card stack">
@@ -5027,6 +5077,135 @@ function ProfileOverviewCard({ profile, expanded = false }) {
   )
 }
 
+
+function ProfileBrandingHubCard({ profile }) {
+  const growth = buildProfileGrowthChecklist(profile)
+  const analytics = getProfileLocalAnalyticsSummary(profile)
+  const publicUrl = getPublicProfileUrl(profile?.slug)
+  const summaryRows = [
+    { label: '정리', value: `${profile?.introductions?.length || 0}개 소개서 · ${profile?.careers?.length || 0}개 경력` },
+    { label: '연결', value: `${profile?.links?.length || 0}개 링크 · ${profile?.qrs?.length || 0}개 QR` },
+    { label: '소통', value: `${profile?.questions?.length || 0}개 질문 · 공개 ${visibilityLabel(profile?.visibility_mode)}` },
+  ]
+
+  async function handleShare() {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${profile?.display_name || profile?.title || '프토리'} 프로필`, url: publicUrl })
+        return
+      }
+    } catch {}
+    await copyText(publicUrl, '공개 프로필 주소를 복사했습니다.')
+  }
+
+  return (
+    <section className="card stack brand-hub-card">
+      <div className="split-row responsive-row brand-hub-head">
+        <div className="stack gap-6">
+          <strong>브랜딩 허브</strong>
+          <div className="muted small-text">광고 2안 기준으로 “정리 → 연결 → 소통” 흐름을 바로 점검하는 실행 보드입니다.</div>
+        </div>
+        <div className="chip-row">
+          <span className="chip">완성도 {growth.percent}%</span>
+          <span className="chip">공개 /p/{profile?.slug}</span>
+        </div>
+      </div>
+      <div className="grid-3 profile-growth-grid">
+        <div className="mini-card stack gap-8">
+          <strong>MVP 체크리스트</strong>
+          <div className="stack compact-list">
+            {growth.items.map(item => <div key={item.key} className={`growth-check-item ${item.done ? 'done' : ''}`}><strong>{item.done ? '완료' : '필수'}</strong><div><div>{item.label}</div><div className="muted small-text">{item.description}</div></div></div>)}
+          </div>
+        </div>
+        <div className="mini-card stack gap-8">
+          <strong>공개 프로필 카드</strong>
+          <div className="public-profile-mini-card" style={{ borderColor: profile?.theme_color || '#3b82f6' }}>
+            <div className="public-profile-mini-top" style={{ backgroundImage: profile?.cover_image_url ? `url(${profile.cover_image_url})` : undefined }} />
+            <div className="public-profile-mini-body stack gap-6">
+              <div className="avatar profile-mini-avatar">{profile?.profile_image_url ? <img src={profile.profile_image_url} alt={profile.display_name || profile.title} /> : <span>{(profile?.display_name || profile?.title || 'P').slice(0, 1)}</span>}</div>
+              <div>
+                <strong>{profile?.display_name || profile?.title}</strong>
+                <div className="muted small-text">{profile?.headline || '한 줄 소개를 입력해보세요.'}</div>
+              </div>
+              <div className="chip-row">
+                {summaryRows.map(item => <span key={item.label} className="chip light-chip">{item.label}</span>)}
+              </div>
+            </div>
+          </div>
+          <div className="action-wrap wrap-row">
+            <button type="button" className="ghost" onClick={() => copyText(publicUrl, '공개 프로필 주소를 복사했습니다.')}>주소 복사</button>
+            <button type="button" className="ghost" onClick={handleShare}>공유</button>
+            <a className="button-link" href={publicUrl} target="_blank" rel="noreferrer">공개 페이지 열기</a>
+          </div>
+        </div>
+        <div className="mini-card stack gap-8">
+          <strong>현재 퍼널 현황</strong>
+          <div className="grid-2 metric-grid-tight">
+            <Metric label="방문" value={analytics.visits} />
+            <Metric label="링크 클릭" value={analytics.linkClicks} />
+            <Metric label="QR 클릭" value={analytics.qrClicks} />
+            <Metric label="문의 전환" value={analytics.leads} />
+          </div>
+          <div className="stack compact-list">
+            {summaryRows.map(item => <div key={item.label} className="growth-summary-row"><strong>{item.label}</strong><span className="muted small-text">{item.value}</span></div>)}
+          </div>
+          <div className="muted small-text">핵심 한 줄: QR + 프로필 + 링크가 먼저 완성되면 공개 전환 흐름의 뼈대가 만들어집니다.</div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUrl }) {
+  const publicUrl = getPublicProfileUrl(profile?.slug)
+  const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필'
+  const quickTags = [
+    profile?.current_work || '현재 하는 일 미입력',
+    profile?.industry_category || '업종 미입력',
+    profile?.location || '지역 미입력',
+  ].filter(Boolean)
+
+  return (
+    <section className="public-hero-card" style={{ '--public-accent': profile?.theme_color || '#facc15' }}>
+      <div className="public-hero-cover" style={{ backgroundImage: profile?.cover_image_url ? `url(${profile.cover_image_url})` : undefined }} />
+      <div className="public-hero-body stack">
+        <div className="public-hero-main">
+          <div className="avatar public-hero-avatar">{profile?.profile_image_url ? <img src={profile.profile_image_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}</div>
+          <div className="stack gap-6 public-hero-copy">
+            <div className="chip-row">
+              <span className="chip accent-chip">프토리 공개 프로필</span>
+              <span className="chip light-chip">/{profile?.slug}</span>
+            </div>
+            <h1>{profileName}</h1>
+            <div className="public-hero-headline">{profile?.headline || '한 줄 소개가 아직 등록되지 않았습니다.'}</div>
+            <div className="muted public-hero-bio">{profile?.bio || '프로필 소개가 아직 등록되지 않았습니다.'}</div>
+            <div className="chip-row wrap-row">
+              {quickTags.map(item => <span key={item} className="chip light-chip">{item}</span>)}
+            </div>
+          </div>
+        </div>
+        <div className="public-hero-side stack gap-12">
+          <div className="grid-2 metric-grid-tight">
+            <Metric label="경력" value={profile?.careers?.length || 0} />
+            <Metric label="링크" value={profile?.links?.length || 0} />
+            <Metric label="QR" value={profile?.qrs?.length || 0} />
+            <Metric label="소개서" value={profile?.introductions?.length || 0} />
+          </div>
+          <div className="grid-2 metric-grid-tight public-hero-analytics">
+            <Metric label="방문" value={analytics.visits} />
+            <Metric label="클릭" value={analytics.linkClicks + analytics.qrClicks + analytics.ctaClicks} />
+          </div>
+          <div className="action-wrap wrap-row public-hero-actions">
+            <button type="button" className="ghost" onClick={onCopyUrl}>주소 복사</button>
+            <button type="button" onClick={onShareUrl}>공유</button>
+            <a className="button-link" href={publicUrl} target="_blank" rel="noreferrer">새 탭 열기</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function CareerCard({ item, showDetail = false }) {
   const [open, setOpen] = useState(false)
   const mediaItems = item.media_items || []
@@ -5141,10 +5320,26 @@ function PublicProfilePage() {
   const canAsk = profile.question_permission !== 'none'
   const brandPages = readLocalItems(LOCAL_STORAGE_KEYS.brandPages, buildDefaultBrandPages()).filter(item => item.status !== '중지')
   const adSlots = readLocalItems(LOCAL_STORAGE_KEYS.adSlots, buildDefaultAdSlots()).filter(item => item.status === '판매중')
+  const analytics = getProfileLocalAnalyticsSummary(profile)
+  const publicUrl = getPublicProfileUrl(profile.slug)
   const publicCtas = [
     { label: '명함 제작 문의', type: 'cta_click', source: 'business_card' },
     { label: '브랜드 페이지 문의', type: 'cta_click', source: 'brand_page' },
   ]
+
+  async function handleCopyUrl() {
+    await copyText(publicUrl, '공개 프로필 주소를 복사했습니다.')
+  }
+
+  async function handleShareUrl() {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${profile.display_name || profile.title} 공개 프로필`, url: publicUrl })
+        return
+      }
+    } catch {}
+    await handleCopyUrl()
+  }
 
   function handlePublicLinkClick(item) {
     recordAnalyticsEvent({ type: 'link_click', profileId: profile.id, profileSlug: profile.slug, linkId: item.id, linkTitle: item.title, source: item.original_url || item.full_short_url || '' })
@@ -5162,24 +5357,51 @@ function PublicProfilePage() {
 
   return (
     <div className="public-shell">
-      <div className="public-container">
-        <ProfileOverviewCard profile={profile} />
-        <section className="card stack">
-          <div className="split-row">
-            <h3>{owner.nickname}님의 한줄 경력</h3>
-            <button type="button" className="ghost" onClick={reportProfile}>신고</button>
+      <div className="public-container public-container-expanded">
+        <PublicProfileHeroCard profile={profile} owner={owner} analytics={analytics} onCopyUrl={handleCopyUrl} onShareUrl={handleShareUrl} />
+        <section className="grid-2 public-summary-grid">
+          <div className="card stack">
+            <div className="split-row responsive-row">
+              <h3>한 번에 정리된 소개</h3>
+              <button type="button" className="ghost" onClick={reportProfile}>신고</button>
+            </div>
+            <div className="muted small-text">광고 2안 기준의 핵심 흐름인 프로필, 소개서, 링크, QR이 한 화면에 연결되도록 구성했습니다.</div>
+            <div className="stack compact-list">
+              <div className="growth-summary-row"><strong>프로필</strong><span className="muted small-text">{profile.display_name || profile.title}</span></div>
+              <div className="growth-summary-row"><strong>소개서</strong><span className="muted small-text">{profile.introductions.length}개</span></div>
+              <div className="growth-summary-row"><strong>링크 허브</strong><span className="muted small-text">{profile.links.length}개</span></div>
+              <div className="growth-summary-row"><strong>QR 공유</strong><span className="muted small-text">{profile.qrs.length}개</span></div>
+            </div>
+            <div className="action-wrap wrap-row">
+              <button type="button" className="ghost" onClick={handleCopyUrl}>주소 복사</button>
+              <button type="button" className="ghost" onClick={handleShareUrl}>공유</button>
+              <a className="button-link" href={`${getApiBase() || ''}/public/p/${profile.slug}`} target="_blank" rel="noreferrer">정적 페이지 열기</a>
+            </div>
           </div>
-          {profile.careers.map(item => <CareerCard key={item.id} item={item} />)}
+          <div className="card stack">
+            <div className="split-row responsive-row"><h3>공개 퍼널</h3><span className="muted small-text">로컬 분석 기준</span></div>
+            <div className="grid-2 metric-grid-tight">
+              <Metric label="방문" value={analytics.visits} />
+              <Metric label="링크 클릭" value={analytics.linkClicks} />
+              <Metric label="QR 클릭" value={analytics.qrClicks} />
+              <Metric label="문의" value={analytics.leads} />
+            </div>
+            <div className="muted small-text">실제 운영에서는 공개 프로필 방문 → 링크 클릭 → QR 스캔 → 문의 전환 흐름을 우선 관리하면 됩니다.</div>
+          </div>
         </section>
-        <section className="grid-2">
+        <section className="card stack">
+          <div className="split-row responsive-row"><h3>{owner.nickname}님의 한줄 경력</h3><span className="muted small-text">스토리 / 신뢰 요소</span></div>
+          {profile.careers.length ? profile.careers.map(item => <CareerCard key={item.id} item={item} />) : <div className="muted">등록된 경력이 없습니다.</div>}
+        </section>
+        <section className="grid-2 public-summary-grid">
           <div className="card stack">
             <h3>자기소개서</h3>
-            {profile.introductions.map(item => <div key={item.id} className="bordered-box"><strong>{item.title}</strong><div className="pre-wrap">{item.content}</div></div>)}
+            {profile.introductions.length ? profile.introductions.map(item => <div key={item.id} className="bordered-box"><strong>{item.title}</strong><div className="pre-wrap">{item.content}</div></div>) : <div className="muted">공개된 자기소개서가 없습니다.</div>}
           </div>
           <div className="card stack">
-            <h3>링크 / QR</h3><div className="muted small-text">정적 공개 페이지: <a href={`${getApiBase() || ''}/public/p/${profile.slug}`} target="_blank" rel="noreferrer">열기</a></div>
+            <div className="split-row responsive-row"><h3>링크 / QR</h3><span className="muted small-text">링크 허브 + 공유</span></div>
             <SocialLinkList items={profile.links} onItemClick={handlePublicLinkClick} />
-            <div className="qr-grid">{profile.qrs.map(item => <button type="button" key={item.id} className="qr-card ghost" onClick={() => handleQrClick(item)}><img src={item.image_url} alt={item.title} /><strong>{item.title}</strong><div className="muted small-text">{item.redirect_url || item.target_url}</div></button>)}</div>
+            <div className="qr-grid">{profile.qrs.length ? profile.qrs.map(item => <button type="button" key={item.id} className="qr-card ghost" onClick={() => handleQrClick(item)}><img src={item.image_url} alt={item.title} /><strong>{item.title}</strong><div className="muted small-text">{item.redirect_url || item.target_url}</div></button>) : <div className="muted">등록된 QR이 없습니다.</div>}</div>
           </div>
         </section>
         <section className="card stack">
@@ -6453,7 +6675,7 @@ function SocialLinkList({ items, editable = false, onItemClick }) {
 }
 
 function tabLabel(name) {
-  return { profile: '기본', career: '경력', intro: '자소서', link: 'URLs', qr: 'QR', media: '미디어' }[name] || name
+  return { hub: '허브', profile: '기본', career: '경력', intro: '자소서', link: 'URLs', qr: 'QR', media: '미디어' }[name] || name
 }
 
 function visibilityLabel(value) {
@@ -6462,6 +6684,77 @@ function visibilityLabel(value) {
 
 function questionPermissionLabel(value) {
   return { none: '질문 안 받음', members: '로그인 사용자만', any: '누구나 가능' }[value] || value
+}
+
+function getPublicProfileUrl(slug) {
+  if (typeof window === 'undefined') return `/p/${slug || ''}`
+  return `${window.location.origin}/p/${slug || ''}`
+}
+
+async function copyText(value, successMessage = '복사했습니다.') {
+  try {
+    await navigator.clipboard.writeText(String(value || ''))
+    window.alert(successMessage)
+    return true
+  } catch {
+    window.alert('복사에 실패했습니다.')
+    return false
+  }
+}
+
+function getProfileLocalAnalyticsSummary(profile) {
+  const slug = String(profile?.slug || '')
+  const profileId = Number(profile?.id || 0)
+  const events = readLocalItems(LOCAL_STORAGE_KEYS.analyticsEvents, [])
+  return events.reduce((acc, item) => {
+    const sameSlug = slug && String(item.profileSlug || '') === slug
+    const sameId = profileId > 0 && Number(item.profileId || 0) === profileId
+    if (!sameSlug && !sameId) return acc
+    const type = String(item.type || '')
+    if (type === 'visit') acc.visits += 1
+    if (type === 'link_click') acc.linkClicks += 1
+    if (type === 'qr_click') acc.qrClicks += 1
+    if (type === 'cta_click') acc.ctaClicks += 1
+    if (type === 'lead') acc.leads += 1
+    return acc
+  }, { visits: 0, linkClicks: 0, qrClicks: 0, ctaClicks: 0, leads: 0 })
+}
+
+function buildProfileGrowthChecklist(profile) {
+  const items = [
+    {
+      key: 'headline',
+      label: '프로필 기본 정보',
+      done: Boolean((profile?.display_name || profile?.title || '').trim() && (profile?.headline || '').trim()),
+      description: '닉네임, 한 줄 소개를 먼저 채워서 공개 페이지 첫 인상을 만듭니다.',
+    },
+    {
+      key: 'intro',
+      label: '자기소개서',
+      done: Boolean(profile?.introductions?.length),
+      description: '광고 2안의 “프로필, 소개서, 링크, QR까지” 흐름 중 소개 영역입니다.',
+    },
+    {
+      key: 'link',
+      label: '링크 허브',
+      done: Boolean(profile?.links?.length),
+      description: '블로그, 포트폴리오, 사업 링크를 연결해 실제 전환 통로를 만듭니다.',
+    },
+    {
+      key: 'qr',
+      label: 'QR 공유',
+      done: Boolean(profile?.qrs?.length),
+      description: '오프라인 소개, 명함, 채팅 공유에서 바로 스캔할 수 있게 연결합니다.',
+    },
+    {
+      key: 'career',
+      label: '경력/스토리',
+      done: Boolean(profile?.careers?.length),
+      description: '이력과 후기, 증빙 이미지를 추가해 신뢰도를 올립니다.',
+    },
+  ]
+  const completed = items.filter(item => item.done).length
+  return { items, completed, total: items.length, percent: items.length ? Math.round(completed / items.length * 100) : 0 }
 }
 
 function emptyProfile() {
