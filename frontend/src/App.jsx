@@ -5238,6 +5238,217 @@ function CareerCard({ item, showDetail = false }) {
   )
 }
 
+
+function PublicProfileEvidenceCard({ item }) {
+  const previewUrl = item?.preview_url || item?.url || ''
+  const title = item?.name || '기록 자료'
+  const category = item?.category || '기록'
+  const mediaKind = item?.media_kind || 'file'
+  const createdAt = item?.created_at ? formatDateLabel(item.created_at) : ''
+  const sizeLabel = item?.size_mb ? `${item.size_mb}MB` : ''
+  const metaParts = [category, mediaKind, createdAt, sizeLabel].filter(Boolean)
+
+  function openItem() {
+    const target = item?.url || item?.preview_url || ''
+    if (!target) return
+    window.open(target, '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <article className="public-evidence-card stack gap-10">
+      {previewUrl ? (
+        <button type="button" className="public-evidence-preview" onClick={openItem}>
+          {mediaKind === 'video' ? <video src={previewUrl} muted playsInline preload="metadata" /> : <img src={previewUrl} alt={title} />}
+        </button>
+      ) : (
+        <div className="public-evidence-preview public-evidence-placeholder"><span>{category}</span></div>
+      )}
+      <div className="stack gap-6 public-evidence-copy">
+        <strong>{title}</strong>
+        {metaParts.length ? <div className="muted small-text">{metaParts.join(' · ')}</div> : null}
+        <div className="action-wrap wrap-row public-evidence-actions">
+          <button type="button" className="ghost small-button" onClick={openItem}>자료 보기</button>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function PublicProfileQuestionDigest({ items = [] }) {
+  const answeredItems = items.filter(item => item?.status === 'answered').slice(0, 3)
+  if (!answeredItems.length) return <div className="muted">공개된 기록형 Q&A가 없습니다.</div>
+  return (
+    <div className="stack compact-list">
+      {answeredItems.map(item => (
+        <article key={item.id} className="public-qa-item stack gap-8">
+          <div className="public-qa-question">Q. {item.question_text}</div>
+          <div className="public-qa-answer">A. {item.answer_text || '답변 준비 중입니다.'}</div>
+          <div className="muted small-text">{item.display_nickname || '익명'} · {formatDateLabel(item.answered_at || item.created_at)}</div>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function PublicProfileUnifiedLayout({ profile, owner, analytics, onCopyUrl, onShareUrl, onReport, onLinkClick, onQrClick, onCtaClick, publicCtas = [] }) {
+  const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필'
+  const storyHighlights = [profile?.headline, profile?.bio, profile?.current_work ? `현재 ${profile.current_work}` : '', profile?.location ? `${profile.location} 기반` : ''].filter(Boolean)
+  const primaryIntroduction = profile?.introductions?.[0] || null
+  const uploadItems = Array.isArray(profile?.uploads) ? profile.uploads : []
+  const feedHighlightItems = uploadItems.slice(0, 6)
+  const compactLinks = Array.isArray(profile?.links) ? profile.links.slice(0, 5) : []
+  const compactQrs = Array.isArray(profile?.qrs) ? profile.qrs.slice(0, 3) : []
+
+  return (
+    <section className="public-unified-shell">
+      <div className="public-unified-main stack gap-16">
+        <section className="card stack public-focus-card">
+          <div className="split-row responsive-row">
+            <div>
+              <h3>프로필 한눈에 보기</h3>
+              <div className="muted small-text">중요도가 높은 프로필 · 스토리 · 경력 · 링크 · 소개서를 한 화면에 묶었습니다.</div>
+            </div>
+            <div className="action-wrap wrap-row public-secondary-actions">
+              <button type="button" className="ghost small-button" onClick={onCopyUrl}>주소 복사</button>
+              <button type="button" className="ghost small-button" onClick={onShareUrl}>공유</button>
+              <button type="button" className="ghost small-button" onClick={onReport}>신고</button>
+            </div>
+          </div>
+          <div className="public-identity-panel">
+            <div className="public-identity-copy stack gap-8">
+              <div className="chip-row wrap-row">
+                <span className="chip accent-chip">{profileName}</span>
+                {profile?.industry_category ? <span className="chip light-chip">{profile.industry_category}</span> : null}
+                {profile?.current_work ? <span className="chip light-chip">{profile.current_work}</span> : null}
+              </div>
+              <div className="public-story-summary">{storyHighlights[0] || '소개 문구가 아직 등록되지 않았습니다.'}</div>
+              {storyHighlights.length > 1 ? (
+                <div className="stack compact-list public-story-points">
+                  {storyHighlights.slice(1, 4).map((item, idx) => <div key={`${item}-${idx}`} className="growth-summary-row"><strong>스토리</strong><span className="muted small-text">{item}</span></div>)}
+                </div>
+              ) : null}
+            </div>
+            <div className="public-identity-stats">
+              <Metric label="경력" value={profile?.careers?.length || 0} />
+              <Metric label="링크" value={profile?.links?.length || 0} />
+              <Metric label="자료" value={uploadItems.length} />
+              <Metric label="방문" value={analytics?.visits || 0} />
+            </div>
+          </div>
+        </section>
+
+        <section className="card stack public-story-career-card">
+          <div className="split-row responsive-row">
+            <div>
+              <h3>스토리 · 역사 · 경력</h3>
+              <div className="muted small-text">핵심 이력은 크게, 보조 정보는 접을 수 있게 구성했습니다.</div>
+            </div>
+            <span className="chip light-chip">{profile?.careers?.length || 0}개 경력</span>
+          </div>
+          {profile?.careers?.length ? (
+            <div className="stack compact-list public-career-timeline">
+              {profile.careers.map(item => <CareerCard key={item.id} item={item} />)}
+            </div>
+          ) : (
+            <div className="muted">등록된 스토리/경력이 없습니다.</div>
+          )}
+        </section>
+
+        <section className="grid-2 public-content-split">
+          <div className="card stack public-intro-card">
+            <div className="split-row responsive-row">
+              <h3>소개서</h3>
+              <span className="muted small-text">중요 내용 우선</span>
+            </div>
+            {primaryIntroduction ? (
+              <article className="bordered-box stack gap-10 public-intro-feature">
+                <strong>{primaryIntroduction.title}</strong>
+                {primaryIntroduction.category ? <div className="muted small-text">{primaryIntroduction.category}</div> : null}
+                <div className="pre-wrap public-intro-content">{primaryIntroduction.content}</div>
+                {profile.introductions.length > 1 ? <div className="muted small-text">추가 소개서 {profile.introductions.length - 1}개</div> : null}
+              </article>
+            ) : <div className="muted">공개된 자기소개서가 없습니다.</div>}
+          </div>
+          <div className="card stack public-feed-card">
+            <div className="split-row responsive-row">
+              <div>
+                <h3>피드 · 근거자료 기록</h3>
+                <div className="muted small-text">사진과 자료를 함께 빠르게 훑어볼 수 있게 정리했습니다.</div>
+              </div>
+              <span className="chip light-chip">{uploadItems.length}개 자료</span>
+            </div>
+            {feedHighlightItems.length ? (
+              <div className="public-evidence-grid">
+                {feedHighlightItems.map(item => <PublicProfileEvidenceCard key={item.id} item={item} />)}
+              </div>
+            ) : <div className="muted">등록된 근거자료가 없습니다.</div>}
+          </div>
+        </section>
+      </div>
+
+      <aside className="public-unified-side stack gap-16">
+        <section className="card stack public-side-card compact-side-card">
+          <div className="split-row responsive-row">
+            <h3>링크</h3>
+            <span className="muted small-text">보조 영역</span>
+          </div>
+          {compactLinks.length ? (
+            <div className="stack compact-list public-link-stack">
+              {compactLinks.map(item => (
+                <a key={item.id} className="social-link-chip compact-link-chip" href={item.original_url || item.full_short_url} target="_blank" rel="noreferrer" onClick={() => onLinkClick(item)}>
+                  <span className="link-type-chip">{item.link_type_label || item.link_type || '링크'}</span>
+                  <span className="link-title-text">{item.title || item.display_host || item.original_url}</span>
+                </a>
+              ))}
+            </div>
+          ) : <div className="muted">공개 링크가 없습니다.</div>}
+        </section>
+
+        <section className="card stack public-side-card compact-side-card">
+          <div className="split-row responsive-row">
+            <h3>QR</h3>
+            <span className="muted small-text">빠른 공유</span>
+          </div>
+          {compactQrs.length ? (
+            <div className="public-compact-qr-grid">
+              {compactQrs.map(item => (
+                <button type="button" key={item.id} className="qr-card ghost public-compact-qr-card" onClick={() => onQrClick(item)}>
+                  <img src={item.image_url} alt={item.title} />
+                  <strong>{item.title}</strong>
+                </button>
+              ))}
+            </div>
+          ) : <div className="muted">등록된 QR이 없습니다.</div>}
+        </section>
+
+        <section className="card stack public-side-card compact-side-card">
+          <div className="split-row responsive-row">
+            <h3>기록형 Q&A</h3>
+            <span className="muted small-text">소통 요약</span>
+          </div>
+          <PublicProfileQuestionDigest items={profile?.questions || []} />
+        </section>
+
+        <section className="card stack public-side-card compact-side-card">
+          <div className="split-row responsive-row">
+            <h3>전환</h3>
+            <span className="muted small-text">작게 배치</span>
+          </div>
+          <div className="grid-2 metric-grid-tight public-side-metrics">
+            <Metric label="링크" value={analytics?.linkClicks || 0} />
+            <Metric label="QR" value={analytics?.qrClicks || 0} />
+            <Metric label="문의" value={analytics?.leads || 0} />
+            <Metric label="CTA" value={analytics?.ctaClicks || 0} />
+          </div>
+          <div className="action-wrap wrap-row public-mini-cta-wrap">
+            {publicCtas.map(item => <button key={item.label} type="button" className="ghost small-button" onClick={() => onCtaClick(item)}>{item.label}</button>)}
+          </div>
+        </section>
+      </aside>
+    </section>
+  )
+}
+
 function PublicProfilePage() {
   const { slug } = useParams()
   const [data, setData] = useState(null)
@@ -5366,60 +5577,24 @@ function PublicProfilePage() {
     <div className="public-shell">
       <div className="public-container public-container-expanded">
         <PublicProfileHeroCard profile={profile} owner={owner} analytics={analytics} onCopyUrl={handleCopyUrl} onShareUrl={handleShareUrl} />
-        <section className="grid-2 public-summary-grid">
-          <div className="card stack">
-            <div className="split-row responsive-row">
-              <h3>한 번에 정리된 소개</h3>
-              <button type="button" className="ghost" onClick={reportProfile}>신고</button>
-            </div>
-            <div className="muted small-text">광고 2안 기준의 핵심 흐름인 프로필, 소개서, 링크, QR이 한 화면에 연결되도록 구성했습니다.</div>
-            <div className="stack compact-list">
-              <div className="growth-summary-row"><strong>프로필</strong><span className="muted small-text">{profile.display_name || profile.title}</span></div>
-              <div className="growth-summary-row"><strong>소개서</strong><span className="muted small-text">{profile.introductions.length}개</span></div>
-              <div className="growth-summary-row"><strong>링크 허브</strong><span className="muted small-text">{profile.links.length}개</span></div>
-              <div className="growth-summary-row"><strong>QR 공유</strong><span className="muted small-text">{profile.qrs.length}개</span></div>
-            </div>
-            <div className="action-wrap wrap-row">
-              <button type="button" className="ghost" onClick={handleCopyUrl}>주소 복사</button>
-              <button type="button" className="ghost" onClick={handleShareUrl}>공유</button>
-              <a className="button-link" href={`${getApiBase() || ''}/public/p/${profile.slug}`} target="_blank" rel="noreferrer">정적 페이지 열기</a>
-            </div>
-          </div>
-          <div className="card stack">
-            <div className="split-row responsive-row"><h3>공개 퍼널</h3><span className="muted small-text">로컬 분석 기준</span></div>
-            <div className="grid-2 metric-grid-tight">
-              <Metric label="방문" value={analytics.visits} />
-              <Metric label="링크 클릭" value={analytics.linkClicks} />
-              <Metric label="QR 클릭" value={analytics.qrClicks} />
-              <Metric label="문의" value={analytics.leads} />
-            </div>
-            <div className="muted small-text">실제 운영에서는 공개 프로필 방문 → 링크 클릭 → QR 스캔 → 문의 전환 흐름을 우선 관리하면 됩니다.</div>
-          </div>
-        </section>
-        <section className="card stack">
-          <div className="split-row responsive-row"><h3>{owner.nickname}님의 한줄 경력</h3><span className="muted small-text">스토리 / 신뢰 요소</span></div>
-          {profile.careers.length ? profile.careers.map(item => <CareerCard key={item.id} item={item} />) : <div className="muted">등록된 경력이 없습니다.</div>}
-        </section>
-        <section className="grid-2 public-summary-grid">
-          <div className="card stack">
-            <h3>자기소개서</h3>
-            {profile.introductions.length ? profile.introductions.map(item => <div key={item.id} className="bordered-box"><strong>{item.title}</strong><div className="pre-wrap">{item.content}</div></div>) : <div className="muted">공개된 자기소개서가 없습니다.</div>}
-          </div>
-          <div className="card stack">
-            <div className="split-row responsive-row"><h3>링크 / QR</h3><span className="muted small-text">링크 허브 + 공유</span></div>
-            <SocialLinkList items={profile.links} onItemClick={handlePublicLinkClick} />
-            <div className="qr-grid">{profile.qrs.length ? profile.qrs.map(item => <button type="button" key={item.id} className="qr-card ghost" onClick={() => handleQrClick(item)}><img src={item.image_url} alt={item.title} /><strong>{item.title}</strong><div className="muted small-text">{item.redirect_url || item.target_url}</div></button>) : <div className="muted">등록된 QR이 없습니다.</div>}</div>
-          </div>
-        </section>
-        <section className="card stack">
-          <div className="split-row responsive-row"><h3>문의 / 전환</h3><span className="muted small-text">공개 프로필 CTA</span></div>
-          <div className="action-wrap wrap-row">
-            {publicCtas.map(item => <button key={item.label} type="button" className="ghost" onClick={() => handlePublicCtaClick(item)}>{item.label}</button>)}
-          </div>
-          {brandPages.length ? <div className="stack compact-list">{brandPages.slice(0, 2).map(item => <div key={item.id} className="mini-card"><strong>{item.name}</strong><div className="muted small-text">/{item.slug} · {item.theme}</div></div>)}</div> : null}
-          {adSlots.length ? <div className="stack compact-list">{adSlots.slice(0, 2).map(item => <div key={item.id} className="mini-card"><strong>{item.name}</strong><div className="muted small-text">{item.placement} · ₩{formatMoney(item.price)}</div></div>)}</div> : null}
-        </section>
-        {profile.uploads?.length ? <section className="card stack"><h3>사진 / 영상</h3><MediaPreviewList items={profile.uploads.map(item => ({ ...item, url: item.url }))} /></section> : null}
+        <PublicProfileUnifiedLayout
+          profile={profile}
+          owner={owner}
+          analytics={analytics}
+          onCopyUrl={handleCopyUrl}
+          onShareUrl={handleShareUrl}
+          onReport={reportProfile}
+          onLinkClick={handlePublicLinkClick}
+          onQrClick={handleQrClick}
+          onCtaClick={handlePublicCtaClick}
+          publicCtas={publicCtas}
+        />
+        {brandPages.length || adSlots.length ? (
+          <section className="grid-2 public-summary-grid public-mini-business-grid">
+            {brandPages.length ? <div className="card stack public-mini-business-card"><div className="split-row responsive-row"><h3>브랜드 페이지</h3><span className="muted small-text">보조 영역</span></div><div className="stack compact-list">{brandPages.slice(0, 2).map(item => <div key={item.id} className="mini-card"><strong>{item.name}</strong><div className="muted small-text">/{item.slug} · {item.theme}</div></div>)}</div></div> : null}
+            {adSlots.length ? <div className="card stack public-mini-business-card"><div className="split-row responsive-row"><h3>광고 슬롯</h3><span className="muted small-text">보조 영역</span></div><div className="stack compact-list">{adSlots.slice(0, 2).map(item => <div key={item.id} className="mini-card"><strong>{item.name}</strong><div className="muted small-text">{item.placement} · ₩{formatMoney(item.price)}</div></div>)}</div></div> : null}
+          </section>
+        ) : null}
         <QuestionBoard profile={profile} ownerNickname={owner.nickname} isOwner={Boolean(getStoredUser()?.id && Number(getStoredUser()?.id) === Number(owner?.id))} canAsk={canAsk} onRefresh={async () => setData(await api(`/api/profile-public/${slug}`))} />
       </div>
     </div>
