@@ -724,15 +724,298 @@ function MorePage({ onOpenSheet, isAdmin }) {
 }
 
 
+function fmtDateValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseDateValue(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  const [, year, month, day] = match
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  if (Number.isNaN(date.getTime())) return null
+  return date
+}
+
+function buildScheduleMonthCells(monthCursor) {
+  const firstDay = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1)
+  const start = new Date(firstDay)
+  start.setDate(firstDay.getDate() - firstDay.getDay())
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    return date
+  })
+}
+
 function SchedulePage() {
+  const todayKey = fmtDateValue(new Date())
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [monthCursor, setMonthCursor] = useState(() => {
+    const initial = parseDateValue(searchParams.get('date')) || new Date()
+    return new Date(initial.getFullYear(), initial.getMonth(), 1)
+  })
+  const [selectedDate, setSelectedDate] = useState(() => searchParams.get('date') || todayKey)
+  const [entries, setEntries] = useState([])
+  const [dayNotes, setDayNotes] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [dayMemoOpen, setDayMemoOpen] = useState(false)
+  const [scheduleForm, setScheduleForm] = useState({ schedule_date: searchParams.get('date') || todayKey, schedule_time: '', customer_name: '', memo: '' })
+  const [dayMemo, setDayMemo] = useState('')
+
+  useEffect(() => {
+    const requestDate = parseDateValue(searchParams.get('date'))
+    if (requestDate) {
+      const key = fmtDateValue(requestDate)
+      setSelectedDate(key)
+      setMonthCursor(new Date(requestDate.getFullYear(), requestDate.getMonth(), 1))
+      setScheduleForm(prev => ({ ...prev, schedule_date: key }))
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadScheduleData() {
+      setLoading(true)
+      setError('')
+      try {
+        const firstDate = fmtDateValue(new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1))
+        const data = await api(`/api/work-schedule?start_date=${encodeURIComponent(firstDate)}&days=42`)
+        if (cancelled) return
+        setEntries(Array.isArray(data?.items) ? data.items : [])
+        setDayNotes(data?.day_notes && typeof data.day_notes === 'object' ? data.day_notes : {})
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || '일정 데이터를 불러오지 못했습니다.')
+          setEntries([])
+          setDayNotes({})
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadScheduleData()
+    return () => { cancelled = true }
+  }, [monthCursor])
+
+  const entriesByDate = useMemo(() => {
+    const mapped = {}
+    for (const item of entries) {
+      const key = String(item?.schedule_date || '').slice(0, 10)
+      if (!key) continue
+      if (!mapped[key]) mapped[key] = []
+      mapped[key].push(item)
+    }
+    Object.values(mapped).forEach(list => list.sort((a, b) => String(a?.schedule_time || '').localeCompare(String(b?.schedule_time || ''))))
+    return mapped
+  }, [entries])
+
+  const selectedEntries = entriesByDate[selectedDate] || []
+  const selectedNote = dayNotes[selectedDate]?.day_memo || ''
+  const monthCells = useMemo(() => buildScheduleMonthCells(monthCursor), [monthCursor])
+  const monthLabel = `${monthCursor.getFullYear()}년 ${monthCursor.getMonth() + 1}월`
+
+  useEffect(() => {
+    if (!composerOpen) {
+      setScheduleForm(prev => ({ ...prev, schedule_date: selectedDate || todayKey }))
+    }
+  }, [selectedDate, composerOpen, todayKey])
+
+  useEffect(() => {
+    if (!dayMemoOpen) {
+      setDayMemo(selectedNote)
+    }
+  }, [dayMemoOpen, selectedNote])
+
+  function moveMonth(diff) {
+    setMonthCursor(prev => new Date(prev.getFullYear(), prev.getMonth() + diff, 1))
+  }
+
+  function moveToToday() {
+    setSelectedDate(todayKey)
+    setMonthCursor(new Date())
+    setSearchParams({ date: todayKey })
+  }
+
+  function handleSelectDate(dateKey) {
+    setSelectedDate(dateKey)
+    setSearchParams({ date: dateKey })
+  }
+
+  async function reloadMonth() {
+    const firstDate = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1)
+    setMonthCursor(new Date(firstDate))
+    const data = await api(`/api/work-schedule?start_date=${encodeURIComponent(fmtDateValue(firstDate))}&days=42`)
+    setEntries(Array.isArray(data?.items) ? data.items : [])
+    setDayNotes(data?.day_notes && typeof data.day_notes === 'object' ? data.day_notes : {})
+  }
+
+  async function handleCreateSchedule(event) {
+    event.preventDefault()
+    const payload = {
+      schedule_date: scheduleForm.schedule_date || selectedDate || todayKey,
+      schedule_time: scheduleForm.schedule_time,
+      customer_name: scheduleForm.customer_name,
+      memo: scheduleForm.memo,
+    }
+    try {
+      await api('/api/work-schedule', { method: 'POST', body: JSON.stringify(payload) })
+      setComposerOpen(false)
+      setScheduleForm({ schedule_date: payload.schedule_date, schedule_time: '', customer_name: '', memo: '' })
+      setSelectedDate(payload.schedule_date)
+      setSearchParams({ date: payload.schedule_date })
+      if (parseDateValue(payload.schedule_date)) {
+        const nextDate = parseDateValue(payload.schedule_date)
+        setMonthCursor(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
+      }
+      await reloadMonth()
+    } catch (err) {
+      window.alert(err.message || '일정을 저장하지 못했습니다.')
+    }
+  }
+
+  async function handleSaveDayMemo() {
+    try {
+      await api('/api/work-schedule/day-note', {
+        method: 'PUT',
+        body: JSON.stringify({ schedule_date: selectedDate, day_memo: dayMemo }),
+      })
+      setDayNotes(prev => ({ ...prev, [selectedDate]: { ...(prev[selectedDate] || {}), day_memo: dayMemo } }))
+      setDayMemoOpen(false)
+      setSettingsOpen(false)
+    } catch (err) {
+      window.alert(err.message || '일정 메모를 저장하지 못했습니다.')
+    }
+  }
+
   return (
-    <section className="page-stack">
-      <div className="card stack more-page-card">
-        <div className="stack gap-8">
-          <strong>일정</strong>
-          <div className="muted">일정 기능을 연결하기 위한 기본 화면입니다.</div>
+    <section className="page-stack schedule-basic-page">
+      <div className="card stack schedule-basic-card">
+        <div className="schedule-basic-toolbar">
+          <div className="schedule-basic-toolbar-left">
+            <button type="button" className="ghost small" onClick={moveToToday}>오늘</button>
+          </div>
+          <div className="schedule-basic-toolbar-center">
+            <button type="button" className="ghost icon-button" onClick={() => moveMonth(-1)} aria-label="이전달">
+              <IconGlyph name="back" label="이전달" />
+            </button>
+            <strong className="schedule-basic-month-label">{monthLabel}</strong>
+            <button type="button" className="ghost icon-button schedule-next-button" onClick={() => moveMonth(1)} aria-label="다음달">
+              <IconGlyph name="back" label="다음달" />
+            </button>
+          </div>
+          <div className="schedule-basic-toolbar-right">
+            <button type="button" className="small icon-button" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }} aria-label="일정만들기" title="일정만들기">
+              <IconGlyph name="compose" label="일정만들기" />
+            </button>
+            <div className="schedule-basic-settings-wrap">
+              <button type="button" className="ghost icon-button" onClick={() => setSettingsOpen(prev => !prev)} aria-label="설정" title="설정">
+                <IconGlyph name="settings" label="설정" />
+              </button>
+              {settingsOpen ? (
+                <div className="schedule-basic-settings-popover">
+                  <button type="button" onClick={() => { setDayMemo(selectedNote); setDayMemoOpen(true) }}>날짜 메모</button>
+                  <button type="button" onClick={moveToToday}>오늘로 이동</button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="schedule-basic-weekdays">{['일', '월', '화', '수', '목', '금', '토'].map(day => <div key={day}>{day}</div>)}</div>
+        <div className="schedule-basic-grid">
+          {monthCells.map(date => {
+            const key = fmtDateValue(date)
+            const isToday = key === todayKey
+            const isSelected = key === selectedDate
+            const isCurrentMonth = date.getMonth() === monthCursor.getMonth()
+            const dayItems = entriesByDate[key] || []
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`schedule-basic-cell${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}${isCurrentMonth ? '' : ' is-outside'}`}
+                onClick={() => handleSelectDate(key)}
+              >
+                <div className="schedule-basic-cell-head">
+                  <span className="schedule-basic-date-number">{date.getDate()}</span>
+                  {dayItems.length ? <span className="schedule-basic-count">{dayItems.length}</span> : null}
+                </div>
+                <div className="schedule-basic-cell-body">
+                  {dayItems.slice(0, 2).map(item => (
+                    <div key={item.id} className="schedule-basic-entry-chip">
+                      <span>{item.schedule_time || '시간미정'}</span>
+                      <span>{item.customer_name || '일정'}</span>
+                    </div>
+                  ))}
+                  {!dayItems.length && dayNotes[key]?.day_memo ? <div className="schedule-basic-note-chip">메모</div> : null}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {loading ? <div className="muted">일정 불러오는 중...</div> : null}
+        {error ? <div className="form-error">{error}</div> : null}
+      </div>
+
+      <div className="card stack schedule-detail-card">
+        <div className="between schedule-detail-head">
+          <div className="stack gap-4">
+            <strong>{selectedDate || todayKey}</strong>
+            <div className="muted small-text">선택한 날짜의 세부 일정</div>
+          </div>
+          <button type="button" className="small" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }}>일정만들기</button>
+        </div>
+        {selectedNote ? <div className="schedule-detail-note">메모 · {selectedNote}</div> : null}
+        <div className="schedule-detail-list">
+          {selectedEntries.length ? selectedEntries.map(item => (
+            <div key={item.id} className="schedule-detail-item">
+              <div className="schedule-detail-time">{item.schedule_time || '시간미정'}</div>
+              <div className="schedule-detail-content">
+                <strong>{item.customer_name || '일정'}</strong>
+                {item.memo ? <div className="muted small-text">{item.memo}</div> : null}
+              </div>
+            </div>
+          )) : <div className="muted">등록된 세부 일정이 없습니다.</div>}
         </div>
       </div>
+
+      {composerOpen ? (
+        <div className="modal-backdrop" onClick={() => setComposerOpen(false)}>
+          <div className="modal-card schedule-basic-modal" onClick={event => event.stopPropagation()}>
+            <div className="between"><strong>일정만들기</strong><button type="button" className="ghost small" onClick={() => setComposerOpen(false)}>닫기</button></div>
+            <form className="stack gap-12" onSubmit={handleCreateSchedule}>
+              <label className="stack gap-6"><span>날짜</span><input type="date" value={scheduleForm.schedule_date} onChange={event => setScheduleForm(prev => ({ ...prev, schedule_date: event.target.value }))} required /></label>
+              <label className="stack gap-6"><span>시간</span><input type="time" value={scheduleForm.schedule_time} onChange={event => setScheduleForm(prev => ({ ...prev, schedule_time: event.target.value }))} /></label>
+              <label className="stack gap-6"><span>일정명</span><input value={scheduleForm.customer_name} onChange={event => setScheduleForm(prev => ({ ...prev, customer_name: event.target.value }))} placeholder="일정명 입력" required /></label>
+              <label className="stack gap-6"><span>메모</span><textarea value={scheduleForm.memo} onChange={event => setScheduleForm(prev => ({ ...prev, memo: event.target.value }))} placeholder="세부 메모 입력" rows={4} /></label>
+              <button type="submit">저장</button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {dayMemoOpen ? (
+        <div className="modal-backdrop" onClick={() => setDayMemoOpen(false)}>
+          <div className="modal-card schedule-basic-modal" onClick={event => event.stopPropagation()}>
+            <div className="between"><strong>{selectedDate} 메모</strong><button type="button" className="ghost small" onClick={() => setDayMemoOpen(false)}>닫기</button></div>
+            <div className="stack gap-12">
+              <textarea value={dayMemo} onChange={event => setDayMemo(event.target.value)} rows={5} placeholder="해당 날짜 메모를 입력하세요." />
+              <button type="button" onClick={handleSaveDayMemo}>저장</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

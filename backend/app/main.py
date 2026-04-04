@@ -2981,3 +2981,108 @@ def admin_update_user(target_user_id: int, payload: AdminUserUpdateIn, user=Depe
         conn.execute("UPDATE users SET extra_profile_slots = ?, role = ?, grade = ?, account_status = ?, suspended_reason = ?, chat_media_quota_bytes = ? WHERE id = ?", (max(payload.extra_profile_slots, 0), role, grade, account_status, payload.suspended_reason[:300], chat_media_quota_bytes, target_user_id))
         updated = conn.execute("SELECT id, email, nickname, phone, role, grade, extra_profile_slots, storage_quota_override_bytes, chat_media_quota_bytes, account_status, warning_count, suspended_reason, phone_verified_at, created_at FROM users WHERE id = ?", (target_user_id,)).fetchone()
         return {"item": row_to_dict(updated)}
+
+
+@app.get("/api/work-schedule")
+def list_work_schedule(start_date: str = Query(...), days: int = Query(default=42, ge=1, le=93), user=Depends(current_user)):
+    base_date = datetime.strptime(start_date[:10], "%Y-%m-%d").date()
+    end_date = base_date + timedelta(days=max(days - 1, 0))
+    with get_conn() as conn:
+        entry_rows = conn.execute(
+            """
+            SELECT id, schedule_date, schedule_time, customer_name, memo, created_at, updated_at
+            FROM work_schedule_entries
+            WHERE user_id = ? AND schedule_date >= ? AND schedule_date <= ?
+            ORDER BY schedule_date ASC, schedule_time ASC, id ASC
+            """,
+            (user["id"], base_date.isoformat(), end_date.isoformat()),
+        ).fetchall()
+        note_rows = conn.execute(
+            """
+            SELECT schedule_date, day_memo, updated_at
+            FROM work_schedule_day_notes
+            WHERE user_id = ? AND schedule_date >= ? AND schedule_date <= ?
+            ORDER BY schedule_date ASC
+            """,
+            (user["id"], base_date.isoformat(), end_date.isoformat()),
+        ).fetchall()
+    items = []
+    for row in entry_rows:
+        item = row_to_dict(row)
+        item["title"] = item.get("customer_name") or "일정"
+        items.append(item)
+    day_notes = {}
+    for row in note_rows:
+        item = row_to_dict(row)
+        day_notes[str(item.get("schedule_date") or "")] = item
+    return {"items": items, "day_notes": day_notes}
+
+
+@app.post("/api/work-schedule")
+def create_work_schedule(payload: dict[str, Any], user=Depends(current_user)):
+    schedule_date = str(payload.get("schedule_date") or "").strip()[:10]
+    if not schedule_date:
+        raise HTTPException(status_code=400, detail="일정 날짜가 필요합니다.")
+    try:
+        datetime.strptime(schedule_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="날짜 형식이 올바르지 않습니다.")
+    schedule_time = str(payload.get("schedule_time") or "").strip()[:5]
+    customer_name = str(payload.get("customer_name") or payload.get("title") or "").strip()[:120]
+    memo = str(payload.get("memo") or "").strip()[:1000]
+    if not customer_name:
+        raise HTTPException(status_code=400, detail="일정명은 필수입니다.")
+    now = utcnow()
+    with get_conn() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO work_schedule_entries(user_id, schedule_date, schedule_time, customer_name, representative_names, staff_names, memo, created_at, updated_at)
+            VALUES (?, ?, ?, ?, '', '', ?, ?, ?)
+            """,
+            (user["id"], schedule_date, schedule_time, customer_name, memo, now, now),
+        )
+        row = conn.execute(
+            "SELECT id, schedule_date, schedule_time, customer_name, memo, created_at, updated_at FROM work_schedule_entries WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+    item = row_to_dict(row)
+    item["title"] = item.get("customer_name") or "일정"
+    return {"item": item}
+
+
+@app.put("/api/work-schedule/day-note")
+def upsert_work_schedule_day_note(payload: dict[str, Any], user=Depends(current_user)):
+    schedule_date = str(payload.get("schedule_date") or "").strip()[:10]
+    if not schedule_date:
+        raise HTTPException(status_code=400, detail="날짜가 필요합니다.")
+    try:
+        datetime.strptime(schedule_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="날짜 형식이 올바르지 않습니다.")
+    day_memo = str(payload.get("day_memo") or "").strip()[:1000]
+    now = utcnow()
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM work_schedule_day_notes WHERE user_id = ? AND schedule_date = ?",
+            (user["id"], schedule_date),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE work_schedule_day_notes SET day_memo = ?, updated_at = ? WHERE id = ?",
+                (day_memo, now, existing[0]),
+            )
+            row_id = existing[0]
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO work_schedule_day_notes(user_id, schedule_date, excluded_business, excluded_staff, excluded_business_details, excluded_staff_details, available_vehicle_count, status_a_count, status_b_count, status_c_count, day_memo, is_handless_day, created_at, updated_at)
+                VALUES (?, ?, '', '', '[]', '[]', 0, 0, 0, 0, ?, 0, ?, ?)
+                """,
+                (user["id"], schedule_date, day_memo, now, now),
+            )
+            row_id = cursor.lastrowid
+        row = conn.execute(
+            "SELECT schedule_date, day_memo, updated_at FROM work_schedule_day_notes WHERE id = ?",
+            (row_id,),
+        ).fetchone()
+    return {"item": row_to_dict(row)}
