@@ -632,6 +632,7 @@ def ensure_profile_tables(conn=None) -> None:
         ensure_column(conn, "dm_messages", "attachment_preview_url TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "dm_messages", "attachment_name TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "dm_messages", "attachment_size_bytes INTEGER NOT NULL DEFAULT 0")
+        ensure_reward_tables(conn)
         ensure_indexes(conn)
         cleanup_expired_marketing_assets(conn)
 
@@ -652,6 +653,173 @@ def get_storage_limit_bytes(user: dict) -> int:
     override = int(user.get("storage_quota_override_bytes") or 0)
     return override if override > 0 else TOTAL_MEDIA_LIMIT_BYTES
 
+
+
+REWARD_MIN_WITHDRAW_POINTS = 10000
+REWARD_MONTHLY_WITHDRAW_LIMIT = 1
+REWARD_RULES = {
+    "receive_question": {"label": "질문 받기", "points": 120, "daily_limit": 20, "description": "내 프로필에 새로운 질문이 등록되면 적립"},
+    "answer_question": {"label": "답변 작성", "points": 300, "daily_limit": 20, "description": "질문에 답변을 등록하면 적립"},
+    "share_profile": {"label": "프로필 공유", "points": 50, "daily_limit": 5, "description": "내 공개 프로필을 공유하면 일 최대 5회 적립"},
+    "complete_profile": {"label": "프로필 정리 완료", "points": 500, "daily_limit": 1, "description": "핵심 프로필 정보를 모두 입력하면 1회 적립"},
+}
+
+
+def ensure_reward_tables(conn) -> None:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS app_point_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        rule_code TEXT NOT NULL,
+        points INTEGER NOT NULL DEFAULT 0,
+        source_type TEXT NOT NULL DEFAULT '',
+        source_id INTEGER,
+        source_key TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(user_id, source_key)
+    )
+    """)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS app_withdrawal_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        points_amount INTEGER NOT NULL DEFAULT 0,
+        cash_amount INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        account_holder TEXT NOT NULL DEFAULT '',
+        bank_name TEXT NOT NULL DEFAULT '',
+        account_number TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        rejection_reason TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        processed_at TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    with suppress(Exception):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_point_ledger_user_created ON app_point_ledger(user_id, created_at)")
+    with suppress(Exception):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_user_created ON app_withdrawal_requests(user_id, created_at)")
+
+
+def month_window_from_now() -> tuple[str, str]:
+    now = datetime.now()
+    month_start = datetime(now.year, now.month, 1)
+    next_month = datetime(now.year + (1 if now.month == 12 else 0), 1 if now.month == 12 else now.month + 1, 1)
+    return month_start.isoformat(), next_month.isoformat()
+
+
+def today_window() -> tuple[str, str]:
+    now = datetime.now()
+    start = datetime(now.year, now.month, now.day)
+    end = start + timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
+def reward_rule_rows() -> list[dict[str, Any]]:
+    return [dict(code=code, **meta) for code, meta in REWARD_RULES.items()]
+
+
+def get_reward_balance(conn, user_id: int) -> dict[str, int]:
+    earned = int(conn.execute("SELECT COALESCE(SUM(points), 0) FROM app_point_ledger WHERE user_id = ?", (user_id,)).fetchone()[0] or 0)
+    pending = int(conn.execute("SELECT COALESCE(SUM(points_amount), 0) FROM app_withdrawal_requests WHERE user_id = ? AND status IN ('pending', 'approved')", (user_id,)).fetchone()[0] or 0)
+    available = max(0, earned - pending)
+    return {"earned": earned, "pending": pending, "available": available}
+
+
+def monthly_withdraw_count(conn, user_id: int) -> int:
+    start, end = month_window_from_now()
+    return int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE user_id = ? AND created_at >= ? AND created_at < ? AND status IN ('pending', 'approved')", (user_id, start, end)).fetchone()[0] or 0)
+
+
+def serialize_point_entry(row: Any) -> dict[str, Any]:
+    item = row_to_dict(row)
+    return {
+        "id": item.get("id"),
+        "rule_code": item.get("rule_code") or '',
+        "label": REWARD_RULES.get(item.get("rule_code") or '', {}).get("label") or '포인트',
+        "points": int(item.get("points") or 0),
+        "description": item.get("description") or '',
+        "created_at": item.get("created_at") or '',
+    }
+
+
+def serialize_withdrawal(row: Any) -> dict[str, Any]:
+    item = row_to_dict(row)
+    return {
+        "id": item.get("id"),
+        "points_amount": int(item.get("points_amount") or 0),
+        "cash_amount": int(item.get("cash_amount") or 0),
+        "status": item.get("status") or 'pending',
+        "account_holder": item.get("account_holder") or '',
+        "bank_name": item.get("bank_name") or '',
+        "account_number_masked": re.sub(r'(?<=..).(?=..)', '*', str(item.get("account_number") or '')),
+        "note": item.get("note") or '',
+        "rejection_reason": item.get("rejection_reason") or '',
+        "created_at": item.get("created_at") or '',
+        "processed_at": item.get("processed_at") or '',
+    }
+
+
+def award_points(conn, user_id: int, rule_code: str, *, source_type: str = '', source_id: int | None = None, source_key: str = '', description: str = '') -> bool:
+    meta = REWARD_RULES.get(rule_code)
+    if not meta or not user_id:
+        return False
+    ensure_reward_tables(conn)
+    if source_key:
+        exists = conn.execute("SELECT id FROM app_point_ledger WHERE user_id = ? AND source_key = ?", (user_id, source_key)).fetchone()
+        if exists:
+            return False
+    daily_limit = int(meta.get('daily_limit') or 0)
+    if daily_limit > 0:
+        start, end = today_window()
+        count = int(conn.execute("SELECT COUNT(*) FROM app_point_ledger WHERE user_id = ? AND rule_code = ? AND created_at >= ? AND created_at < ?", (user_id, rule_code, start, end)).fetchone()[0] or 0)
+        if count >= daily_limit:
+            return False
+    conn.execute(
+        "INSERT INTO app_point_ledger(user_id, rule_code, points, source_type, source_id, source_key, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, rule_code, int(meta.get('points') or 0), source_type, source_id, source_key or '', description or str(meta.get('description') or ''), utcnow()),
+    )
+    return True
+
+
+def maybe_award_profile_completion(conn, user_id: int, profile_id: int) -> bool:
+    row = conn.execute("SELECT id, display_name, title, headline, bio, current_work, industry_category, profile_image_url FROM app_profiles WHERE id = ? AND user_id = ?", (profile_id, user_id)).fetchone()
+    if not row:
+        return False
+    item = row_to_dict(row)
+    required = [item.get('display_name') or item.get('title'), item.get('headline'), item.get('bio'), item.get('current_work'), item.get('industry_category'), item.get('profile_image_url')]
+    if not all(str(value or '').strip() for value in required):
+        return False
+    return award_points(conn, user_id, 'complete_profile', source_type='profile', source_id=profile_id, source_key=f'complete_profile:{profile_id}', description='핵심 프로필 정보를 모두 입력해 보너스가 적립되었습니다.')
+
+
+def reward_summary_payload(conn, user_id: int) -> dict[str, Any]:
+    ensure_reward_tables(conn)
+    balance = get_reward_balance(conn, user_id)
+    month_start, month_end = month_window_from_now()
+    month_earned = int(conn.execute("SELECT COALESCE(SUM(points), 0) FROM app_point_ledger WHERE user_id = ? AND created_at >= ? AND created_at < ?", (user_id, month_start, month_end)).fetchone()[0] or 0)
+    month_withdraw_count = monthly_withdraw_count(conn, user_id)
+    ledger_rows = conn.execute("SELECT * FROM app_point_ledger WHERE user_id = ? ORDER BY id DESC LIMIT 50", (user_id,)).fetchall()
+    withdrawal_rows = conn.execute("SELECT * FROM app_withdrawal_requests WHERE user_id = ? ORDER BY id DESC LIMIT 12", (user_id,)).fetchall()
+    return {
+        "balance": balance,
+        "month_earned": month_earned,
+        "min_withdraw_points": REWARD_MIN_WITHDRAW_POINTS,
+        "monthly_withdraw_limit": REWARD_MONTHLY_WITHDRAW_LIMIT,
+        "monthly_withdraw_count": month_withdraw_count,
+        "can_withdraw": balance['available'] >= REWARD_MIN_WITHDRAW_POINTS and month_withdraw_count < REWARD_MONTHLY_WITHDRAW_LIMIT,
+        "rules": reward_rule_rows(),
+        "notices": [
+            "광고 수익은 플랫폼 운영 수익이며 회원 보상은 활동 포인트 기준으로만 적립됩니다.",
+            "광고 시청·클릭 자체는 포인트 지급 기준이 아니며, 부정 트래픽 유도 행위는 제한됩니다.",
+            f"현금 전환은 최소 {REWARD_MIN_WITHDRAW_POINTS:,}P부터 가능하며 월 {REWARD_MONTHLY_WITHDRAW_LIMIT}회까지 신청할 수 있습니다.",
+        ],
+        "ledger": [serialize_point_entry(row) for row in ledger_rows],
+        "withdrawals": [serialize_withdrawal(row) for row in withdrawal_rows],
+    }
 
 def create_default_profile(conn, user_id: int, nickname: str) -> None:
     existing = conn.execute("SELECT id FROM app_profiles WHERE user_id = ? LIMIT 1", (user_id,)).fetchone()
@@ -2050,6 +2218,8 @@ def create_profile(payload: ProfileIn, user=Depends(current_user)):
             ),
         )
         row = conn.execute("SELECT * FROM app_profiles WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user["id"],)).fetchone()
+        if row:
+            maybe_award_profile_completion(conn, int(user['id']), int(row['id']))
         return {"item": serialize_profile(conn, row_to_dict(row), include_private=True)}
 
 
@@ -2078,6 +2248,7 @@ def update_profile(profile_id: int, payload: ProfileIn, user=Depends(current_use
             ),
         )
         row = conn.execute("SELECT * FROM app_profiles WHERE id = ?", (profile_id,)).fetchone()
+        maybe_award_profile_completion(conn, int(user['id']), profile_id)
         return {"item": serialize_profile(conn, row_to_dict(row), include_private=True)}
 
 
@@ -2241,6 +2412,60 @@ def delete_qr(qr_id: int, user=Depends(current_user)):
         return {"ok": True}
 
 
+@app.get("/api/rewards/summary")
+def rewards_summary(user=Depends(current_user)):
+    with get_conn() as conn:
+        return reward_summary_payload(conn, int(user["id"]))
+
+
+@app.post("/api/rewards/profile-share")
+def rewards_profile_share(payload: RewardActionIn, user=Depends(current_user)):
+    profile_id = int(payload.profile_id or 0)
+    if not profile_id:
+        raise HTTPException(status_code=400, detail="공유할 프로필을 선택해 주세요.")
+    with get_conn() as conn:
+        profile = conn.execute("SELECT id FROM app_profiles WHERE id = ? AND user_id = ?", (profile_id, user["id"])).fetchone()
+        if not profile:
+            raise HTTPException(status_code=404, detail="프로필을 찾을 수 없습니다.")
+        today_key = datetime.now().strftime('%Y-%m-%d')
+        awarded = award_points(conn, int(user['id']), 'share_profile', source_type='profile', source_id=profile_id, source_key=f'share_profile:{user["id"]}:{profile_id}:{today_key}', description='공개 프로필을 공유해 포인트가 적립되었습니다.')
+        summary = reward_summary_payload(conn, int(user['id']))
+        return {"ok": True, "awarded": awarded, "summary": summary}
+
+
+@app.post("/api/rewards/profile-completion-check")
+def rewards_profile_completion(payload: RewardActionIn, user=Depends(current_user)):
+    profile_id = int(payload.profile_id or 0)
+    if not profile_id:
+        raise HTTPException(status_code=400, detail="프로필을 선택해 주세요.")
+    with get_conn() as conn:
+        awarded = maybe_award_profile_completion(conn, int(user['id']), profile_id)
+        summary = reward_summary_payload(conn, int(user['id']))
+        return {"ok": True, "awarded": awarded, "summary": summary}
+
+
+@app.post("/api/rewards/withdrawals")
+def create_reward_withdrawal(payload: RewardWithdrawalIn, user=Depends(current_user)):
+    account_holder = (payload.account_holder or '').strip()
+    bank_name = (payload.bank_name or '').strip()
+    account_number = re.sub(r'\s+', '', payload.account_number or '')
+    if not account_holder or not bank_name or not account_number:
+        raise HTTPException(status_code=400, detail="예금주, 은행명, 계좌번호를 모두 입력해 주세요.")
+    with get_conn() as conn:
+        ensure_reward_tables(conn)
+        balance = get_reward_balance(conn, int(user['id']))
+        month_count = monthly_withdraw_count(conn, int(user['id']))
+        if month_count >= REWARD_MONTHLY_WITHDRAW_LIMIT:
+            raise HTTPException(status_code=400, detail="이번 달 출금 신청은 이미 완료되었습니다.")
+        if balance['available'] < REWARD_MIN_WITHDRAW_POINTS:
+            raise HTTPException(status_code=400, detail=f"최소 출금 가능 포인트는 {REWARD_MIN_WITHDRAW_POINTS:,}P 입니다.")
+        conn.execute(
+            "INSERT INTO app_withdrawal_requests(user_id, points_amount, cash_amount, status, account_holder, bank_name, account_number, note, created_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+            (int(user['id']), REWARD_MIN_WITHDRAW_POINTS, REWARD_MIN_WITHDRAW_POINTS, account_holder[:40], bank_name[:40], account_number[:60], (payload.note or '').strip()[:200], utcnow()),
+        )
+        return {"ok": True, "summary": reward_summary_payload(conn, int(user['id']))}
+
+
 @app.get("/api/profiles/{profile_id}/questions")
 def questions(profile_id: int, status: str = Query("all"), user=Depends(current_user_optional)):
     with get_conn() as conn:
@@ -2296,6 +2521,7 @@ def answer_question(question_id: int, payload: QuestionAnswerIn, user=Depends(cu
         if not row or int(row["user_id"]) != int(user["id"]):
             raise HTTPException(status_code=404, detail="질문을 찾을 수 없습니다.")
         conn.execute("UPDATE app_questions SET answer_text = ?, status = ?, answered_at = ? WHERE id = ?", (payload.answer_text.strip(), payload.status, utcnow(), question_id))
+        award_points(conn, int(user['id']), 'answer_question', source_type='question', source_id=question_id, source_key=f'answer_question:{question_id}', description='질문에 답변을 등록해 포인트가 적립되었습니다.')
         updated = conn.execute("SELECT * FROM app_questions WHERE id = ?", (question_id,)).fetchone()
         return {"item": serialize_question(row_to_dict(updated))}
 

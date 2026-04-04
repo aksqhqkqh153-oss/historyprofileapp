@@ -3172,3 +3172,37 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .nav-item-text{font-size:10px!important;letter-spacing:-.02em!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:100%!important}
 @media (max-width:820px){.bottom-nav{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:2px!important;padding:2px 3px calc(2px + env(safe-area-inset-bottom,0px))!important}.nav-item{min-height:50px!important;padding:4px 1px!important}.nav-item-icon{width:16px!important;height:16px!important}.nav-item-icon .icon-symbol{width:14px!important;height:14px!important}.nav-item-label{gap:1px!important}.nav-item-text{font-size:9px!important}}
 @media (max-width:720px){.schedule-basic-weekdays>div{padding:5px 1px}.schedule-detail-head{align-items:center}.schedule-detail-create-button{align-self:center}}
+
+.rewards-policy-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rewards-policy-strip span,
+.rewards-rule-card,
+.rewards-history-card {
+  border: 1px solid var(--line-color, #d4d4d8);
+  border-radius: 0;
+}
+
+.rewards-policy-strip span {
+  padding: 10px 12px;
+  background: #fffdf1;
+  font-size: 12px;
+}
+
+.rewards-grid {
+  align-items: start;
+}
+
+.rewards-scroll-list {
+  max-height: 520px;
+  overflow: auto;
+}
+
+@media (max-width: 720px) {
+  .rewards-policy-strip {
+    grid-template-columns: 1fr;
+  }
+}

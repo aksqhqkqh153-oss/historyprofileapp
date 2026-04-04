@@ -22,6 +22,7 @@ function pageTitle(pathname) {
   if (pathname.startsWith('/introductions-manager')) return '자기소개서관리'
   if (pathname.startsWith('/share-links-manager')) return '링크공유관리'
   if (pathname.startsWith('/more')) return '더보기'
+  if (pathname.startsWith('/rewards')) return '포인트'
   if (pathname.startsWith('/schedule')) return '일정'
   if (pathname.startsWith('/admin')) return '관리자'
   if (pathname.startsWith('/music')) return '음악듣기'
@@ -41,6 +42,17 @@ function openDirectMessageRoom(navigate, otherUserId) {
   const targetId = Number(otherUserId || 0)
   if (!targetId) return
   navigate(`/chats?user=${targetId}`)
+}
+
+async function claimProfileShareReward(profileId) {
+  const targetId = Number(profileId || 0)
+  if (!targetId) return null
+  try {
+    return await api('/api/rewards/profile-share', { method: 'POST', body: JSON.stringify({ profile_id: targetId }) })
+  } catch (error) {
+    console.warn('profile share reward failed', error)
+    return null
+  }
 }
 
 
@@ -172,6 +184,7 @@ function IconGlyph({ name, label }) {
     businessCard: <svg {...common}><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="8" cy="12" r="2" /><path d="M13 10h5" /><path d="M13 13h5" /><path d="M6 16c.8-1.2 1.8-1.8 3-1.8s2.2.6 3 1.8" /></svg>,
     document: <svg {...common}><path d="M8 3h6l5 5v13a1 1 0 0 1-1 1H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M14 3v5h5" /><path d="M10 13h6" /><path d="M10 17h6" /><path d="M10 9h2" /></svg>,
     star: <svg {...common}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9Z" /></svg>,
+    coin: <svg {...common}><circle cx="12" cy="12" r="8" /><path d="M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4" /><path d="M12 7.5v9" /></svg>,
     music: <svg {...common}><path d="M9 18V7l10-2v11" /><circle cx="7" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>,
   }
   return <span className="icon-symbol" aria-label={label}>{icons[name] || icons.home}</span>
@@ -591,6 +604,7 @@ function AppShell({ user, setUser }) {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/mvp" element={<MvpSuccessPage />} />
           <Route path="/more" element={<MorePage onOpenSheet={openMoreSheet} isAdmin={isAdmin} />} />
+          <Route path="/rewards" element={<RewardsPage />} />
           <Route path="/vault" element={<StorageVaultPage />} />
           <Route path="/workspace" element={<WorkspacePage />} />
           <Route path="/introductions-manager" element={<IntroductionsManagerPage />} />
@@ -658,6 +672,7 @@ function MorePage({ onOpenSheet, isAdmin }) {
     { path: '/introductions-manager', label: 'AI 자기소개서', desc: 'AI 초안 생성 결과를 저장/복원/수정', icon: 'document' },
     { path: '/vault', label: '클라우드 저장함', desc: '요금제별 저장용량 전략과 보관 자산 관리', icon: 'folder' },
     { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
+    { path: '/rewards', label: '포인트/출금', desc: '활동 포인트 적립 기준 확인, 적립 내역 조회, 월 1회 출금 신청', icon: 'coin' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용 플레이어로 청취', icon: 'music' }] : []),
   ]
 
@@ -707,6 +722,7 @@ function MorePage({ onOpenSheet, isAdmin }) {
             <Link className="button-link" to="/profile?tab=qr">프로필 QR 연결</Link>
             <Link className="button-link" to="/url-shortener">단축 URL 생성</Link>
             <Link className="button-link" to="/video-watch">영상시청 열기</Link>
+            <Link className="button-link" to="/rewards">포인트 센터 열기</Link>
             {isAdmin ? <Link className="button-link" to="/music">음악듣기 열기</Link> : null}
           </div>
           <div className="muted small-text">공개 URL → 링크 클릭 → QR 스캔 → 문의 전환 흐름을 바로 실행할 수 있게 연결했습니다.</div>
@@ -724,6 +740,192 @@ function MorePage({ onOpenSheet, isAdmin }) {
           </div>
         </div>
       ) : null}
+    </section>
+  )
+}
+
+
+function RewardsPage() {
+  const [summary, setSummary] = useState(null)
+  const [profiles, setProfiles] = useState([])
+  const [selectedProfileId, setSelectedProfileId] = useState(getStoredActiveProfileId())
+  const [withdrawForm, setWithdrawForm] = useState({ account_holder: '', bank_name: '', account_number: '', note: '' })
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const [summaryData, profileData] = await Promise.all([api('/api/rewards/summary'), api('/api/profiles')])
+      setSummary(summaryData)
+      const items = Array.isArray(profileData?.items) ? profileData.items : []
+      setProfiles(items)
+      if (!selectedProfileId && items.length) {
+        const fallbackId = Number(items[0]?.id || 0)
+        setSelectedProfileId(fallbackId)
+        setStoredActiveProfileId(fallbackId)
+      }
+    } catch (err) {
+      setError(err.message || '포인트 데이터를 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const availablePoints = Number(summary?.balance?.available || 0)
+  const pendingPoints = Number(summary?.balance?.pending || 0)
+  const totalEarned = Number(summary?.balance?.earned || 0)
+  const monthEarned = Number(summary?.month_earned || 0)
+  const minWithdraw = Number(summary?.min_withdraw_points || 10000)
+  const withdrawCount = Number(summary?.monthly_withdraw_count || 0)
+  const withdrawLimit = Number(summary?.monthly_withdraw_limit || 1)
+  const canWithdraw = Boolean(summary?.can_withdraw)
+
+  async function handleShareProfile() {
+    const profile = profiles.find(item => Number(item.id) === Number(selectedProfileId))
+    if (!profile) return
+    const publicUrl = `${window.location.origin}/p/${profile.slug}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${profile.display_name || profile.title} 공개 프로필`, url: publicUrl })
+      } else {
+        await navigator.clipboard.writeText(publicUrl)
+        window.alert('공개 프로필 주소를 복사했습니다.')
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(publicUrl)
+        window.alert('공개 프로필 주소를 복사했습니다.')
+      } catch {}
+    }
+    const result = await claimProfileShareReward(profile.id)
+    if (result?.summary) setSummary(result.summary)
+    if (result && result.awarded === false) window.alert('오늘 공유 적립 한도에 도달했거나 이미 적립된 공유입니다.')
+  }
+
+  async function handleCompletionCheck() {
+    const profileId = Number(selectedProfileId || 0)
+    if (!profileId) return
+    setSubmitting(true)
+    try {
+      const result = await api('/api/rewards/profile-completion-check', { method: 'POST', body: JSON.stringify({ profile_id: profileId }) })
+      if (result?.summary) setSummary(result.summary)
+      window.alert(result?.awarded ? '프로필 정리 완료 보너스가 적립되었습니다.' : '아직 필수 프로필 정보가 부족하거나 이미 지급된 보너스입니다.')
+    } catch (err) {
+      window.alert(err.message || '보너스 확인에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleWithdrawSubmit(e) {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      const result = await api('/api/rewards/withdrawals', { method: 'POST', body: JSON.stringify(withdrawForm) })
+      if (result?.summary) setSummary(result.summary)
+      setWithdrawForm({ account_holder: '', bank_name: '', account_number: '', note: '' })
+      window.alert('출금 신청이 접수되었습니다. 운영 검수 후 순차 지급됩니다.')
+    } catch (err) {
+      window.alert(err.message || '출금 신청에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <section className="page-stack">
+      <div className="card stack">
+        <div className="split-row responsive-row">
+          <div className="stack gap-6">
+            <strong>포인트 운영센터</strong>
+            <div className="muted small-text">광고는 플랫폼 운영 수익으로 처리하고, 회원 보상은 질문·답변·프로필 공유 같은 활동 기준으로만 적립하는 안전형 구조입니다.</div>
+          </div>
+          <button type="button" className="ghost" onClick={load}>새로고침</button>
+        </div>
+        <div className="grid-4 rewards-metric-grid">
+          <Metric label="출금 가능 포인트" value={`${availablePoints.toLocaleString()}P`} />
+          <Metric label="보류중 포인트" value={`${pendingPoints.toLocaleString()}P`} />
+          <Metric label="이번 달 적립" value={`${monthEarned.toLocaleString()}P`} />
+          <Metric label="누적 적립" value={`${totalEarned.toLocaleString()}P`} />
+        </div>
+        <div className="rewards-policy-strip">
+          <span>최소 출금 {minWithdraw.toLocaleString()}P</span>
+          <span>월 출금 {withdrawCount}/{withdrawLimit}회</span>
+          <span>{canWithdraw ? '이번 달 출금 신청 가능' : '이번 달 출금 조건 미충족'}</span>
+        </div>
+      </div>
+
+      <div className="grid-2 rewards-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>적립 기준</strong><span className="muted small-text">광고 시청/클릭 보상 아님</span></div>
+          <div className="stack compact-list">
+            {(summary?.rules || []).map(item => (
+              <div key={item.code} className="mini-card rewards-rule-card">
+                <div className="split-row responsive-row"><strong>{item.label}</strong><strong>{Number(item.points || 0).toLocaleString()}P</strong></div>
+                <div className="muted small-text">{item.description}</div>
+                <div className="muted small-text">일 적립 제한 {Number(item.daily_limit || 0)}회</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>활동 실행</strong><span className="muted small-text">즉시 적립 가능한 항목</span></div>
+          <label className="small-text">적립 기준으로 사용할 프로필</label>
+          <select value={selectedProfileId || ''} onChange={e => { const next = Number(e.target.value) || null; setSelectedProfileId(next); setStoredActiveProfileId(next) }}>
+            {profiles.map(item => <option key={item.id} value={item.id}>{item.display_name || item.title}</option>)}
+          </select>
+          <div className="action-wrap wrap-row">
+            <button type="button" onClick={handleShareProfile} disabled={!selectedProfileId || submitting}>프로필 공유하고 적립</button>
+            <button type="button" className="ghost" onClick={handleCompletionCheck} disabled={!selectedProfileId || submitting}>프로필 완성 보너스 확인</button>
+          </div>
+          <div className="stack compact-list">
+            {(summary?.notices || []).map((item, index) => <div key={`notice-${index}`} className="bordered-box small-text">{item}</div>)}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-2 rewards-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>현금 전환 신청</strong><span className="muted small-text">월 1회 · 최소 10,000P</span></div>
+          <div className="muted small-text">광고 보상금이 아니라 서비스 활동 포인트 정산 요청입니다. 관리자 검수 후 순차 지급됩니다.</div>
+          <form className="stack" onSubmit={handleWithdrawSubmit}>
+            <div className="grid-2">
+              <TextField label="예금주" value={withdrawForm.account_holder} onChange={value => setWithdrawForm(prev => ({ ...prev, account_holder: value }))} />
+              <TextField label="은행명" value={withdrawForm.bank_name} onChange={value => setWithdrawForm(prev => ({ ...prev, bank_name: value }))} />
+            </div>
+            <TextField label="계좌번호" value={withdrawForm.account_number} onChange={value => setWithdrawForm(prev => ({ ...prev, account_number: value }))} />
+            <label className="field-label">관리자 메모</label>
+            <textarea value={withdrawForm.note} onChange={e => setWithdrawForm(prev => ({ ...prev, note: e.target.value }))} placeholder="정산 시 참고할 내용을 입력하세요." />
+            <button type="submit" disabled={!canWithdraw || submitting}>{submitting ? '처리중' : `${minWithdraw.toLocaleString()}P 출금 신청`}</button>
+          </form>
+          {!canWithdraw ? <div className="muted small-text">출금 조건: 출금 가능 포인트 {minWithdraw.toLocaleString()}P 이상, 이번 달 출금 신청 0회</div> : null}
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>최근 적립 / 출금</strong><span className="muted small-text">최근 50건 / 12건</span></div>
+          <div className="stack compact-list rewards-scroll-list">
+            {(summary?.ledger || []).length ? summary.ledger.map(item => (
+              <div key={`ledger-${item.id}`} className="mini-card rewards-history-card">
+                <div className="split-row responsive-row"><strong>{item.label}</strong><strong>{Number(item.points || 0).toLocaleString()}P</strong></div>
+                <div className="muted small-text">{item.description}</div>
+                <div className="muted small-text">{formatDateLabel(item.created_at)}</div>
+              </div>
+            )) : <div className="muted">아직 적립 내역이 없습니다.</div>}
+            {(summary?.withdrawals || []).length ? summary.withdrawals.map(item => (
+              <div key={`withdraw-${item.id}`} className="bordered-box small-text">출금 {Number(item.points_amount || 0).toLocaleString()}P · {item.status} · {formatDateLabel(item.created_at)}</div>
+            )) : <div className="muted">아직 출금 신청 내역이 없습니다.</div>}
+          </div>
+        </div>
+      </div>
+
+      {loading ? <div className="muted">포인트 데이터를 불러오는 중입니다.</div> : null}
+      {error ? <div className="card muted">{error}</div> : null}
     </section>
   )
 }
@@ -1935,6 +2137,7 @@ function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
     { path: '/introductions-manager', label: '자기소개서관리', desc: '회사/직무별 문항 세트 저장 · 비교 · 복원', icon: 'document' },
     { path: '/share-links-manager', label: '링크공유관리', desc: '채용용 · 영업용 · 소개용 공개 링크 생성', icon: 'link' },
     { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
+    { path: '/rewards', label: '포인트/출금', desc: '활동 포인트 적립 기준 확인, 적립 내역 조회, 월 1회 출금 신청', icon: 'coin' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용으로 재생', icon: 'music' }] : []),
     { path: '/more', label: '기타기능', desc: '업데이트 예정', icon: 'more', disabled: true },
   ]
@@ -5770,10 +5973,12 @@ function ProfileBrandingHubCard({ profile }) {
     try {
       if (navigator.share) {
         await navigator.share({ title: `${profile?.display_name || profile?.title || '프토리'} 프로필`, url: publicUrl })
+        await claimProfileShareReward(profile?.id)
         return
       }
     } catch {}
     await copyText(publicUrl, '공개 프로필 주소를 복사했습니다.')
+    await claimProfileShareReward(profile?.id)
   }
 
   return (

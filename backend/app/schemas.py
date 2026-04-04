@@ -152,3 +152,14 @@ class CommunityPostCreateIn(BaseModel):
 
 class CommunityCommentCreateIn(BaseModel):
     content: str = ""
+
+
+class RewardWithdrawalIn(BaseModel):
+    account_holder: str
+    bank_name: str
+    account_number: str
+    note: str = ""
+
+
+class RewardActionIn(BaseModel):
+    profile_id: int | None = None
