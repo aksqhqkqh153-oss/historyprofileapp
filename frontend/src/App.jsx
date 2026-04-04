@@ -915,8 +915,8 @@ function SchedulePage() {
             </button>
           </div>
           <div className="schedule-basic-toolbar-right">
-            <button type="button" className="small icon-button schedule-toolbar-button" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }} aria-label="일정만들기" title="일정만들기">
-              <IconGlyph name="compose" label="일정만들기" />
+            <button type="button" className="ghost icon-button schedule-toolbar-button" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }} aria-label="일정등록" title="일정등록">
+              <IconGlyph name="compose" label="일정등록" />
             </button>
             <div className="schedule-basic-settings-wrap">
               <button type="button" className="ghost icon-button schedule-toolbar-button" onClick={() => setSettingsOpen(prev => !prev)} aria-label="설정" title="설정">
@@ -953,9 +953,8 @@ function SchedulePage() {
                 </div>
                 <div className="schedule-basic-cell-body">
                   {dayItems.slice(0, 2).map(item => (
-                    <div key={item.id} className="schedule-basic-entry-chip">
-                      <span>{item.schedule_time || '시간미정'}</span>
-                      <span>{item.customer_name || '일정'}</span>
+                    <div key={item.id} className="schedule-basic-entry-chip" title={item.customer_name || '일정'}>
+                      <span className="schedule-basic-entry-title">{item.customer_name || '일정'}</span>
                     </div>
                   ))}
                   {!dayItems.length && dayNotes[key]?.day_memo ? <div className="schedule-basic-note-chip">메모</div> : null}
