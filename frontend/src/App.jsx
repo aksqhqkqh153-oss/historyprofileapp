@@ -4292,8 +4292,12 @@ function ChatsPage() {
   const [activeCategory, setActiveCategory] = useState('전체')
   const [customCategories, setCustomCategories] = useState(getStoredChatCategories)
   const [roomCategories, setRoomCategories] = useState(getStoredChatRoomCategories)
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false)
+  const [myProfiles, setMyProfiles] = useState([])
+  const [chatUploading, setChatUploading] = useState(false)
   const wsRef = useRef(null)
   const boardRef = useRef(null)
+  const filePickerRef = useRef(null)
 
   async function loadRooms(keepSelectedUserId = null) {
     const data = await api('/api/chats')
@@ -4329,6 +4333,13 @@ function ChatsPage() {
     setStoredChatRoomCategories(roomCategories)
   }, [roomCategories])
 
+
+  useEffect(() => {
+    api('/api/profiles')
+      .then(data => setMyProfiles(Array.isArray(data) ? data : []))
+      .catch(() => setMyProfiles([]))
+  }, [])
+
   useEffect(() => {
     if (!selected) return
     loadMessages(selected.user_id).catch(err => setChatError(err.message || '메시지를 불러오지 못했습니다.'))
@@ -4359,21 +4370,28 @@ function ChatsPage() {
     boardRef.current.scrollTop = boardRef.current.scrollHeight
   }, [messages])
 
-  async function send() {
-    if (!selected || !message.trim()) return
+  async function sendMessageText(text) {
+    const normalized = String(text || '').trim()
+    if (!selected || !normalized) return
     setChatError('')
     try {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(message)
+        wsRef.current.send(normalized)
       } else {
-        await api(`/api/chats/direct/${selected.user_id}/messages`, { method: 'POST', body: JSON.stringify({ message }) })
+        await api(`/api/chats/direct/${selected.user_id}/messages`, { method: 'POST', body: JSON.stringify({ message: normalized }) })
         await loadMessages(selected.user_id)
       }
-      setMessage('')
       await loadRooms(selected.user_id)
     } catch (err) {
       setChatError(err.message || '메시지 전송에 실패했습니다.')
+      throw err
     }
+  }
+
+  async function send() {
+    if (!selected || !message.trim()) return
+    await sendMessageText(message)
+    setMessage('')
   }
 
   function handleAddCategory() {
@@ -4437,6 +4455,115 @@ ${optionText}`, current ? String(customCategories.indexOf(current) + 1) : '')
       setSelected(filteredRooms[0])
     }
   }, [activeCategory, rooms.length, selected?.user_id, JSON.stringify(filteredRooms.map(item => item.user_id))])
+
+  const activeProfileId = getStoredActiveProfileId()
+  const selectedProfile = useMemo(() => {
+    if (!myProfiles.length) return null
+    return myProfiles.find(item => Number(item.id) === Number(activeProfileId)) || myProfiles[0] || null
+  }, [myProfiles, activeProfileId])
+
+  async function sendBusinessCardPhoto() {
+    if (!selectedProfile?.cover_image_url) {
+      window.alert('선택된 멀티프로필에 명함 이미지가 없습니다. 프로필에서 명함 이미지를 먼저 등록해주세요.')
+      return
+    }
+    const publicUrl = selectedProfile?.slug ? getPublicProfileUrl(selectedProfile.slug) : ''
+    const lines = ['[명함사진]']
+    lines.push(selectedProfile.cover_image_url)
+    if (publicUrl) lines.push(`프로필: ${publicUrl}`)
+    await sendMessageText(lines.join('\n'))
+    setAttachmentMenuOpen(false)
+  }
+
+  async function sendProfileLink() {
+    if (!selectedProfile?.slug) {
+      window.alert('선택된 멀티프로필의 공개 slug가 없습니다. 프로필에서 공개 주소를 먼저 등록해주세요.')
+      return
+    }
+    const publicUrl = getPublicProfileUrl(selectedProfile.slug)
+    const title = selectedProfile.display_name || selectedProfile.title || '프로필'
+    await sendMessageText(`[프로필링크] ${title}\n${publicUrl}`)
+    setAttachmentMenuOpen(false)
+  }
+
+  async function sendIntroduction() {
+    const introductions = Array.isArray(selectedProfile?.introductions) ? selectedProfile.introductions : []
+    if (!introductions.length) {
+      window.alert('선택된 멀티프로필에 자기소개서가 없습니다.')
+      return
+    }
+    const intro = introductions[0]
+    const title = [intro.company, intro.job].filter(Boolean).join(' / ') || intro.title || '자기소개서'
+    const content = String(intro.content || '').trim()
+    if (!content) {
+      window.alert('전송할 자기소개서 내용이 없습니다.')
+      return
+    }
+    await sendMessageText(`[자기소개서] ${title}\n${content}`)
+    setAttachmentMenuOpen(false)
+  }
+
+  async function sendSelectedLink() {
+    const links = Array.isArray(selectedProfile?.links) ? selectedProfile.links.filter(item => item?.url || item?.original_url || item?.full_short_url) : []
+    if (!links.length) {
+      window.alert('선택된 멀티프로필에 링크가 없습니다.')
+      return
+    }
+    const optionText = links.map((item, index) => `${index + 1}. ${item.title || item.label || item.url || item.original_url}`).join('\n')
+    const input = window.prompt(`전송할 링크 번호를 입력하세요.
+${optionText}`, '1')
+    if (input === null) return
+    const index = Number(String(input).trim()) - 1
+    if (!Number.isInteger(index) || index < 0 || index >= links.length) {
+      window.alert('올바른 번호를 입력하세요.')
+      return
+    }
+    const item = links[index]
+    const url = item.full_short_url || item.url || item.original_url || ''
+    if (!url) {
+      window.alert('선택한 링크의 URL이 없습니다.')
+      return
+    }
+    await sendMessageText(`[링크선택] ${item.title || item.label || '링크'}\n${url}`)
+    setAttachmentMenuOpen(false)
+  }
+
+  async function handlePickedFile(file) {
+    if (!selected || !file) return
+    setChatUploading(true)
+    setChatError('')
+    try {
+      const contentType = String(file.type || '').toLowerCase()
+      if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
+        const formData = new FormData()
+        formData.append('file', file)
+        await api(`/api/chats/direct/${selected.user_id}/attachments`, {
+          method: 'POST',
+          body: formData,
+        })
+        await loadMessages(selected.user_id)
+        await loadRooms(selected.user_id)
+      } else {
+        const uploaded = await uploadFile(file, 'vault', selectedProfile?.id || null)
+        const uploadedUrl = uploaded?.item?.url || uploaded?.url || ''
+        await sendMessageText(`[파일선택] ${file.name}${uploadedUrl ? `\n${uploadedUrl}` : ''}`)
+      }
+      setAttachmentMenuOpen(false)
+    } catch (err) {
+      setChatError(err.message || '파일 전송에 실패했습니다.')
+    } finally {
+      setChatUploading(false)
+      if (filePickerRef.current) filePickerRef.current.value = ''
+    }
+  }
+
+  const chatAttachmentActions = [
+    { key: 'business-card', label: '명함사진', icon: '🪪', onClick: sendBusinessCardPhoto },
+    { key: 'profile-link', label: '프로필링크', icon: '👤', onClick: sendProfileLink },
+    { key: 'introduction', label: '자기소개서', icon: '📝', onClick: sendIntroduction },
+    { key: 'link-select', label: '링크선택', icon: '🔗', onClick: sendSelectedLink },
+    { key: 'file-select', label: '파일선택', icon: '📁', onClick: () => filePickerRef.current?.click() },
+  ]
 
   return (
     <div className="chat-page-stack">
@@ -4523,10 +4650,45 @@ ${optionText}`, current ? String(customCategories.indexOf(current) + 1) : '')
             )) : <div className="muted">선택한 채팅의 메시지가 없습니다.</div>}
           </div>
           {chatError ? <div className="alert error">{chatError}</div> : null}
-          <div className="inline-form chat-input-row">
+          <div className="inline-form chat-input-row chat-input-row-modern">
+            <button
+              type="button"
+              className={attachmentMenuOpen ? 'chat-plus-button active' : 'chat-plus-button'}
+              onClick={() => setAttachmentMenuOpen(current => !current)}
+              aria-label="보내기 기능 열기"
+              title="보내기 기능"
+            >
+              +
+            </button>
             <input value={message} onChange={e => setMessage(e.target.value)} placeholder="메시지 입력" onKeyDown={e => { if (e.key === 'Enter') send() }} />
-            <button type="button" onClick={send}>전송</button>
+            <button type="button" onClick={send} disabled={chatUploading}>{chatUploading ? '전송중...' : '전송'}</button>
           </div>
+          <input
+            ref={filePickerRef}
+            type="file"
+            className="chat-hidden-file-input"
+            onChange={e => handlePickedFile(e.target.files?.[0] || null)}
+          />
+          {attachmentMenuOpen ? (
+            <div className="chat-attachment-sheet" role="dialog" aria-modal="true" aria-label="보내기 메뉴">
+              <button type="button" className="chat-attachment-sheet-backdrop" onClick={() => setAttachmentMenuOpen(false)} aria-label="보내기 메뉴 닫기" />
+              <div className="chat-attachment-sheet-panel card stack">
+                <div className="chat-attachment-sheet-head">
+                  <strong>보내기</strong>
+                  <button type="button" className="ghost small-button" onClick={() => setAttachmentMenuOpen(false)}>닫기</button>
+                </div>
+                <div className="muted small-text">선택한 멀티프로필의 명함, 프로필 링크, 자기소개서, 링크, 파일을 빠르게 보낼 수 있습니다.</div>
+                <div className="chat-attachment-grid">
+                  {chatAttachmentActions.map(item => (
+                    <button key={item.key} type="button" className="chat-attachment-action" onClick={item.onClick} disabled={chatUploading}>
+                      <span className="chat-attachment-action-icon" aria-hidden="true">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

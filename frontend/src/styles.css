@@ -2738,3 +2738,111 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   .public-detail-overlay{align-items:flex-end}
   .public-detail-overlay-card{width:100%;max-height:76svh;border-radius:22px 22px 0 0;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
 }
+
+.chat-input-row-modern {
+  position: relative;
+  gap: 10px;
+}
+
+.chat-plus-button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  font-size: 24px;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-plus-button.active {
+  background: var(--accent-soft);
+  border-color: #bcd0ff;
+}
+
+.chat-hidden-file-input {
+  display: none;
+}
+
+.chat-attachment-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.chat-attachment-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.chat-attachment-sheet-panel {
+  position: absolute;
+  left: 50%;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(calc(100vw - 28px), 520px);
+  border-radius: 26px;
+  padding: 18px;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22);
+}
+
+.chat-attachment-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chat-attachment-action {
+  min-height: 88px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background: #f8fbff;
+  color: var(--text);
+}
+
+.chat-attachment-action-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+@media (max-width: 820px) {
+  .chat-attachment-sheet-panel {
+    width: calc(100vw - 20px);
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    border-radius: 22px;
+    padding: 16px;
+  }
+
+  .chat-attachment-grid {
+    gap: 10px;
+  }
+
+  .chat-attachment-action {
+    min-height: 82px;
+    border-radius: 16px;
+    font-size: 13px;
+  }
+}
