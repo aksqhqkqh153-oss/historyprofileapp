@@ -377,7 +377,7 @@ function AppShell({ user, setUser }) {
 
   useEffect(() => {
     loadMultiProfiles().catch(() => null)
-  }, [requestedUserId])
+  }, [user?.id])
 
   async function runSearch() {
     if (!searchWord.trim()) return
