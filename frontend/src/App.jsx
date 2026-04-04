@@ -292,7 +292,7 @@ function useDismissLayer(isOpen, onClose) {
 }
 
 
-function AnchoredPopup({ anchorRef, open, align = 'left', placement = 'auto', className = '', children }) {
+function AnchoredPopup({ anchorRef, open, align = 'left', placement = 'auto', viewportEdge = '', className = '', children }) {
   const [style, setStyle] = useState({})
 
   useLayoutEffect(() => {
@@ -312,7 +312,11 @@ function AnchoredPopup({ anchorRef, open, align = 'left', placement = 'auto', cl
       const fallbackTop = rect.bottom + gap
       const forcedBelowTop = rect.bottom + gap
       const baseTop = placement === 'bottom' ? forcedBelowTop : (preferSide ? sideTop : fallbackTop)
-      const nextLeft = Math.max(8, Math.min(baseLeft, viewportWidth - popupWidth - 8))
+      const nextLeft = viewportEdge === 'left'
+        ? 8
+        : viewportEdge === 'right'
+          ? Math.max(8, viewportWidth - popupWidth - 8)
+          : Math.max(8, Math.min(baseLeft, viewportWidth - popupWidth - 8))
       const nextTop = Math.max(8, Math.min(baseTop, viewportHeight - 80))
       setStyle({
         position: 'fixed',
@@ -329,7 +333,7 @@ function AnchoredPopup({ anchorRef, open, align = 'left', placement = 'auto', cl
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [align, anchorRef, open, placement])
+  }, [align, anchorRef, open, placement, viewportEdge])
 
   if (!open || typeof document === 'undefined') return null
   return createPortal(
@@ -483,7 +487,7 @@ function AppShell({ user, setUser }) {
             <button ref={profileSwitchButtonRef} type="button" className="ghost topbar-profile-switch topbar-text-trigger" onClick={async () => { await loadMultiProfiles(); togglePopup('profiles') }} aria-expanded={activePopup === 'profiles'} aria-label="계정 전환">
               <span className="topbar-profile-name">계정전환</span>
             </button>
-            <AnchoredPopup anchorRef={profileSwitchButtonRef} open={activePopup === 'profiles'} placement="bottom" className="dropdown-popup profile-switch-popup stack">
+            <AnchoredPopup anchorRef={profileSwitchButtonRef} open={activePopup === 'profiles'} placement="bottom" viewportEdge="left" className="dropdown-popup profile-switch-popup stack">
               <div className="dropdown-list profile-shortcuts-list">
                 <button type="button" className="dropdown-item ghost dropdown-item-with-icon active-profile-dropdown-item" onClick={() => closePopupAndNavigate('/profile')}>
                   <IconGlyph name="profile" label="내 프로필" />
@@ -525,7 +529,7 @@ function AppShell({ user, setUser }) {
               <IconGlyph name="bell" label="알림" />
               {totalNotificationLabel ? <span className="count-badge topbar-badge">{totalNotificationLabel}</span> : null}
             </button>
-            <AnchoredPopup anchorRef={alertButtonRef} open={activePopup === 'alerts'} align="right" className="settings-popup dropdown-popup stack settings-panel">
+            <AnchoredPopup anchorRef={alertButtonRef} open={activePopup === 'alerts'} align="right" viewportEdge="right" className="settings-popup dropdown-popup stack settings-panel">
               <div className="dropdown-title">알림</div>
               <div className="dropdown-list">
                 <button type="button" className="dropdown-item ghost dropdown-item-between" onClick={() => closePopupAndNavigate('/chats')}>
@@ -545,7 +549,7 @@ function AppShell({ user, setUser }) {
             <button ref={settingsButtonRef} type="button" className="icon-button ghost topbar-trigger topbar-icon-button" onClick={() => togglePopup('settings')} aria-expanded={activePopup === 'settings'} aria-label="설정">
               <IconGlyph name="settings" label="설정" />
             </button>
-            <AnchoredPopup anchorRef={settingsButtonRef} open={activePopup === 'settings'} align="right" className="settings-popup dropdown-popup stack settings-panel">
+            <AnchoredPopup anchorRef={settingsButtonRef} open={activePopup === 'settings'} align="right" viewportEdge="right" className="settings-popup dropdown-popup stack settings-panel">
               <div className="dropdown-title">설정</div>
               <div className="dropdown-list">
                 {isAdmin ? <button type="button" className="dropdown-item ghost dropdown-item-with-icon" onClick={() => closePopupAndNavigate('/admin')}><IconGlyph name="admin" label="관리자" /><span>관리자 페이지</span></button> : null}
