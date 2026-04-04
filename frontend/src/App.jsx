@@ -191,6 +191,7 @@ const NAV_META = {
   '/friends': { icon: 'friends' },
   '/community': { icon: 'conversation' },
   '/questions': { icon: 'questions' },
+  '/schedule': { icon: 'calendar' },
   '/more': { icon: 'more' },
 }
 
@@ -902,23 +903,23 @@ function SchedulePage() {
       <div className="card stack schedule-basic-card">
         <div className="schedule-basic-toolbar">
           <div className="schedule-basic-toolbar-left">
-            <button type="button" className="ghost small" onClick={moveToToday}>오늘</button>
+            <button type="button" className="ghost small schedule-toolbar-button" onClick={moveToToday}>오늘</button>
           </div>
           <div className="schedule-basic-toolbar-center">
-            <button type="button" className="ghost icon-button" onClick={() => moveMonth(-1)} aria-label="이전달">
+            <button type="button" className="ghost icon-button schedule-toolbar-button" onClick={() => moveMonth(-1)} aria-label="이전달">
               <IconGlyph name="back" label="이전달" />
             </button>
             <strong className="schedule-basic-month-label">{monthLabel}</strong>
-            <button type="button" className="ghost icon-button schedule-next-button" onClick={() => moveMonth(1)} aria-label="다음달">
+            <button type="button" className="ghost icon-button schedule-next-button schedule-toolbar-button" onClick={() => moveMonth(1)} aria-label="다음달">
               <IconGlyph name="back" label="다음달" />
             </button>
           </div>
           <div className="schedule-basic-toolbar-right">
-            <button type="button" className="small icon-button" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }} aria-label="일정만들기" title="일정만들기">
+            <button type="button" className="small icon-button schedule-toolbar-button" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }} aria-label="일정만들기" title="일정만들기">
               <IconGlyph name="compose" label="일정만들기" />
             </button>
             <div className="schedule-basic-settings-wrap">
-              <button type="button" className="ghost icon-button" onClick={() => setSettingsOpen(prev => !prev)} aria-label="설정" title="설정">
+              <button type="button" className="ghost icon-button schedule-toolbar-button" onClick={() => setSettingsOpen(prev => !prev)} aria-label="설정" title="설정">
                 <IconGlyph name="settings" label="설정" />
               </button>
               {settingsOpen ? (
@@ -972,9 +973,10 @@ function SchedulePage() {
         <div className="between schedule-detail-head">
           <div className="stack gap-4">
             <strong>{selectedDate || todayKey}</strong>
-            <div className="muted small-text">선택한 날짜의 세부 일정</div>
           </div>
-          <button type="button" className="small" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }}>일정만들기</button>
+          <button type="button" className="icon-button schedule-detail-create-button" onClick={() => { setComposerOpen(true); setSettingsOpen(false) }} aria-label="일정만들기" title="일정만들기">
+            <IconGlyph name="compose" label="일정만들기" />
+          </button>
         </div>
         {selectedNote ? <div className="schedule-detail-note">메모 · {selectedNote}</div> : null}
         <div className="schedule-detail-list">

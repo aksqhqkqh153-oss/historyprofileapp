@@ -2888,6 +2888,19 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   text-align: center;
 }
 
+.schedule-toolbar-button {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.schedule-toolbar-button:hover,
+.schedule-toolbar-button:focus-visible {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: rgba(15, 23, 42, 0.04) !important;
+}
+
 .schedule-next-button .icon-symbol {
   transform: rotate(180deg);
 }
@@ -2973,6 +2986,7 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 
 .schedule-basic-date-number {
   font-weight: 700;
+  color: #111827;
 }
 
 .schedule-basic-count,
@@ -3012,6 +3026,15 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 
 .schedule-detail-head {
   align-items: flex-start;
+}
+
+.schedule-detail-create-button {
+  min-width: 40px !important;
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  border-radius: 999px;
+  margin-left: auto;
 }
 
 .schedule-detail-note {
