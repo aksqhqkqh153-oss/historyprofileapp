@@ -4168,6 +4168,26 @@ function QuestionProfilePage() {
     }
   }
 
+  function startDm() {
+    const ownerId = Number(data?.owner?.id || 0)
+    if (!ownerId || Boolean(data?.is_owner)) return
+    openDirectMessageRoom(navigate, ownerId)
+  }
+
+  async function blockUser() {
+    const ownerId = Number(data?.owner?.id || 0)
+    if (!ownerId || Boolean(data?.is_owner)) return
+    const targetName = data?.owner?.nickname || data?.profile?.display_name || data?.profile?.title || '해당 사용자'
+    if (!window.confirm(`${targetName}님을 차단하시겠습니까?`)) return
+    try {
+      await api(`/api/blocks/${ownerId}`, { method: 'POST' })
+      window.alert('차단이 완료되었습니다.')
+      navigate('/chats')
+    } catch (err) {
+      window.alert(err.message || '차단 처리에 실패했습니다.')
+    }
+  }
+
   if (error) return <div className="card error">{error}</div>
   if (!data?.profile) return <div className="card">불러오는 중...</div>
 
