@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, clearSession, getApiBase, getStoredUser, getToken, uploadFile } from './api'
 import { NAV_ITEMS, MENU_ITEMS, INDUSTRY_OPTIONS } from './constants'
 import AuthPage from './pages/AuthPage'
@@ -35,6 +35,12 @@ function pageTitle(pathname) {
 function useAuth() {
   const [user, setUser] = useState(getStoredUser())
   return { user, setUser }
+}
+
+function openDirectMessageRoom(navigate, otherUserId) {
+  const targetId = Number(otherUserId || 0)
+  if (!targetId) return
+  navigate(`/chats?user=${targetId}`)
 }
 
 
@@ -371,7 +377,7 @@ function AppShell({ user, setUser }) {
 
   useEffect(() => {
     loadMultiProfiles().catch(() => null)
-  }, [])
+  }, [requestedUserId])
 
   async function runSearch() {
     if (!searchWord.trim()) return
@@ -3560,7 +3566,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
   )
 }
 
-function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow, followLoading }) {
+function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow, followLoading, onStartDm, onBlock }) {
   const profile = data?.profile
   const owner = data?.owner
   const stats = profile?.stats || {}
@@ -3568,7 +3574,7 @@ function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow
   const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필 주인'
   const profileIdLabel = owner?.account_unique_id || owner?.email?.split('@')?.[0] || 'profile'
   const avatarUrl = profile?.profile_image_url || owner?.photo_url || ''
-  const coverUrl = profile?.cover_image_url || ''
+  const [menuOpen, setMenuOpen] = useState(false)
 
   async function handleShare() {
     const shareUrl = `${window.location.origin}/questions/${profile?.id}`
@@ -3596,7 +3602,21 @@ function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow
         </div>
       </div>
       <div className="asked-profile-copy">
-        <div className="asked-display-name">{profileName}</div>
+        <div className="asked-display-name-row">
+          <div className="asked-display-name">{profileName}</div>
+          <div className="asked-inline-icon-actions">
+            <button type="button" className="ghost icon-button" onClick={onStartDm} aria-label="DM 보내기" title="DM 보내기"><IconGlyph name="chatMini" label="DM 보내기" /></button>
+            <button type="button" className={isFollowing ? 'ghost icon-button active' : 'ghost icon-button'} onClick={onToggleFollow} disabled={followLoading} aria-label={isFollowing ? '친구추가 완료' : '친구추가'} title={isFollowing ? '친구추가 완료' : '친구추가'}><IconGlyph name="userAdd" label="친구추가" /></button>
+            <div className="friend-more-wrap">
+              <button type="button" className="ghost icon-button friend-more-button" onClick={() => setMenuOpen(current => !current)} aria-label="설정" title="설정"><IconGlyph name="more" label="설정" /></button>
+              {menuOpen ? (
+                <div className="friend-row-menu floating-popup">
+                  <button type="button" className="ghost friend-row-menu-item" onClick={async () => { setMenuOpen(false); await onBlock?.() }}>차단하기</button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
         <div className="asked-account-id">@{profileIdLabel}</div>
         <div className="asked-bio-line">{profile?.headline || profile?.bio || '한 줄 소개가 아직 없습니다.'}</div>
       </div>
@@ -3689,7 +3709,7 @@ function QuestionProfilePage() {
         canAsk
         initialAskOpen={askRequested && !Boolean(data.is_owner)}
         variant={isAskedStyle ? 'asked' : 'default'}
-        headerExtras={isAskedStyle ? <AskedQuestionProfileHeader data={data} askOpen={askRequested} onToggleAsk={() => setAskRequested(prev => !prev)} onToggleFollow={toggleFollow} followLoading={followLoading} /> : null}
+        headerExtras={isAskedStyle ? <AskedQuestionProfileHeader data={data} askOpen={askRequested} onToggleAsk={() => setAskRequested(prev => !prev)} onToggleFollow={toggleFollow} followLoading={followLoading} onStartDm={startDm} onBlock={blockUser} /> : null}
       />
     </div>
   )
@@ -3875,6 +3895,11 @@ function FeedPostCard({ item, onOpenProfile, onFriendRequest }) {
     navigate(`/questions/${profile.id}`, { state: { openAsk: true, source: 'feed' } })
   }
 
+  function startDm() {
+    const targetUserId = owner?.id || item?.user_id || profile?.user_id
+    openDirectMessageRoom(navigate, targetUserId)
+  }
+
   return (
     <article className="feed-post-card">
       <div className="feed-post-top">
@@ -3888,6 +3913,9 @@ function FeedPostCard({ item, onOpenProfile, onFriendRequest }) {
           </span>
         </button>
         <div className="feed-post-top-actions">
+          <button type="button" className="ghost feed-friend-button" onClick={startDm} title="DM 보내기">
+            <IconGlyph name="chatMini" label="DM 보내기" />
+          </button>
           <button type="button" className="ghost feed-friend-button" onClick={() => onFriendRequest?.(item)} disabled={disableFriend} title={friendLabel}>
             <IconGlyph name="userAdd" label="친구요청" />
           </button>
@@ -4284,6 +4312,8 @@ function FriendsPage() {
 }
 
 function ChatsPage() {
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [rooms, setRooms] = useState([])
   const [selected, setSelected] = useState(null)
   const [messages, setMessages] = useState([])
@@ -4298,6 +4328,7 @@ function ChatsPage() {
   const wsRef = useRef(null)
   const boardRef = useRef(null)
   const filePickerRef = useRef(null)
+  const requestedUserId = Number(searchParams.get('user') || location.state?.userId || 0)
 
   async function loadRooms(keepSelectedUserId = null) {
     const data = await api('/api/chats')
@@ -4322,7 +4353,7 @@ function ChatsPage() {
 
   useEffect(() => {
     setStoredChatLastViewedAt(new Date().toISOString())
-    loadRooms().catch(err => setChatError(err.message || '채팅 목록을 불러오지 못했습니다.'))
+    loadRooms(requestedUserId || null).catch(err => setChatError(err.message || '채팅 목록을 불러오지 못했습니다.'))
   }, [])
 
   useEffect(() => {
@@ -4332,6 +4363,14 @@ function ChatsPage() {
   useEffect(() => {
     setStoredChatRoomCategories(roomCategories)
   }, [roomCategories])
+
+  useEffect(() => {
+    if (!requestedUserId || !rooms.length) return
+    const matched = rooms.find(item => Number(item.user_id) === Number(requestedUserId))
+    if (matched && Number(selected?.user_id) !== Number(matched.user_id)) {
+      setSelected(matched)
+    }
+  }, [requestedUserId, rooms, selected?.user_id])
 
 
   useEffect(() => {
@@ -5508,6 +5547,9 @@ function ProfileBrandingHubCard({ profile }) {
 }
 
 function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUrl }) {
+  const navigate = useNavigate()
+  const viewer = getStoredUser()
+  const isOwner = Boolean(viewer?.id && Number(viewer.id) === Number(owner?.id))
   const publicUrl = getPublicProfileUrl(profile?.slug)
   const profileName = profile?.display_name || profile?.title || owner?.nickname || '프로필'
   const profileIdLabel = owner?.login_id || owner?.email || `@${profile?.slug || ''}`
@@ -5515,6 +5557,7 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
   const hasBusinessCardImage = Boolean(businessCardImageUrl)
   const [cardPreviewOpen, setCardPreviewOpen] = useState(false)
   const [detailView, setDetailView] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
   const profileMetaRows = [
     profile?.current_work ? { label: '현재 활동', value: profile.current_work } : null,
     profile?.industry_category ? { label: '분야', value: profile.industry_category } : null,
@@ -5534,6 +5577,30 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
     { label: '문의전환', value: `${analytics.leads || analytics.ctaClicks || 0}회` },
     { label: 'QR클릭', value: `${analytics.qrClicks || 0}회` },
   ]
+
+  function startDm() {
+    if (!owner?.id || isOwner) return
+    openDirectMessageRoom(navigate, owner.id)
+  }
+
+  function sendFriendRequest() {
+    if (!owner?.id || isOwner) return
+    api(`/api/friends/requests/${owner.id}`, { method: 'POST' })
+      .then(() => window.alert('친구요청을 보냈습니다.'))
+      .catch(err => window.alert(err.message || '친구요청에 실패했습니다.'))
+  }
+
+  async function blockProfileOwner() {
+    if (!owner?.id || isOwner) return
+    if (!window.confirm(`${profileName}님을 차단하시겠습니까?`)) return
+    try {
+      await api(`/api/blocks/${owner.id}`, { method: 'POST' })
+      window.alert('차단이 완료되었습니다.')
+      navigate('/chats')
+    } catch (err) {
+      window.alert(err.message || '차단 처리에 실패했습니다.')
+    }
+  }
 
   const detailConfig = {
     career: {
@@ -5627,7 +5694,23 @@ function PublicProfileHeroCard({ profile, owner, analytics, onCopyUrl, onShareUr
           <div className="public-hero-main public-hero-main-identity">
             <div className="avatar public-hero-avatar">{profile?.profile_image_url ? <img src={profile.profile_image_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}</div>
             <div className="stack gap-6 public-hero-copy">
-              <h1>{profileName}</h1>
+              <div className="public-hero-title-row">
+                <h1>{profileName}</h1>
+                {!isOwner ? (
+                  <div className="public-hero-inline-actions">
+                    <button type="button" className="ghost icon-button" onClick={startDm} aria-label="DM 보내기" title="DM 보내기"><IconGlyph name="chatMini" label="DM 보내기" /></button>
+                    <button type="button" className="ghost icon-button" onClick={sendFriendRequest} aria-label="친구추가" title="친구추가"><IconGlyph name="userAdd" label="친구추가" /></button>
+                    <div className="friend-more-wrap">
+                      <button type="button" className="ghost icon-button friend-more-button" onClick={() => setMenuOpen(current => !current)} aria-label="설정" title="설정"><IconGlyph name="more" label="설정" /></button>
+                      {menuOpen ? (
+                        <div className="friend-row-menu floating-popup">
+                          <button type="button" className="ghost friend-row-menu-item" onClick={async () => { setMenuOpen(false); await blockProfileOwner() }}>차단하기</button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <div className="public-hero-idline">{profileIdLabel}</div>
               <div className="public-hero-headline">{profile?.headline || '한 줄 소개가 아직 등록되지 않았습니다.'}</div>
               <div className="muted public-hero-bio">{profile?.bio || '프로필 소개가 아직 등록되지 않았습니다.'}</div>
