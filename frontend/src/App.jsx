@@ -4639,18 +4639,15 @@ function FeedEntryPickerModal({ open, onClose, onSelect }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal-card entry-picker-modal" onClick={event => event.stopPropagation()}>
-        <div className="modal-head">
-          <h3>무엇을 작성할까요?</h3>
+        <div className="modal-head entry-picker-head">
           <button type="button" className="ghost" onClick={onClose}>닫기</button>
         </div>
         <div className="entry-picker-grid">
           <button type="button" className="entry-picker-option" onClick={() => onSelect?.('feed')}>
-            <strong>피드</strong>
-            <span className="muted">기존 피드 작성 화면으로 이동합니다.</span>
+            <strong>피드작성</strong>
           </button>
           <button type="button" className="entry-picker-option" onClick={() => onSelect?.('story')}>
-            <strong>숏토리</strong>
-            <span className="muted">인스타그램 스토리처럼 짧게 올리고 24시간 노출됩니다.</span>
+            <strong>스토리작성</strong>
           </button>
         </div>
       </section>

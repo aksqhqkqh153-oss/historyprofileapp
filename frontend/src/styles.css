@@ -870,6 +870,12 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
   max-width: 520px;
 }
 
+
+.entry-picker-head {
+  justify-content: flex-start;
+  margin-bottom: 8px;
+}
+
 .entry-picker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
