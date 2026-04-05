@@ -677,7 +677,7 @@ function MorePage({ onOpenSheet, isAdmin }) {
     { path: '/introductions-manager', label: 'AI 자기소개서', desc: 'AI 초안 생성 결과를 저장/복원/수정', icon: 'document' },
     { path: '/vault', label: '클라우드 저장함', desc: '요금제별 저장용량 전략과 보관 자산 관리', icon: 'folder' },
     { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
-    { path: '/rewards', label: '포인트/출금', desc: '활동 포인트 적립 기준 확인, 적립 내역 조회, 월 1회 출금 신청', icon: 'coin' },
+    { path: '/rewards', label: '리워드/정산', desc: '마이크로 인플루언서 활동 포인트, 예상 수익, 출금 신청, 광고 운영 현황 확인', icon: 'coin' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용 플레이어로 청취', icon: 'music' }] : []),
   ]
 
@@ -933,8 +933,8 @@ function RewardsPage() {
       <div className="card stack">
         <div className="split-row responsive-row">
           <div className="stack gap-6">
-            <strong>포인트 운영센터</strong>
-            <div className="muted small-text">질문/답변/홈 피드 광고 노출은 플랫폼 수익으로 처리하고, 회원 보상은 활동 포인트 기준으로만 적립하는 구조입니다.</div>
+            <strong>마이크로 인플루언서 리워드센터</strong>
+            <div className="muted small-text">프로필, 경력, 자기소개, 링크, 파일관리 자산을 기반으로 질문·DM·피드 유입을 만들고, 플랫폼 광고 수익 일부를 활동 포인트로 환원하는 구조입니다.</div>
           </div>
           <button type="button" className="ghost" onClick={load}>새로고침</button>
         </div>
@@ -976,6 +976,35 @@ function RewardsPage() {
             <div className="stack compact-list">
               {(summary?.insights || []).map((item, index) => <div key={`insight-${index}`} className="bordered-box small-text">{item}</div>)}
             </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div className="grid-2 rewards-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>마이크로 인플루언서 운영 모델</strong><span className="muted small-text">핵심 방향</span></div>
+          <div className="stack compact-list">
+            {(summary?.creator_model || []).map((item, index) => (
+              <div key={`creator-model-${index}`} className="mini-card rewards-rule-card">
+                <div className="split-row responsive-row"><strong>{index + 1}. {item.title}</strong><span className="muted small-text">운영 단계</span></div>
+                <div className="muted small-text">{item.description}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>다른 서비스와 비교</strong><span className="muted small-text">차별화 포인트</span></div>
+          <div className="stack compact-list">
+            {(summary?.strategy_comparison || []).map(item => (
+              <div key={item.service} className="mini-card rewards-rule-card stack gap-6">
+                <div className="split-row responsive-row"><strong>{item.service}</strong><span className="muted small-text">비교 대상</span></div>
+                <div className="small-text"><strong>강점:</strong> {item.strength}</div>
+                <div className="small-text"><strong>한계:</strong> {item.gap}</div>
+                <div className="small-text"><strong>우리 앱 우위:</strong> {item.our_edge}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -2370,7 +2399,7 @@ function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
     { path: '/introductions-manager', label: '자기소개서관리', desc: '회사/직무별 문항 세트 저장 · 비교 · 복원', icon: 'document' },
     { path: '/share-links-manager', label: '링크공유관리', desc: '채용용 · 영업용 · 소개용 공개 링크 생성', icon: 'link' },
     { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
-    { path: '/rewards', label: '포인트/출금', desc: '활동 포인트 적립 기준 확인, 적립 내역 조회, 월 1회 출금 신청', icon: 'coin' },
+    { path: '/rewards', label: '리워드/정산', desc: '마이크로 인플루언서 활동 포인트, 예상 수익, 출금 신청, 광고 운영 현황 확인', icon: 'coin' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용으로 재생', icon: 'music' }] : []),
     { path: '/more', label: '기타기능', desc: '업데이트 예정', icon: 'more', disabled: true },
   ]
