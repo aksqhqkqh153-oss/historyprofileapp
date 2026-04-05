@@ -5,6 +5,7 @@ const ADSENSE_CLIENT = String(import.meta.env.VITE_ADSENSE_CLIENT || '').trim()
 const DEFAULT_MODE = String(import.meta.env.VITE_QUESTION_PROFILE_AD_MODE || 'adsense').trim().toLowerCase()
 const QUESTION_TOP_SLOT = String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_TOP || '').trim()
 const QUESTION_PROFILE_SLOT = String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_PROFILE || '').trim()
+const HOME_FEED_LAYOUT_KEY = String(import.meta.env.VITE_ADSENSE_LAYOUT_KEY_HOME_FEED_INLINE || '').trim()
 const SLOT_BY_PLACEMENT = {
   question_profile: QUESTION_PROFILE_SLOT || QUESTION_TOP_SLOT,
   question_top: QUESTION_TOP_SLOT || QUESTION_PROFILE_SLOT,
@@ -12,7 +13,6 @@ const SLOT_BY_PLACEMENT = {
   home_feed_inline: String(import.meta.env.VITE_ADSENSE_SLOT_HOME_FEED_INLINE || '').trim(),
   rewards_inline: String(import.meta.env.VITE_ADSENSE_SLOT_REWARDS_INLINE || '').trim(),
 }
-const HOME_FEED_LAYOUT_KEY = String(import.meta.env.VITE_ADSENSE_LAYOUT_KEY_HOME_FEED_INLINE || '').trim()
 const DIRECT_LABEL = String(import.meta.env.VITE_DIRECT_AD_LABEL || '추천 광고').trim()
 const DIRECT_TITLE = String(import.meta.env.VITE_DIRECT_AD_TITLE || '브랜드 제휴 광고를 연결해 보세요').trim()
 const DIRECT_DESC = String(import.meta.env.VITE_DIRECT_AD_DESC || '단가가 높은 업종 스폰서를 직접 유치하면 일반 네트워크 광고보다 수익성이 좋아질 수 있습니다.').trim()
@@ -85,6 +85,7 @@ export default function MonetizationAdBanner({ placement = 'question_profile', c
   const hasLoggedImpressionRef = useRef(false)
   const slot = SLOT_BY_PLACEMENT[placement] || SLOT_BY_PLACEMENT.question_profile
   const effectiveMode = String(mode || DEFAULT_MODE || 'adsense').trim().toLowerCase()
+  const isManualInfeedPlacement = placement === 'home_feed_inline'
   const canRenderAdSense = effectiveMode === 'adsense' && isValidAdSenseClient(ADSENSE_CLIENT) && isValidAdSenseSlot(slot)
   const shouldHide = shouldHideAdsForUser(user)
   const directHref = DIRECT_LINK || 'mailto:ads@historyprofile.com?subject=%ED%94%84%EB%A1%9C%ED%95%84%20%EA%B4%91%EA%B3%A0%20%EB%AC%B8%EC%9D%98'
@@ -145,33 +146,22 @@ export default function MonetizationAdBanner({ placement = 'question_profile', c
   const wrapClass = `asked-ad-banner ${compact ? 'asked-ad-banner-compact' : ''} ${className}`.trim()
 
   if (displayMode === 'adsense') {
-    const isHomeFeedInFeed = placement === 'home_feed_inline'
-    const adCopy = isHomeFeedInFeed ? 'Google AdSense 수동 스타일 인피드 광고' : 'Google AdSense 반응형 광고'
-    const insProps = isHomeFeedInFeed
-      ? {
-          'data-ad-format': 'fluid',
-          'data-ad-layout': 'in-feed',
-          ...(HOME_FEED_LAYOUT_KEY ? { 'data-ad-layout-key': HOME_FEED_LAYOUT_KEY } : {}),
-        }
-      : {
-          'data-ad-format': 'auto',
-          'data-full-width-responsive': 'true',
-        }
-
     return (
       <div ref={wrapRef} className={wrapClass} onClickCapture={handleClick}>
         <div className="asked-ad-banner-head">
           <div className="asked-ad-label">AD</div>
-          <div className="asked-ad-copy">{adCopy}</div>
+          <div className="asked-ad-copy">Google AdSense 반응형 광고</div>
         </div>
         <ins
-          key={`${placement}-${slot}`}
+          key={`${placement}-${slot}-${isManualInfeedPlacement ? HOME_FEED_LAYOUT_KEY || 'manual-infeed' : 'auto'}`}
           ref={adRef}
           className="adsbygoogle asked-adsense-slot"
           style={{ display: 'block' }}
           data-ad-client={ADSENSE_CLIENT}
           data-ad-slot={slot}
-          {...insProps}
+          data-ad-format={isManualInfeedPlacement ? 'fluid' : 'auto'}
+          data-ad-layout-key={isManualInfeedPlacement && HOME_FEED_LAYOUT_KEY ? HOME_FEED_LAYOUT_KEY : undefined}
+          data-full-width-responsive={isManualInfeedPlacement ? undefined : 'true'}
         />
       </div>
     )
