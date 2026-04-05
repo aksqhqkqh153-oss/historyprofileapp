@@ -604,6 +604,7 @@ function AppShell({ user, setUser }) {
           <Route path="/questions" element={<QuestionsPage />} />
           <Route path="/community" element={<CommunityPage user={user} />} />
           <Route path="/community/new" element={<CommunityComposerPage />} />
+          <Route path="/questions/:profileId/ask" element={<QuestionAskStandalonePage />} />
           <Route path="/questions/:profileId" element={<QuestionProfilePage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
@@ -4103,7 +4104,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
   const defaultNickname = String(viewer?.nickname || '').trim() || '익명'
   const isAskedStyle = variant === 'asked'
   const [tab, setTab] = useState('feed')
-  const [askOpen, setAskOpen] = useState(Boolean(initialAskOpen))
+  const [askOpen, setAskOpen] = useState(Boolean(initialAskOpen) && !isAskedStyle)
   const [question, setQuestion] = useState('')
   const [nickname, setNickname] = useState(defaultNickname)
   const [isAnonymous, setIsAnonymous] = useState(false)
@@ -4120,8 +4121,8 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
   const rejectedItems = useMemo(() => (profile?.questions || []).filter(item => item.status === 'rejected' && !item.is_hidden), [profile])
 
   useEffect(() => {
-    setAskOpen(Boolean(initialAskOpen) && !isOwner && canAsk)
-  }, [initialAskOpen, isOwner, canAsk, profile?.id])
+    setAskOpen(Boolean(initialAskOpen) && !isOwner && canAsk && !isAskedStyle)
+  }, [initialAskOpen, isOwner, canAsk, isAskedStyle, profile?.id])
 
   useEffect(() => {
     if (!askOpen) return
@@ -4240,7 +4241,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
         </div>
         {!isAskedStyle && !isOwner && canAsk ? <button type="button" onClick={() => setAskOpen(v => !v)}>질문하기</button> : null}
       </div>
-      {!isOwner && askOpen ? (
+      {!isOwner && !isAskedStyle && askOpen ? (
         <div className={isAskedStyle ? 'asked-ask-card' : 'bordered-box stack question-ask-box'}>
           <div className={isAskedStyle ? 'asked-ask-head' : undefined}>
             {isAskedStyle ? <strong>질문 남기기</strong> : null}
@@ -4390,7 +4391,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
   )
 }
 
-function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow, followLoading, onStartDm, onBlock }) {
+function AskedQuestionProfileHeader({ data, onOpenAsk, onToggleFollow, followLoading, onStartDm, onBlock }) {
   const profile = data?.profile
   const owner = data?.owner
   const stats = profile?.stats || {}
@@ -4446,10 +4447,121 @@ function AskedQuestionProfileHeader({ data, askOpen, onToggleAsk, onToggleFollow
       </div>
       <div className="asked-cta-row">
         <button type="button" className={isFollowing ? 'ghost asked-follow-button active' : 'ghost asked-follow-button'} onClick={onToggleFollow} disabled={followLoading}>{followLoading ? '처리중' : (isFollowing ? '팔로잉' : '팔로우')}</button>
-        <button type="button" className="asked-question-button" onClick={onToggleAsk}>{askOpen ? '질문닫기' : '질문하기'}</button>
+        <button type="button" className="asked-question-button" onClick={onOpenAsk}>질문하기</button>
         <button type="button" className="ghost asked-share-button" onClick={handleShare}>공유</button>
       </div>
       <MonetizationAdBanner />
+    </div>
+  )
+}
+
+function QuestionAskStandalonePage() {
+  const { profileId } = useParams()
+  const navigate = useNavigate()
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  const viewer = getStoredUser()
+  const defaultNickname = String(viewer?.nickname || '').trim() || '익명'
+  const [question, setQuestion] = useState('')
+  const [nickname, setNickname] = useState(defaultNickname)
+  const [isAnonymous, setIsAnonymous] = useState(false)
+  const turnstile = useTurnstileConfig()
+  const [captchaToken, setCaptchaToken] = useState('')
+  const [captchaVersion, setCaptchaVersion] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const next = await api(`/api/profiles/${profileId}/view`)
+        if (!cancelled) {
+          setData(next)
+          setError('')
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message || '질문 화면을 불러오지 못했습니다.')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [profileId])
+
+  useEffect(() => {
+    setIsAnonymous(false)
+    setNickname(defaultNickname)
+  }, [defaultNickname, profileId])
+
+  async function submitQuestion() {
+    const targetProfileId = Number(data?.profile?.id || 0)
+    if (!targetProfileId || !question.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      await api(`/api/profiles/${targetProfileId}/questions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          question_text: question,
+          nickname: isAnonymous ? '익명' : nickname,
+          captcha_token: captchaToken,
+        }),
+      })
+      window.alert('질문이 등록되었습니다.')
+      navigate(`/questions/${targetProfileId}`)
+    } catch (err) {
+      window.alert(err.message || '질문 등록에 실패했습니다.')
+      setCaptchaVersion(prev => prev + 1)
+      setCaptchaToken('')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (error) return <div className="card error">{error}</div>
+  if (!data?.profile) return <div className="card">불러오는 중...</div>
+
+  if (Boolean(data.is_owner)) {
+    return <Navigate to={`/questions/${data.profile.id}`} replace />
+  }
+
+  const profileName = data?.owner?.nickname || data?.profile?.display_name || data?.profile?.title || '프로필 주인'
+  const avatarUrl = data?.profile?.profile_image_url || data?.owner?.photo_url || ''
+
+  return (
+    <div className="stack page-stack question-ask-standalone-page">
+      <section className="asked-page-head question-ask-standalone-head">
+        <div className="asked-nav-row question-ask-nav-row">
+          <BackIconButton onClick={() => navigate(`/questions/${data.profile.id}`)} />
+          <div className="asked-page-title">질문하기</div>
+        </div>
+      </section>
+      <section className="card stack question-ask-standalone-card">
+        <div className="question-ask-profile-row">
+          <div className="feed-avatar question-ask-profile-avatar">
+            {avatarUrl ? <img src={avatarUrl} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}
+          </div>
+          <div className="stack small-gap">
+            <strong>{profileName}</strong>
+            <span className="muted small-text">상대방에게 보낼 질문을 작성하세요.</span>
+          </div>
+        </div>
+        <div className="inline-form responsive-row question-nickname-row">
+          <TextField label="닉네임" value={nickname} onChange={setNickname} />
+          <label className="question-anon-toggle">
+            <input type="checkbox" checked={isAnonymous} onChange={event => {
+              const checked = event.target.checked
+              setIsAnonymous(checked)
+              setNickname(checked ? '익명' : defaultNickname)
+            }} />
+            <span>익명전환</span>
+          </label>
+        </div>
+        <label>질문 내용</label>
+        <textarea value={question} onChange={e => setQuestion(e.target.value)} placeholder="상대에게 남길 질문을 입력하세요." />
+        <TurnstileWidget enabled={turnstile.turnstile_enabled} siteKey={turnstile.turnstile_site_key} onToken={setCaptchaToken} refreshKey={`question-standalone-${captchaVersion}`} />
+        <div className="action-wrap">
+          <button type="button" onClick={submitQuestion} disabled={submitting || (turnstile.turnstile_enabled && !captchaToken)}>{submitting ? '등록중' : '질문 등록'}</button>
+          <button type="button" className="ghost" onClick={() => navigate(`/questions/${data.profile.id}`)}>닫기</button>
+        </div>
+      </section>
     </div>
   )
 }
@@ -4461,7 +4573,7 @@ function QuestionProfilePage() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [followLoading, setFollowLoading] = useState(false)
-  const [askRequested, setAskRequested] = useState(Boolean(location.state?.openAsk))
+  const [askRequested] = useState(Boolean(location.state?.openAsk))
 
   async function load() {
     try {
@@ -4553,7 +4665,7 @@ function QuestionProfilePage() {
         canAsk
         initialAskOpen={askRequested && !Boolean(data.is_owner)}
         variant={isAskedStyle ? 'asked' : 'default'}
-        headerExtras={isAskedStyle ? <AskedQuestionProfileHeader data={data} askOpen={askRequested} onToggleAsk={() => setAskRequested(prev => !prev)} onToggleFollow={toggleFollow} followLoading={followLoading} onStartDm={startDm} onBlock={blockUser} /> : null}
+        headerExtras={isAskedStyle ? <AskedQuestionProfileHeader data={data} onOpenAsk={() => navigate(`/questions/${data.profile.id}/ask`)} onToggleFollow={toggleFollow} followLoading={followLoading} onStartDm={startDm} onBlock={blockUser} /> : null}
       />
     </div>
   )
