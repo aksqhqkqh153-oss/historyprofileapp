@@ -989,7 +989,7 @@ function RewardsPage() {
         </div>
       </div>
 
-      <MonetizationAdBanner placement="rewards_inline" className="rewards-inline-ad" />
+      <MonetizationAdBanner placement="rewards_inline" className="rewards-inline-ad" user={user} pageKey="/rewards" eventKeySuffix="rewards-inline" />
 
       <div className="card stack">
         <div className="split-row responsive-row">
@@ -4271,7 +4271,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
         {lockedTab ? <div className={isAskedStyle ? 'asked-locked-card' : 'bordered-box muted'}>이 항목은 프로필 소유자만 확인할 수 있습니다.</div> : null}
         {!lockedTab && visibleItems.length ? (
           <>
-            <MonetizationAdBanner placement="question_top" className={isAskedStyle ? 'asked-inline-ad asked-inline-ad-top' : 'question-inline-ad question-inline-ad-top'} compact />
+            <MonetizationAdBanner placement="question_top" className={isAskedStyle ? 'asked-inline-ad asked-inline-ad-top' : 'question-inline-ad question-inline-ad-top'} compact user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-top-${profile?.id || 0}`} />
             {recommendationPool.length ? (
               <section className={isAskedStyle ? 'asked-recommend-strip' : 'question-recommend-strip'}>
                 <div className="split-row responsive-row question-recommend-head">
@@ -4373,7 +4373,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
               ) : null}
                   </article>
                   {(index + 1) % 3 === 0 ? (
-                    <MonetizationAdBanner placement="question_feed_inline" className={isAskedStyle ? 'asked-inline-ad' : 'question-inline-ad'} compact />
+                    <MonetizationAdBanner placement="question_feed_inline" className={isAskedStyle ? 'asked-inline-ad' : 'question-inline-ad'} compact user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-feed-${item.id}`} />
                   ) : null}
                 </React.Fragment>
               )
@@ -4392,6 +4392,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
 }
 
 function AskedQuestionProfileHeader({ data, onOpenAsk, onToggleFollow, followLoading, onStartDm, onBlock }) {
+  const viewerUser = getStoredUser()
   const profile = data?.profile
   const owner = data?.owner
   const stats = profile?.stats || {}
@@ -4450,7 +4451,7 @@ function AskedQuestionProfileHeader({ data, onOpenAsk, onToggleFollow, followLoa
         <button type="button" className="asked-question-button" onClick={onOpenAsk}>질문하기</button>
         <button type="button" className="ghost asked-share-button" onClick={handleShare}>공유</button>
       </div>
-      <MonetizationAdBanner />
+      <MonetizationAdBanner user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-profile-${profile?.id || 0}`} />
     </div>
   )
 }
@@ -4901,13 +4902,40 @@ function FeedPostCard({ item, onOpenProfile, onFriendRequest }) {
 }
 
 function DirectAdCard({ item, compact = false }) {
+  const loggedImpressionRef = useRef(false)
+  const cardRef = useRef(null)
+
+  useEffect(() => {
+    if (!item?.id || !cardRef.current || loggedImpressionRef.current) return undefined
+    const observer = new IntersectionObserver(entries => {
+      const entry = entries[0]
+      if (!entry?.isIntersecting || loggedImpressionRef.current) return
+      loggedImpressionRef.current = true
+      api('/api/ads/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          placement: 'home_feed_inline',
+          event_type: 'impression',
+          ad_kind: 'direct',
+          campaign_id: Number(item.id || 0),
+          ad_unit_key: `direct-${item.id}`,
+          page_key: '/',
+          event_key: `direct:${item.id}:impression`,
+        }),
+      }).catch(() => {})
+      observer.disconnect()
+    }, { threshold: 0.35 })
+    observer.observe(cardRef.current)
+    return () => observer.disconnect()
+  }, [item?.id])
+
   async function handleClick() {
     try { await api(`/api/direct-ads/${item.id}/click`, { method: 'POST' }) } catch {}
     if (item?.target_url) window.open(item.target_url, '_blank', 'noopener,noreferrer')
   }
 
   return (
-    <article className={`direct-ad-card${compact ? ' compact' : ''}`.trim()}>
+    <article ref={cardRef} className={`direct-ad-card${compact ? ' compact' : ''}`.trim()}>
       <div className="split-row responsive-row">
         <div className="stack gap-6">
           <div className="small-text muted">스폰서드 · 직접 광고</div>
@@ -5166,13 +5194,25 @@ function HomePage({ user }) {
       </section>
 
       <div className="feed-post-list">
-        {items.length ? items.map((item, index) => (
-          <React.Fragment key={`feed-post-wrap-${item.id}-${item.created_at}`}>
-            <FeedPostCard item={item} onOpenProfile={setSelectedProfile} onFriendRequest={handleFriendRequest} />
-            {(index + 1) % 5 === 0 ? <MonetizationAdBanner placement="home_feed_inline" className="feed-inline-ad" compact /> : null}
-            {directAds.length && (index + 1) % 4 === 0 ? <DirectAdCard item={directAds[index % directAds.length]} compact /> : null}
-          </React.Fragment>
-        )) : (
+        {items.length ? items.map((item, index) => {
+          const feedPosition = index + 1
+          const shouldShowAdSlot = feedPosition % 10 === 0
+          const adBlockIndex = Math.floor(feedPosition / 10)
+          const shouldShowDirectAd = shouldShowAdSlot && directAds.length > 0 && adBlockIndex % 2 === 0
+          const directAdItem = shouldShowDirectAd ? directAds[(adBlockIndex - 1) % directAds.length] : null
+          return (
+            <React.Fragment key={`feed-post-wrap-${item.id}-${item.created_at}`}>
+              <FeedPostCard item={item} onOpenProfile={setSelectedProfile} onFriendRequest={handleFriendRequest} />
+              {shouldShowAdSlot ? (
+                directAdItem ? (
+                  <DirectAdCard item={directAdItem} compact />
+                ) : (
+                  <MonetizationAdBanner placement="home_feed_inline" className="feed-inline-ad" compact user={user} pageKey="/" eventKeySuffix={`home-${feedPosition}`} />
+                )
+              ) : null}
+            </React.Fragment>
+          )
+        }) : (
           <div className="card">현재 표시할 피드가 없습니다. 먼저 피드를 작성해보세요.</div>
         )}
       </div>

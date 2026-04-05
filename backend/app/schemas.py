@@ -208,3 +208,13 @@ class AdminDirectAdProcessIn(BaseModel):
     status: str = "approved"
     note: str = ""
 
+
+
+class AdEventIn(BaseModel):
+    placement: str = "home_feed_inline"
+    event_type: str = "impression"
+    ad_kind: str = "adsense"
+    ad_unit_key: str = ""
+    campaign_id: int | None = None
+    page_key: str = ""
+    event_key: str = ""

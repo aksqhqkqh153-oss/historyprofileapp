@@ -1,46 +1,34 @@
-# 질문 화면 광고 수익화 설정
+# 광고 수익화 설정
 
-## 추천 방식
-- 기본 추천: Google AdSense 반응형 디스플레이 광고
-- 추가 고수익 전략: 특정 업종 스폰서를 직접 판매하는 direct 모드
+## 적용 범위
+- 질문 프로필 상단 광고
+- 질문 피드 인라인 광고
+- 홈 피드 10개 단위 광고
+- 리워드센터 인라인 광고
 
 ## 프론트 환경변수
 ```env
 VITE_QUESTION_PROFILE_AD_MODE=adsense
 VITE_ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
 VITE_ADSENSE_SLOT_QUESTION_PROFILE=1234567890
+VITE_ADSENSE_SLOT_QUESTION_FEED_INLINE=1234567891
+VITE_ADSENSE_SLOT_HOME_FEED_INLINE=1234567892
+VITE_ADSENSE_SLOT_REWARDS_INLINE=1234567893
+VITE_ADS_HIDE_FOR_ADMIN=true
+VITE_ADS_HIDDEN_GRADES=1
 ```
 
-직접 판매형 광고를 쓰려면:
-```env
-VITE_QUESTION_PROFILE_AD_MODE=direct
-VITE_DIRECT_AD_LABEL=추천 광고
-VITE_DIRECT_AD_TITLE=브랜드 제휴 광고를 연결해 보세요
-VITE_DIRECT_AD_DESC=이 영역에 고정 스폰서 설명을 넣습니다.
-VITE_DIRECT_AD_CTA=광고 문의
-VITE_DIRECT_AD_LINK=https://your-domain.com/ads
-VITE_DIRECT_AD_IMAGE=https://your-domain.com/ad-banner.png
-```
+## 동작 방식
+- 홈 피드는 피드 10개마다 광고 슬롯 1개를 삽입합니다.
+- 직접 광고가 등록되어 있으면 20개 단위 슬롯에는 직접 광고를 우선 노출하고, 나머지 슬롯은 AdSense를 노출합니다.
+- 관리자/특정 등급은 환경변수로 광고 미노출 처리할 수 있습니다.
 
-## Cloudflare Pages Variables 예시
-- `VITE_QUESTION_PROFILE_AD_MODE`
-- `VITE_ADSENSE_CLIENT`
-- `VITE_ADSENSE_SLOT_QUESTION_PROFILE`
+## 로그 저장
+- 광고 노출 로그: `app_ad_event_logs`
+- 광고 일자별 집계: `app_ad_daily_stats`
+- 관리자 확인용 API: `/api/admin/ads/overview`
+- 이벤트 수집 API: `/api/ads/events`
 
-## 적용 순서
-1. AdSense 승인 후 사이트용 코드에서 publisher id를 확인합니다.
-2. 질문 화면 전용 광고 단위를 만들고 slot id를 발급받습니다.
-3. Cloudflare Pages > Settings > Variables에 값을 등록합니다.
-4. 프론트 재배포 후 공개 질문 화면에서 광고가 노출되는지 확인합니다.
-5. 개발/테스트에서는 실제 광고 클릭 테스트를 하지 않습니다.
-
-## 운영 메모
-- 공개 질문/답변처럼 UGC가 포함된 화면은 신고/차단/검수 정책을 유지하는 편이 안전합니다.
-- 직접 스폰서를 붙일 수 있으면 `direct` 모드가 더 높은 단가를 만들 가능성이 큽니다.
-
-
-## 2026-04-05 고정 수익 정책
-- 무료 기능: DM(채팅), 질문(하기/받기)
-- 유료 기능: 출금 수수료 5%
-- 비활성화 기능: 키워드 입찰, DM 과금
-- 기본 광고 지면: 질문 상단, 질문 본문 인라인, 홈 피드 인라인, 리워드센터 인라인
+## 참고
+- AdSense 클릭은 네트워크 최종 클릭 확정값이 아니라 프론트 인터랙션 기반 로그입니다.
+- 직접 광고 클릭은 `app_direct_ad_campaigns.clicks`와 이벤트 로그에 함께 반영됩니다.

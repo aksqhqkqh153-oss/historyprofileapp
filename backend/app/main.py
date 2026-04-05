@@ -644,6 +644,7 @@ def ensure_profile_tables(conn=None) -> None:
         ensure_brand_verification_tables(conn)
         ensure_keyword_boost_tables(conn)
         ensure_direct_ad_tables(conn)
+        ensure_ad_event_tables(conn)
         ensure_indexes(conn)
         cleanup_expired_marketing_assets(conn)
 
@@ -765,6 +766,89 @@ def ensure_keyword_boost_tables(conn) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_keyword_boosts_keyword_status ON app_keyword_boosts(keyword, status, created_at DESC)")
 
 
+
+
+def ensure_ad_event_tables(conn) -> None:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS app_ad_event_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        user_grade INTEGER NOT NULL DEFAULT 0,
+        user_role TEXT NOT NULL DEFAULT '',
+        placement TEXT NOT NULL DEFAULT '',
+        event_type TEXT NOT NULL DEFAULT 'impression',
+        ad_kind TEXT NOT NULL DEFAULT 'adsense',
+        ad_unit_key TEXT NOT NULL DEFAULT '',
+        campaign_id INTEGER,
+        page_key TEXT NOT NULL DEFAULT '',
+        event_key TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
+        UNIQUE(event_key)
+    )
+    """)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS app_ad_daily_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        stat_date TEXT NOT NULL,
+        placement TEXT NOT NULL DEFAULT '',
+        event_type TEXT NOT NULL DEFAULT 'impression',
+        ad_kind TEXT NOT NULL DEFAULT 'adsense',
+        ad_unit_key TEXT NOT NULL DEFAULT '',
+        campaign_id INTEGER,
+        total_count INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        UNIQUE(stat_date, placement, event_type, ad_kind, ad_unit_key, campaign_id)
+    )
+    """)
+    with suppress(Exception):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ad_event_logs_created ON app_ad_event_logs(created_at DESC)")
+    with suppress(Exception):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ad_event_logs_placement_event ON app_ad_event_logs(placement, event_type, created_at DESC)")
+    with suppress(Exception):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ad_daily_stats_date ON app_ad_daily_stats(stat_date, placement, event_type)")
+
+
+def record_ad_event(conn, *, placement: str, event_type: str, ad_kind: str = 'adsense', ad_unit_key: str = '', campaign_id: int | None = None, page_key: str = '', event_key: str = '', user: dict[str, Any] | None = None) -> bool:
+    ensure_ad_event_tables(conn)
+    placement_value = (placement or 'unknown').strip()[:80]
+    event_type_value = (event_type or 'impression').strip().lower()[:20]
+    ad_kind_value = (ad_kind or 'adsense').strip().lower()[:40]
+    ad_unit_value = (ad_unit_key or '').strip()[:120]
+    page_value = (page_key or '').strip()[:120]
+    campaign_value = int(campaign_id or 0) or None
+    user_id = int(user.get('id') or 0) if user else None
+    user_grade = int(user.get('grade') or 0) if user else 0
+    user_role = str(user.get('role') or '')[:40] if user else ''
+    created_at = utcnow()
+    date_key = created_at[:10]
+    if not event_key:
+        event_key = f"{placement_value}:{event_type_value}:{ad_kind_value}:{campaign_value or 0}:{user_id or 0}:{created_at}"
+    event_key = event_key[:180]
+    try:
+        conn.execute(
+            "INSERT INTO app_ad_event_logs(user_id, user_grade, user_role, placement, event_type, ad_kind, ad_unit_key, campaign_id, page_key, event_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, user_grade, user_role, placement_value, event_type_value, ad_kind_value, ad_unit_value, campaign_value, page_value, event_key, created_at),
+        )
+    except Exception:
+        return False
+    stat_row = conn.execute(
+        "SELECT id, total_count FROM app_ad_daily_stats WHERE stat_date = ? AND placement = ? AND event_type = ? AND ad_kind = ? AND ad_unit_key = ? AND COALESCE(campaign_id, 0) = ?",
+        (date_key, placement_value, event_type_value, ad_kind_value, ad_unit_value, int(campaign_value or 0)),
+    ).fetchone()
+    if stat_row:
+        conn.execute("UPDATE app_ad_daily_stats SET total_count = ?, updated_at = ? WHERE id = ?", (int(stat_row['total_count'] or 0) + 1, created_at, stat_row['id']))
+    else:
+        conn.execute(
+            "INSERT INTO app_ad_daily_stats(stat_date, placement, event_type, ad_kind, ad_unit_key, campaign_id, total_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+            (date_key, placement_value, event_type_value, ad_kind_value, ad_unit_value, campaign_value, created_at),
+        )
+    if campaign_value:
+        if event_type_value == 'impression':
+            conn.execute("UPDATE app_direct_ad_campaigns SET impressions = COALESCE(impressions, 0) + 1 WHERE id = ?", (campaign_value,))
+        elif event_type_value == 'click':
+            conn.execute("UPDATE app_direct_ad_campaigns SET clicks = COALESCE(clicks, 0) + 1 WHERE id = ?", (campaign_value,))
+    return True
 
 
 def ensure_direct_ad_tables(conn) -> None:
@@ -1334,18 +1418,47 @@ def list_active_direct_ads(placement: str = Query(default='home_feed'), limit: i
         category_norm = normalize_keyword(category)
         if category_norm:
             items = [item for item in items if normalize_keyword(item.get('category') or '') == category_norm][:limit]
-        for item in items:
-            conn.execute("UPDATE app_direct_ad_campaigns SET impressions = COALESCE(impressions, 0) + 1 WHERE id = ?", (int(item.get('id') or 0),))
-            item['impressions'] = int(item.get('impressions') or 0) + 1
         return {'items': items, 'competition': direct_ad_competition_payload(conn, placement=placement, category=category_norm)}
 
 
 @app.post("/api/direct-ads/{campaign_id}/click")
-def track_direct_ad_click(campaign_id: int):
+def track_direct_ad_click(campaign_id: int, user=Depends(current_user_optional)):
     with get_conn() as conn:
         ensure_direct_ad_tables(conn)
-        conn.execute("UPDATE app_direct_ad_campaigns SET clicks = COALESCE(clicks, 0) + 1 WHERE id = ?", (campaign_id,))
+        record_ad_event(conn, placement='home_feed_inline', event_type='click', ad_kind='direct', campaign_id=campaign_id, page_key='home', event_key=f'direct-click:{campaign_id}:{make_token()}', user=user)
         return {'ok': True}
+
+
+@app.post("/api/ads/events")
+def track_ad_event(payload: AdEventIn, user=Depends(current_user_optional)):
+    placement = (payload.placement or 'home_feed_inline').strip().lower()[:80]
+    event_type = (payload.event_type or 'impression').strip().lower()
+    ad_kind = (payload.ad_kind or 'adsense').strip().lower()[:40]
+    if event_type not in {'impression', 'click'}:
+        raise HTTPException(status_code=400, detail='허용되지 않는 광고 이벤트 타입입니다.')
+    with get_conn() as conn:
+        ensure_ad_event_tables(conn)
+        created = record_ad_event(
+            conn,
+            placement=placement,
+            event_type=event_type,
+            ad_kind=ad_kind,
+            ad_unit_key=(payload.ad_unit_key or '')[:120],
+            campaign_id=payload.campaign_id,
+            page_key=(payload.page_key or '')[:120],
+            event_key=(payload.event_key or '')[:180],
+            user=user,
+        )
+        return {'ok': True, 'created': bool(created)}
+
+
+@app.get("/api/admin/ads/overview")
+def admin_ads_overview(user=Depends(admin_user)):
+    with get_conn() as conn:
+        ensure_ad_event_tables(conn)
+        recent = [row_to_dict(item) for item in conn.execute("SELECT * FROM app_ad_event_logs ORDER BY id DESC LIMIT 200").fetchall()]
+        daily = [row_to_dict(item) for item in conn.execute("SELECT * FROM app_ad_daily_stats ORDER BY stat_date DESC, id DESC LIMIT 120").fetchall()]
+        return {'recent': recent, 'daily': daily}
 
 
 @app.post("/api/admin/direct-ads/{campaign_id}/process")
