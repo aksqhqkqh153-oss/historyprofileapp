@@ -163,3 +163,30 @@ class RewardWithdrawalIn(BaseModel):
 
 class RewardActionIn(BaseModel):
     profile_id: int | None = None
+
+
+class AdminRewardWithdrawalProcessIn(BaseModel):
+    status: str = "approved"
+    note: str = ""
+    rejection_reason: str = ""
+
+
+class BrandVerificationRequestIn(BaseModel):
+    profile_id: int
+    business_name: str = ""
+    business_category: str = ""
+    website_url: str = ""
+    note: str = ""
+
+
+class KeywordBoostCreateIn(BaseModel):
+    content_type: str = "feed_post"
+    content_id: int
+    keyword: str
+    points_spent: int = 0
+
+
+class AdminBrandVerificationProcessIn(BaseModel):
+    status: str = "approved"
+    note: str = ""
+

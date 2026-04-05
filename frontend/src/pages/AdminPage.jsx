@@ -110,12 +110,13 @@ export default function AdminPage() {
   const [costGuide, setCostGuide] = useState(null)
   const [smsTestPhone, setSmsTestPhone] = useState('')
   const [integrationMessage, setIntegrationMessage] = useState('')
+  const [rewardsOverview, setRewardsOverview] = useState(null)
   const [calculatorInputs, setCalculatorInputs] = useState(() => (
     Object.fromEntries(MONETIZATION_MODELS.map(model => [model.key, createCalculatorState(model)]))
   ))
 
   async function load() {
-    const [o, r, u, us, q, h, integ, guide] = await Promise.all([
+    const [o, r, u, us, q, h, integ, guide, rewards] = await Promise.all([
       api('/api/admin/overview'),
       api('/api/admin/reports'),
       api('/api/admin/uploads'),
@@ -124,6 +125,7 @@ export default function AdminPage() {
       api('/api/admin/moderation/history'),
       api('/api/admin/integrations/status'),
       api('/api/admin/cost-protection/guide'),
+      api('/api/admin/rewards/overview'),
     ])
     setOverview(o)
     setReports(r.items || [])
@@ -133,6 +135,7 @@ export default function AdminPage() {
     setHistory(h.items || [])
     setIntegrationStatus(integ)
     setCostGuide(guide)
+    setRewardsOverview(rewards)
   }
 
   useEffect(() => { load() }, [])
@@ -191,6 +194,19 @@ export default function AdminPage() {
     setIntegrationMessage(data.debug_code ? `데모 코드: ${data.debug_code}` : `${data.provider} / ${data.status}`)
   }
 
+  async function processRewardWithdrawal(item, status) {
+    const rejectionReason = status === 'rejected' ? (window.prompt('반려 사유를 입력하세요', '증빙 부족') || '') : ''
+    const note = status === 'paid' ? (window.prompt('지급 메모를 입력하세요', '송금 완료') || '') : (status === 'approved' ? '지급 준비 승인' : '')
+    await api(`/api/admin/rewards/withdrawals/${item.id}/process`, { method: 'POST', body: JSON.stringify({ status, note, rejection_reason: rejectionReason }) })
+    await load()
+  }
+
+  async function processBrandVerification(item, status) {
+    const note = window.prompt(status === 'approved' ? '승인 메모를 입력하세요' : '반려 사유를 입력하세요', status === 'approved' ? '브랜드/기업 인증 승인' : '증빙 확인 필요') || ''
+    await api(`/api/admin/brand-verification/${item.id}/process`, { method: 'POST', body: JSON.stringify({ status, note }) })
+    await load()
+  }
+
   const pendingCounts = useMemo(() => ({
     reports: reports.filter(item => item.status === 'pending').length,
     uploads: uploads.filter(item => item.moderation_status === 'pending').length,
@@ -224,6 +240,84 @@ export default function AdminPage() {
           <Metric label="자동 비공개 프로필" value={overview.auto_private_profiles || 0} />
           <Metric label="경고 사용자" value={overview.warned_users || 0} />
           <Metric label="정지 사용자" value={overview.suspended_users || 0} />
+        </section>
+      ) : null}
+
+      {rewardsOverview ? (
+        <section className="card stack">
+          <div className="split-row responsive-row">
+            <div>
+              <h3>리워드 정산 관리자</h3>
+              <div className="muted small-text">회원 활동 기반 포인트 적립과 출금 요청을 검수하고 지급 상태를 관리합니다.</div>
+            </div>
+            <div className="muted small-text">최소 출금 10,000P · 월 1회</div>
+          </div>
+
+          <div className="grid-4">
+            <Metric label="대기 출금" value={rewardsOverview.summary?.pending_count || 0} />
+            <Metric label="승인 대기" value={rewardsOverview.summary?.approved_count || 0} />
+            <Metric label="지급 완료" value={rewardsOverview.summary?.paid_count || 0} />
+            <Metric label="지급 예정 포인트" value={`${formatNumber(rewardsOverview.summary?.total_pending_points || 0)}P`} />
+          </div>
+
+          <div className="grid-2">
+            <div className="stack compact-list">
+              <strong>출금 요청 목록</strong>
+              {(rewardsOverview.requests || []).map(item => (
+                <div key={`reward-request-${item.id}`} className="bordered-box stack">
+                  <div className="split-row responsive-row">
+                    <strong>{item.nickname || item.email || `회원 #${item.user_id}`}</strong>
+                    <strong>{formatNumber(item.points_amount || 0)}P</strong>
+                  </div>
+                  <div className="muted small-text">{item.email} · {item.bank_name} · {item.account_holder} · {item.account_number_masked}</div>
+                  <div className="muted small-text">상태: {item.status} · 신청일: {item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : '-'}</div>
+                  {item.rejection_reason ? <div className="muted small-text">반려 사유: {item.rejection_reason}</div> : null}
+                  <div className="action-wrap wrap-row">
+                    <button type="button" className="ghost" onClick={() => processRewardWithdrawal(item, 'approved')} disabled={item.status === 'approved' || item.status === 'paid'}>승인</button>
+                    <button type="button" className="ghost" onClick={() => processRewardWithdrawal(item, 'rejected')} disabled={item.status === 'paid'}>반려</button>
+                    <button type="button" onClick={() => processRewardWithdrawal(item, 'paid')} disabled={item.status === 'paid'}>지급완료</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="stack compact-list">
+              <strong>상위 리워드 회원</strong>
+              {(rewardsOverview.top_users || []).map(item => (
+                <div key={`top-user-${item.user_id}`} className="bordered-box">
+                  <div className="split-row responsive-row"><strong>{item.nickname || item.email}</strong><strong>{formatNumber(item.earned_points || 0)}P</strong></div>
+                  <div className="muted small-text">예상 월 리워드 {formatNumber(item.projected_month_points || 0)}P · 예상 광고 노출 지수 {formatNumber(item.estimated_ad_exposure || 0)}회</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid-2">
+            <div className="stack compact-list">
+              <strong>브랜드/기업 인증 요청</strong>
+              {(rewardsOverview.brand_requests || []).length ? rewardsOverview.brand_requests.map(item => (
+                <div key={`brand-request-${item.id}`} className="bordered-box stack">
+                  <div className="split-row responsive-row"><strong>{item.business_name || item.nickname || item.email}</strong><strong>{item.status}</strong></div>
+                  <div className="muted small-text">{item.email} · {item.business_category || '업종 미입력'} · {item.website_url || '웹사이트 없음'}</div>
+                  <div className="muted small-text">신청일: {item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : '-'}</div>
+                  <div className="action-wrap wrap-row">
+                    <button type="button" className="ghost" onClick={() => processBrandVerification(item, 'approved')} disabled={item.status === 'approved'}>승인</button>
+                    <button type="button" onClick={() => processBrandVerification(item, 'rejected')}>반려</button>
+                  </div>
+                </div>
+              )) : <div className="muted small-text">인증 요청이 없습니다.</div>}
+            </div>
+
+            <div className="stack compact-list">
+              <strong>상위 노출 키워드 경쟁</strong>
+              {(rewardsOverview.top_keywords || []).length ? rewardsOverview.top_keywords.map(item => (
+                <div key={`top-keyword-${item.keyword}`} className="bordered-box">
+                  <div className="split-row responsive-row"><strong>{item.keyword}</strong><strong>{formatNumber(item.total_points || 0)}P</strong></div>
+                  <div className="muted small-text">활성 콘텐츠 {formatNumber(item.item_count || 0)}개</div>
+                </div>
+              )) : <div className="muted small-text">활성 키워드 경쟁이 없습니다.</div>}
+            </div>
+          </div>
         </section>
       ) : null}
 

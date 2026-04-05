@@ -190,6 +190,11 @@ function IconGlyph({ name, label }) {
   return <span className="icon-symbol" aria-label={label}>{icons[name] || icons.home}</span>
 }
 
+function VerifiedBadge({ profile, compact = false }) {
+  if (!profile?.brand_verified) return null
+  return <span className={`verified-badge${compact ? ' compact' : ''}`.trim()} title={profile?.verification_badge_text || '브랜드/기업 인증'}>{profile?.verification_badge_text || '브랜드/기업 인증'}</span>
+}
+
 function BackIconButton({ onClick, className = '', label = '뒤로가기' }) {
   return (
     <button type="button" className={`icon-button ghost back-icon-button ${className}`.trim()} onClick={onClick} aria-label={label} title={label}>
@@ -746,10 +751,17 @@ function MorePage({ onOpenSheet, isAdmin }) {
 
 
 function RewardsPage() {
+  const currentUser = getStoredUser()
+  const currentUserId = Number(currentUser?.id || 0)
   const [summary, setSummary] = useState(null)
   const [profiles, setProfiles] = useState([])
   const [selectedProfileId, setSelectedProfileId] = useState(getStoredActiveProfileId())
   const [withdrawForm, setWithdrawForm] = useState({ account_holder: '', bank_name: '', account_number: '', note: '' })
+  const [brandForm, setBrandForm] = useState({ business_name: '', business_category: '', website_url: '', note: '' })
+  const [boostForm, setBoostForm] = useState({ content_type: 'feed_post', content_id: '', keyword: '', points_spent: 1000 })
+  const [competition, setCompetition] = useState(null)
+  const [feedItems, setFeedItems] = useState([])
+  const [communityItems, setCommunityItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -758,14 +770,22 @@ function RewardsPage() {
     setLoading(true)
     setError('')
     try {
-      const [summaryData, profileData] = await Promise.all([api('/api/rewards/summary'), api('/api/profiles')])
+      const [summaryData, profileData, feedData, communityData] = await Promise.all([api('/api/rewards/summary'), api('/api/profiles'), api('/api/feed/posts?limit=20&offset=0'), api('/api/community/posts')])
       setSummary(summaryData)
-      const items = Array.isArray(profileData?.items) ? profileData.items : []
-      setProfiles(items)
-      if (!selectedProfileId && items.length) {
-        const fallbackId = Number(items[0]?.id || 0)
+      const profileItems = Array.isArray(profileData?.items) ? profileData.items : []
+      setProfiles(profileItems)
+      const ownFeedItems = (Array.isArray(feedData?.items) ? feedData.items : []).filter(item => Number(item?.owner?.id || item?.user_id || 0) === currentUserId)
+      const ownCommunityItems = (Array.isArray(communityData?.items) ? communityData.items : []).filter(item => Number(item?.author?.id || 0) === currentUserId)
+      setFeedItems(ownFeedItems)
+      setCommunityItems(ownCommunityItems)
+      if (!selectedProfileId && profileItems.length) {
+        const fallbackId = Number(profileItems[0]?.id || 0)
         setSelectedProfileId(fallbackId)
         setStoredActiveProfileId(fallbackId)
+      }
+      const firstProfile = profileItems[0] || null
+      if (firstProfile) {
+        setBrandForm(prev => ({ ...prev, business_name: prev.business_name || firstProfile.display_name || firstProfile.title || '' }))
       }
     } catch (err) {
       setError(err.message || '포인트 데이터를 불러오지 못했습니다.')
@@ -784,6 +804,8 @@ function RewardsPage() {
   const withdrawCount = Number(summary?.monthly_withdraw_count || 0)
   const withdrawLimit = Number(summary?.monthly_withdraw_limit || 1)
   const canWithdraw = Boolean(summary?.can_withdraw)
+  const selectedBoostItems = boostForm.content_type === 'feed_post' ? feedItems : communityItems
+  const activeProfile = profiles.find(item => Number(item.id) === Number(selectedProfileId))
 
   async function handleShareProfile() {
     const profile = profiles.find(item => Number(item.id) === Number(selectedProfileId))
@@ -797,10 +819,7 @@ function RewardsPage() {
         window.alert('공개 프로필 주소를 복사했습니다.')
       }
     } catch {
-      try {
-        await navigator.clipboard.writeText(publicUrl)
-        window.alert('공개 프로필 주소를 복사했습니다.')
-      } catch {}
+      try { await navigator.clipboard.writeText(publicUrl); window.alert('공개 프로필 주소를 복사했습니다.') } catch {}
     }
     const result = await claimProfileShareReward(profile.id)
     if (result?.summary) setSummary(result.summary)
@@ -837,13 +856,54 @@ function RewardsPage() {
     }
   }
 
+  async function handleBrandVerificationRequest(e) {
+    e.preventDefault()
+    if (!selectedProfileId) return window.alert('프로필을 먼저 선택해주세요.')
+    setSubmitting(true)
+    try {
+      const result = await api('/api/rewards/brand-verification/request', { method: 'POST', body: JSON.stringify({ profile_id: Number(selectedProfileId), ...brandForm }) })
+      if (result?.summary) setSummary(result.summary)
+      window.alert('브랜드/기업 인증 요청이 접수되었습니다. 관리자 검수 후 인증 마크가 반영됩니다.')
+    } catch (err) {
+      window.alert(err.message || '브랜드 인증 요청에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleBoostSubmit(e) {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      const result = await api('/api/rewards/keyword-boosts', { method: 'POST', body: JSON.stringify({ ...boostForm, content_id: Number(boostForm.content_id || 0), points_spent: Number(boostForm.points_spent || 0) }) })
+      if (result?.summary) setSummary(result.summary)
+      if (result?.competition) setCompetition(result.competition)
+      window.alert('키워드 상위 노출 포인트 사용이 반영되었습니다.')
+    } catch (err) {
+      window.alert(err.message || '키워드 상위 노출 적용에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleCompetitionLookup(keyword) {
+    const normalized = String(keyword || boostForm.keyword || '').trim()
+    if (!normalized) return
+    try {
+      const result = await api(`/api/rewards/keyword-competition?keyword=${encodeURIComponent(normalized)}`)
+      setCompetition(result)
+    } catch (err) {
+      window.alert(err.message || '경쟁 현황 조회에 실패했습니다.')
+    }
+  }
+
   return (
     <section className="page-stack">
       <div className="card stack">
         <div className="split-row responsive-row">
           <div className="stack gap-6">
             <strong>포인트 운영센터</strong>
-            <div className="muted small-text">광고는 플랫폼 운영 수익으로 처리하고, 회원 보상은 질문·답변·프로필 공유 같은 활동 기준으로만 적립하는 안전형 구조입니다.</div>
+            <div className="muted small-text">질문/답변/홈 피드 광고 노출은 플랫폼 수익으로 처리하고, 회원 보상은 활동 포인트 기준으로만 적립하는 구조입니다.</div>
           </div>
           <button type="button" className="ghost" onClick={load}>새로고침</button>
         </div>
@@ -860,11 +920,40 @@ function RewardsPage() {
         </div>
       </div>
 
+      <div className="card stack">
+        <div className="split-row responsive-row">
+          <div className="stack gap-6">
+            <strong>리워드 대시보드</strong>
+            <div className="muted small-text">실제 광고 수익을 직접 보여주지 않고, 최근 활동량을 기준으로 안전하게 계산한 예상 리워드 지표입니다.</div>
+          </div>
+          <Link className="button-link" to="/questions">질문 화면 보기</Link>
+        </div>
+        <div className="grid-4 rewards-metric-grid">
+          <Metric label="오늘 적립" value={`${Number(summary?.today_earned || 0).toLocaleString()}P`} />
+          <Metric label="최근 7일 적립" value={`${Number(summary?.week_earned || 0).toLocaleString()}P`} />
+          <Metric label="예상 월 리워드" value={`${Number(summary?.estimated?.projected_month_points || 0).toLocaleString()}P`} />
+          <Metric label="예상 광고 노출 지수" value={`${Number(summary?.estimated?.estimated_ad_exposure || 0).toLocaleString()}회`} />
+        </div>
+        <div className="grid-2 rewards-grid">
+          <div className="mini-card rewards-rule-card stack">
+            <div className="split-row responsive-row"><strong>현재 리워드 상태</strong><strong>{Number(summary?.estimated?.expected_cash_krw || 0).toLocaleString()}원</strong></div>
+            <div className="muted small-text">예상 현금 전환 금액은 활동 점수 기반 추정치이며 실제 광고 정산 금액과 1:1로 연결되지 않습니다.</div>
+            <div className="muted small-text">질문 수 {Number(summary?.estimated?.received_questions || 0).toLocaleString()}건 · 답변 완료 {Number(summary?.estimated?.answered_questions || 0).toLocaleString()}건 · 최근 공유 {Number(summary?.estimated?.profile_shares_7d || 0).toLocaleString()}회</div>
+          </div>
+          <div className="mini-card rewards-rule-card stack">
+            <div className="split-row responsive-row"><strong>운영 안내</strong><strong>월 1회 출금</strong></div>
+            <div className="stack compact-list">
+              {(summary?.insights || []).map((item, index) => <div key={`insight-${index}`} className="bordered-box small-text">{item}</div>)}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid-2 rewards-grid">
         <div className="card stack">
           <div className="split-row responsive-row"><strong>적립 기준</strong><span className="muted small-text">광고 시청/클릭 보상 아님</span></div>
           <div className="stack compact-list">
-            {(summary?.rules || []).map(item => (
+            {(summary?.rules || []).filter(item => item.code !== 'keyword_boost_spend').map(item => (
               <div key={item.code} className="mini-card rewards-rule-card">
                 <div className="split-row responsive-row"><strong>{item.label}</strong><strong>{Number(item.points || 0).toLocaleString()}P</strong></div>
                 <div className="muted small-text">{item.description}</div>
@@ -887,6 +976,77 @@ function RewardsPage() {
           <div className="stack compact-list">
             {(summary?.notices || []).map((item, index) => <div key={`notice-${index}`} className="bordered-box small-text">{item}</div>)}
           </div>
+        </div>
+      </div>
+
+      <div className="grid-2 rewards-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>브랜드/기업 인증 마크</strong><span className="muted small-text">운영자 검수형</span></div>
+          <div className="muted small-text">브랜드/기업 계정은 프로필과 피드에 인증 마크를 표시할 수 있습니다. 승인 시 피드/질문/공개프로필에서 뱃지가 노출됩니다.</div>
+          <div className="bordered-box small-text">현재 선택 프로필: {activeProfile ? `${activeProfile.display_name || activeProfile.title} ${activeProfile.brand_verified ? '· 인증됨' : '· 미인증'}` : '선택 안 됨'}</div>
+          <form className="stack" onSubmit={handleBrandVerificationRequest}>
+            <div className="grid-2">
+              <TextField label="브랜드명" value={brandForm.business_name} onChange={value => setBrandForm(prev => ({ ...prev, business_name: value }))} />
+              <TextField label="업종" value={brandForm.business_category} onChange={value => setBrandForm(prev => ({ ...prev, business_category: value }))} />
+            </div>
+            <TextField label="대표 웹사이트" value={brandForm.website_url} onChange={value => setBrandForm(prev => ({ ...prev, website_url: value }))} />
+            <label className="field-label">검수 메모</label>
+            <textarea value={brandForm.note} onChange={e => setBrandForm(prev => ({ ...prev, note: e.target.value }))} placeholder="사업자명, 브랜드 설명, 증빙 링크 등을 입력하세요." />
+            <button type="submit" disabled={!selectedProfileId || submitting}>브랜드/기업 인증 요청</button>
+          </form>
+          <div className="stack compact-list">
+            {(summary?.brand_verification?.my_requests || []).length ? summary.brand_verification.my_requests.map(item => <div key={`brand-req-${item.id}`} className="bordered-box small-text">{item.business_name || '브랜드'} · {item.status} · {formatDateLabel(item.created_at)}</div>) : <div className="muted small-text">아직 인증 요청 내역이 없습니다.</div>}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>외부 플랫폼 인증 요금 참고</strong><span className="muted small-text">공식 정책 참고용</span></div>
+          <div className="stack compact-list">
+            {(summary?.brand_verification?.external_examples || []).map(item => (
+              <div key={item.platform} className="mini-card rewards-rule-card">
+                <div className="split-row responsive-row"><strong>{item.platform}</strong><strong>{item.price_text}</strong></div>
+                <div className="muted small-text">서비스별 실제 지역 요금과 세금은 다를 수 있습니다.</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-2 rewards-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>키워드 상위 노출</strong><span className="muted small-text">포인트 사용형</span></div>
+          <div className="muted small-text">내가 작성한 피드/게시글을 특정 키워드 검색 시 상위권에 더 잘 보이도록 포인트를 사용할 수 있습니다.</div>
+          <form className="stack" onSubmit={handleBoostSubmit}>
+            <div className="grid-2">
+              <label className="stack small-text"><span>대상</span><select value={boostForm.content_type} onChange={e => setBoostForm(prev => ({ ...prev, content_type: e.target.value, content_id: '' }))}><option value="feed_post">피드</option><option value="community_post">게시글</option></select></label>
+              <label className="stack small-text"><span>콘텐츠</span><select value={boostForm.content_id} onChange={e => setBoostForm(prev => ({ ...prev, content_id: e.target.value }))}><option value="">선택</option>{selectedBoostItems.map(item => <option key={`${boostForm.content_type}-${item.id}`} value={item.id}>{(item.display_title || item.title || item.summary || item.content || '콘텐츠').slice(0, 40)}</option>)}</select></label>
+            </div>
+            <div className="grid-2">
+              <TextField label="키워드" value={boostForm.keyword} onChange={value => setBoostForm(prev => ({ ...prev, keyword: value }))} />
+              <TextField label="사용 포인트" value={String(boostForm.points_spent)} onChange={value => setBoostForm(prev => ({ ...prev, points_spent: value.replace(/[^0-9]/g, '') }))} />
+            </div>
+            <div className="action-wrap wrap-row">
+              <button type="submit" disabled={submitting}>포인트 사용하고 노출 강화</button>
+              <button type="button" className="ghost" onClick={() => handleCompetitionLookup(boostForm.keyword)}>경쟁 현황 보기</button>
+            </div>
+          </form>
+          <div className="stack compact-list">
+            {(summary?.keyword_boosts?.my_items || []).length ? summary.keyword_boosts.my_items.map(item => (
+              <div key={`boost-${item.id}`} className="bordered-box small-text">{item.keyword} · {item.content_type === 'feed_post' ? '피드' : '게시글'} · {Number(item.points_spent || 0).toLocaleString()}P 사용 · {formatDateLabel(item.created_at)}</div>
+            )) : <div className="muted small-text">아직 사용한 키워드 노출 포인트가 없습니다.</div>}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>키워드 경쟁 현황</strong><span className="muted small-text">누구와 경쟁하는지 확인</span></div>
+          <div className="muted small-text">같은 키워드에 포인트를 사용한 사용자와 사용 포인트 순위를 보여줍니다.</div>
+          {(competition?.leaderboard || []).length ? competition.leaderboard.map(item => (
+            <div key={`competition-${item.rank}-${item.user_id}-${item.content_id}`} className={`bordered-box small-text${item.is_me ? ' competition-me' : ''}`}>
+              <div className="split-row responsive-row"><strong>{item.rank}위 · {item.nickname}</strong><strong>{Number(item.points_spent || 0).toLocaleString()}P</strong></div>
+              <div className="muted small-text">{item.content_type === 'feed_post' ? '피드' : '게시글'} · {item.content_title || '콘텐츠'} </div>
+            </div>
+          )) : <div className="muted small-text">키워드를 조회하면 경쟁 순위가 표시됩니다.</div>}
+          {competition?.my_rank ? <div className="bordered-box small-text">내 현재 순위: {competition.my_rank}위 · 키워드: {competition.keyword}</div> : null}
         </div>
       </div>
 
@@ -4205,7 +4365,7 @@ function QuestionProfilePage() {
                 {data.profile?.profile_image_url || data.owner?.photo_url ? <img src={data.profile?.profile_image_url || data.owner?.photo_url} alt={profileName} /> : <span>{profileName.slice(0, 1)}</span>}
               </span>
               <span className="question-profile-summary-copy">
-                <strong>{profileName}</strong>
+                <strong>{profileName}</strong><VerifiedBadge profile={data.profile} compact />
                 <span>{askRequested && !Boolean(data.is_owner) ? '질문을 남길 수 있는 화면입니다.' : '질문과 피드를 확인할 수 있습니다.'}</span>
               </span>
             </button>
@@ -4242,7 +4402,7 @@ function FeedProfileCard({ item, onOpenProfile }) {
       <div className="profile-meta profile-meta-overlap">
         <div className="avatar large-avatar profile-avatar-overlap">{profile.profile_image_url ? <img src={profile.profile_image_url} alt={profile.title} /> : <span>{(profile.display_name || profile.title || 'P').slice(0, 1)}</span>}</div>
         <div className="profile-head-copy">
-          <h3>{profile.display_name || profile.title}</h3>
+          <h3>{profile.display_name || profile.title} <VerifiedBadge profile={profile} compact /></h3>
           <div className="muted">{profile.headline || '소개를 준비 중입니다.'}</div>
           <div className="muted small-text">{owner?.nickname || ''}{profile.gender ? ` · ${profile.gender}` : ''}{profile.birth_year ? ` · ${profile.birth_year}년생` : ''}</div>
           <div className="muted small-text">{profile.gender || '성별 미입력'}{profile.birth_year ? ` · ${profile.birth_year}년생` : ''}</div>
@@ -4419,7 +4579,7 @@ function FeedPostCard({ item, onOpenProfile, onFriendRequest }) {
             {avatar ? <img src={avatar} alt={displayName} /> : <span>{displayName.slice(0, 1)}</span>}
           </span>
           <span className="feed-author-copy">
-            <strong>{displayName}</strong>
+            <strong>{displayName}</strong><VerifiedBadge profile={profile} compact />
             <span className="muted">{owner.nickname && owner.nickname !== displayName ? owner.nickname : profile.current_work || profile.headline || 'historyprofile 사용자'}</span>
           </span>
         </button>
@@ -4754,7 +4914,7 @@ function FriendsPage() {
                   <button type="button" className="friend-kakao-main" onClick={() => openFriendProfile(item)}>
                     <span className="friend-kakao-avatar">{item.photo_url ? <img src={item.photo_url} alt={displayName} /> : <span>{displayName.slice(0, 1)}</span>}</span>
                     <span className="friend-kakao-copy">
-                      <strong>{displayName}</strong>
+                      <strong>{displayName}</strong><VerifiedBadge profile={profile} compact />
                       <span className="muted small-text">{intro}</span>
                     </span>
                   </button>
@@ -5958,7 +6118,7 @@ function ProfileOverviewCard({ profile, expanded = false }) {
       <div className="profile-meta profile-meta-overlap">
         <div className="avatar large-avatar profile-avatar-overlap">{profile.profile_image_url ? <img src={profile.profile_image_url} alt={profile.title} /> : <span>{profile.title?.slice(0, 1) || 'P'}</span>}</div>
         <div className="profile-head-copy">
-          <h3>{profile.display_name || profile.title}</h3>
+          <h3>{profile.display_name || profile.title} <VerifiedBadge profile={profile} compact /></h3>
           <div className="muted">{profile.headline}</div>
           <div className="muted small-text">{profile.gender || '성별 미입력'}{profile.birth_year ? ` · ${profile.birth_year}년생` : ''}</div>
           <div className="muted small-text">현재 하는 일: {profile.current_work || '미입력'}</div>

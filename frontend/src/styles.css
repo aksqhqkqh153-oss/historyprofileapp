@@ -3206,3 +3206,11 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
     grid-template-columns: 1fr;
   }
 }
+
+.rewards-dashboard-note{padding:10px 12px;border:1px solid var(--line);background:#fffdf0}
+
+/* 2026-04-05 rewards brand verification + keyword competition */
+.verified-badge{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:2px 8px;border:1px solid #e7c85d;background:#fff8d9;color:#7a5d00;font-size:11px;font-weight:700;line-height:1.2;white-space:nowrap;vertical-align:middle}
+.verified-badge.compact{padding:1px 6px;font-size:10px}
+.competition-me{border-color:#d8b400;background:#fffbe8}
+.rewards-scroll-list{max-height:420px;overflow:auto}

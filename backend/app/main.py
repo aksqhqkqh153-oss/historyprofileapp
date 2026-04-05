@@ -601,6 +601,9 @@ def ensure_profile_tables(conn=None) -> None:
         ensure_column(conn, "app_uploads", "report_count INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "app_profiles", "report_count INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "app_profiles", "auto_private_reason TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "app_profiles", "account_type TEXT NOT NULL DEFAULT 'personal'")
+        ensure_column(conn, "app_profiles", "brand_verified INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "app_profiles", "verification_badge_text TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "feed_posts", "title TEXT NOT NULL DEFAULT ''")
         conn.execute("""
         CREATE TABLE IF NOT EXISTS community_posts (
@@ -633,6 +636,8 @@ def ensure_profile_tables(conn=None) -> None:
         ensure_column(conn, "dm_messages", "attachment_name TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "dm_messages", "attachment_size_bytes INTEGER NOT NULL DEFAULT 0")
         ensure_reward_tables(conn)
+        ensure_brand_verification_tables(conn)
+        ensure_keyword_boost_tables(conn)
         ensure_indexes(conn)
         cleanup_expired_marketing_assets(conn)
 
@@ -662,6 +667,7 @@ REWARD_RULES = {
     "answer_question": {"label": "답변 작성", "points": 300, "daily_limit": 20, "description": "질문에 답변을 등록하면 적립"},
     "share_profile": {"label": "프로필 공유", "points": 50, "daily_limit": 5, "description": "내 공개 프로필을 공유하면 일 최대 5회 적립"},
     "complete_profile": {"label": "프로필 정리 완료", "points": 500, "daily_limit": 1, "description": "핵심 프로필 정보를 모두 입력하면 1회 적립"},
+    "keyword_boost_spend": {"label": "키워드 상위 노출 사용", "points": -1, "daily_limit": 0, "description": "피드/게시글 키워드 상위 노출에 사용한 포인트"},
 }
 
 
@@ -702,6 +708,155 @@ def ensure_reward_tables(conn) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_point_ledger_user_created ON app_point_ledger(user_id, created_at)")
     with suppress(Exception):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_user_created ON app_withdrawal_requests(user_id, created_at)")
+
+
+
+
+def ensure_brand_verification_tables(conn) -> None:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS app_brand_verification_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        profile_id INTEGER NOT NULL,
+        business_name TEXT NOT NULL DEFAULT '',
+        business_category TEXT NOT NULL DEFAULT '',
+        website_url TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        admin_note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        processed_at TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY(profile_id) REFERENCES app_profiles(id) ON DELETE CASCADE
+    )
+    """)
+
+
+def ensure_keyword_boost_tables(conn) -> None:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS app_keyword_boosts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        profile_id INTEGER,
+        content_type TEXT NOT NULL DEFAULT 'feed_post',
+        content_id INTEGER NOT NULL,
+        keyword TEXT NOT NULL,
+        points_spent INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    with suppress(Exception):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_keyword_boosts_keyword_status ON app_keyword_boosts(keyword, status, created_at DESC)")
+
+
+def serialize_brand_verification_request(row: Any) -> dict[str, Any]:
+    item = row_to_dict(row)
+    return {
+        "id": int(item.get("id") or 0),
+        "user_id": int(item.get("user_id") or 0),
+        "profile_id": int(item.get("profile_id") or 0),
+        "business_name": item.get("business_name") or '',
+        "business_category": item.get("business_category") or '',
+        "website_url": item.get("website_url") or '',
+        "note": item.get("note") or '',
+        "status": item.get("status") or 'pending',
+        "admin_note": item.get("admin_note") or '',
+        "created_at": item.get("created_at") or '',
+        "processed_at": item.get("processed_at") or '',
+    }
+
+
+def serialize_keyword_boost(row: Any) -> dict[str, Any]:
+    item = row_to_dict(row)
+    return {
+        "id": int(item.get("id") or 0),
+        "user_id": int(item.get("user_id") or 0),
+        "profile_id": int(item.get("profile_id") or 0),
+        "content_type": item.get("content_type") or 'feed_post',
+        "content_id": int(item.get("content_id") or 0),
+        "keyword": item.get("keyword") or '',
+        "points_spent": int(item.get("points_spent") or 0),
+        "status": item.get("status") or 'active',
+        "created_at": item.get("created_at") or '',
+        "expires_at": item.get("expires_at") or '',
+    }
+
+
+def spend_points(conn, user_id: int, amount: int, *, description: str, source_type: str = '', source_id: int | None = None, source_key: str = '') -> bool:
+    points = int(amount or 0)
+    if points <= 0:
+        return False
+    balance = get_reward_balance(conn, user_id)
+    if balance['available'] < points:
+        raise HTTPException(status_code=400, detail='사용 가능한 포인트가 부족합니다.')
+    conn.execute(
+        "INSERT INTO app_point_ledger(user_id, rule_code, points, source_type, source_id, source_key, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, 'keyword_boost_spend', -points, source_type, source_id, source_key or '', description, utcnow()),
+    )
+    return True
+
+
+def normalize_keyword(value: str) -> str:
+    normalized = re.sub(r"\s+", ' ', str(value or '').strip().lower())
+    normalized = re.sub(r"[^0-9a-z가-힣\s_-]", '', normalized)
+    return normalized[:30].strip()
+
+
+def compute_keyword_boost_score(conn, *, content_type: str, content_id: int, keyword: str) -> int:
+    norm = normalize_keyword(keyword)
+    if not norm:
+        return 0
+    row = conn.execute(
+        "SELECT COALESCE(SUM(points_spent), 0) FROM app_keyword_boosts WHERE content_type = ? AND content_id = ? AND keyword = ? AND status = 'active'",
+        (content_type, content_id, norm),
+    ).fetchone()
+    return int(row[0] or 0)
+
+
+def keyword_competition_payload(conn, keyword: str, viewer_user_id: int = 0) -> dict[str, Any]:
+    norm = normalize_keyword(keyword)
+    if not norm:
+        return {"keyword": '', "leaderboard": [], "my_rank": 0}
+    rows = conn.execute("""
+        SELECT kb.user_id, kb.content_type, kb.content_id, SUM(kb.points_spent) AS total_points, MAX(kb.created_at) AS last_used
+        FROM app_keyword_boosts kb
+        WHERE kb.keyword = ? AND kb.status = 'active'
+        GROUP BY kb.user_id, kb.content_type, kb.content_id
+        ORDER BY total_points DESC, last_used DESC, kb.id DESC
+        LIMIT 20
+    """, (norm,)).fetchall()
+    leaderboard=[]
+    my_rank=0
+    for idx,row in enumerate(rows, start=1):
+        item=row_to_dict(row)
+        content_title=''
+        if item.get('content_type')=='feed_post':
+            target=conn.execute("SELECT title, content FROM feed_posts WHERE id = ?", (item.get('content_id'),)).fetchone()
+            if target:
+                content_title=(target['title'] or target['content'] or '피드').strip()[:60]
+        else:
+            target=conn.execute("SELECT title, content FROM community_posts WHERE id = ?", (item.get('content_id'),)).fetchone()
+            if target:
+                content_title=(target['title'] or target['content'] or '게시글').strip()[:60]
+        user_row=conn.execute("SELECT nickname, email FROM users WHERE id = ?", (item.get('user_id'),)).fetchone()
+        entry={
+            'rank': idx,
+            'user_id': int(item.get('user_id') or 0),
+            'content_type': item.get('content_type') or '',
+            'content_id': int(item.get('content_id') or 0),
+            'points_spent': int(item.get('total_points') or 0),
+            'last_used': item.get('last_used') or '',
+            'nickname': (user_row['nickname'] if user_row else '') or (user_row['email'] if user_row else f"회원 #{item.get('user_id')}") ,
+            'content_title': content_title,
+            'is_me': viewer_user_id and int(item.get('user_id') or 0) == int(viewer_user_id),
+        }
+        if entry['is_me']:
+            my_rank = idx
+        leaderboard.append(entry)
+    return {'keyword': norm, 'leaderboard': leaderboard, 'my_rank': my_rank}
 
 
 def month_window_from_now() -> tuple[str, str]:
@@ -796,30 +951,210 @@ def maybe_award_profile_completion(conn, user_id: int, profile_id: int) -> bool:
     return award_points(conn, user_id, 'complete_profile', source_type='profile', source_id=profile_id, source_key=f'complete_profile:{profile_id}', description='핵심 프로필 정보를 모두 입력해 보너스가 적립되었습니다.')
 
 
+def compute_reward_projection(conn, user_id: int) -> dict[str, Any]:
+    ensure_reward_tables(conn)
+    now = datetime.now()
+    today_start = datetime(now.year, now.month, now.day).isoformat()
+    week_start = (now - timedelta(days=7)).isoformat()
+    month_start, month_end = month_window_from_now()
+    today_earned = int(conn.execute("SELECT COALESCE(SUM(points), 0) FROM app_point_ledger WHERE user_id = ? AND created_at >= ?", (user_id, today_start)).fetchone()[0] or 0)
+    week_earned = int(conn.execute("SELECT COALESCE(SUM(points), 0) FROM app_point_ledger WHERE user_id = ? AND created_at >= ?", (user_id, week_start)).fetchone()[0] or 0)
+    month_earned = int(conn.execute("SELECT COALESCE(SUM(points), 0) FROM app_point_ledger WHERE user_id = ? AND created_at >= ? AND created_at < ?", (user_id, month_start, month_end)).fetchone()[0] or 0)
+    answered_count = int(conn.execute("SELECT COUNT(*) FROM app_questions q JOIN app_profiles p ON p.id = q.profile_id WHERE p.user_id = ? AND q.status = 'answered' AND COALESCE(q.deleted_at, '') = ''", (user_id,)).fetchone()[0] or 0)
+    question_count = int(conn.execute("SELECT COUNT(*) FROM app_questions q JOIN app_profiles p ON p.id = q.profile_id WHERE p.user_id = ? AND COALESCE(q.deleted_at, '') = ''", (user_id,)).fetchone()[0] or 0)
+    share_count = int(conn.execute("SELECT COUNT(*) FROM app_point_ledger WHERE user_id = ? AND rule_code = 'share_profile' AND created_at >= ?", (user_id, week_start)).fetchone()[0] or 0)
+    public_profile_count = int(conn.execute("SELECT COUNT(*) FROM app_profiles WHERE user_id = ? AND is_public = 1", (user_id,)).fetchone()[0] or 0)
+    activity_score_7d = week_earned + (answered_count * 40) + (share_count * 25) + (public_profile_count * 30)
+    projected_month_points = max(month_earned, int(round(week_earned * 4.3)))
+    estimated_ad_exposure = max(0, answered_count * 35 + question_count * 18 + share_count * 12 + public_profile_count * 40)
+    expected_cash_krw = projected_month_points
+    return {
+        "today_earned": today_earned,
+        "week_earned": week_earned,
+        "month_earned": month_earned,
+        "activity_score_7d": activity_score_7d,
+        "projected_month_points": projected_month_points,
+        "expected_cash_krw": expected_cash_krw,
+        "estimated_ad_exposure": estimated_ad_exposure,
+        "answered_questions": answered_count,
+        "received_questions": question_count,
+        "profile_shares_7d": share_count,
+        "public_profiles": public_profile_count,
+    }
+
+
 def reward_summary_payload(conn, user_id: int) -> dict[str, Any]:
     ensure_reward_tables(conn)
     balance = get_reward_balance(conn, user_id)
-    month_start, month_end = month_window_from_now()
-    month_earned = int(conn.execute("SELECT COALESCE(SUM(points), 0) FROM app_point_ledger WHERE user_id = ? AND created_at >= ? AND created_at < ?", (user_id, month_start, month_end)).fetchone()[0] or 0)
+    projection = compute_reward_projection(conn, user_id)
+    month_earned = int(projection.get('month_earned') or 0)
     month_withdraw_count = monthly_withdraw_count(conn, user_id)
     ledger_rows = conn.execute("SELECT * FROM app_point_ledger WHERE user_id = ? ORDER BY id DESC LIMIT 50", (user_id,)).fetchall()
     withdrawal_rows = conn.execute("SELECT * FROM app_withdrawal_requests WHERE user_id = ? ORDER BY id DESC LIMIT 12", (user_id,)).fetchall()
     return {
         "balance": balance,
         "month_earned": month_earned,
+        "today_earned": int(projection.get('today_earned') or 0),
+        "week_earned": int(projection.get('week_earned') or 0),
+        "estimated": projection,
         "min_withdraw_points": REWARD_MIN_WITHDRAW_POINTS,
         "monthly_withdraw_limit": REWARD_MONTHLY_WITHDRAW_LIMIT,
         "monthly_withdraw_count": month_withdraw_count,
         "can_withdraw": balance['available'] >= REWARD_MIN_WITHDRAW_POINTS and month_withdraw_count < REWARD_MONTHLY_WITHDRAW_LIMIT,
         "rules": reward_rule_rows(),
+        "brand_verification": {
+            "my_requests": [serialize_brand_verification_request(row) for row in conn.execute("SELECT * FROM app_brand_verification_requests WHERE user_id = ? ORDER BY id DESC LIMIT 10", (user_id,)).fetchall()],
+            "external_examples": [
+                {"platform": "X Premium Business Basic", "price_text": "$200/월 또는 $2,000/년", "source": "official"},
+                {"platform": "X Premium Organizations Full Access", "price_text": "$1,000/월 또는 $10,000/년", "source": "official"},
+                {"platform": "Meta Verified for businesses", "price_text": "Meta가 사업용 유료 플랜을 운영하며 번들 할인 안내를 제공", "source": "official"},
+            ],
+        },
+        "keyword_boosts": {
+            "my_items": [serialize_keyword_boost(row) for row in conn.execute("SELECT * FROM app_keyword_boosts WHERE user_id = ? ORDER BY id DESC LIMIT 20", (user_id,)).fetchall()],
+        },
         "notices": [
             "광고 수익은 플랫폼 운영 수익이며 회원 보상은 활동 포인트 기준으로만 적립됩니다.",
             "광고 시청·클릭 자체는 포인트 지급 기준이 아니며, 부정 트래픽 유도 행위는 제한됩니다.",
             f"현금 전환은 최소 {REWARD_MIN_WITHDRAW_POINTS:,}P부터 가능하며 월 {REWARD_MONTHLY_WITHDRAW_LIMIT}회까지 신청할 수 있습니다.",
         ],
+        "insights": [
+            f"최근 7일 활동 점수는 {int(projection.get('activity_score_7d') or 0):,}점 입니다.",
+            f"예상 월 리워드는 약 {int(projection.get('projected_month_points') or 0):,}P 입니다.",
+            f"질문 화면 기반 예상 광고 노출 지수는 {int(projection.get('estimated_ad_exposure') or 0):,}회 입니다.",
+        ],
         "ledger": [serialize_point_entry(row) for row in ledger_rows],
         "withdrawals": [serialize_withdrawal(row) for row in withdrawal_rows],
     }
+
+
+def admin_reward_overview_payload(conn) -> dict[str, Any]:
+    ensure_reward_tables(conn)
+    pending_count = int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE status = 'pending'").fetchone()[0] or 0)
+    approved_count = int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE status = 'approved'").fetchone()[0] or 0)
+    paid_count = int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE status = 'paid'").fetchone()[0] or 0)
+    total_pending_points = int(conn.execute("SELECT COALESCE(SUM(points_amount), 0) FROM app_withdrawal_requests WHERE status IN ('pending', 'approved')").fetchone()[0] or 0)
+    total_paid_points = int(conn.execute("SELECT COALESCE(SUM(points_amount), 0) FROM app_withdrawal_requests WHERE status = 'paid'").fetchone()[0] or 0)
+    withdrawal_rows = conn.execute("""
+        SELECT w.*, u.email, u.nickname
+        FROM app_withdrawal_requests w
+        JOIN users u ON u.id = w.user_id
+        ORDER BY CASE w.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, w.id DESC
+        LIMIT 80
+    """).fetchall()
+    top_rows = conn.execute("""
+        SELECT u.id, u.email, u.nickname, COALESCE(SUM(l.points), 0) AS earned_points
+        FROM users u
+        LEFT JOIN app_point_ledger l ON l.user_id = u.id
+        GROUP BY u.id, u.email, u.nickname
+        ORDER BY earned_points DESC, u.id DESC
+        LIMIT 12
+    """).fetchall()
+    top_users = []
+    for row in top_rows:
+        item = row_to_dict(row)
+        projection = compute_reward_projection(conn, int(item.get('id') or 0))
+        top_users.append({
+            "user_id": int(item.get('id') or 0),
+            "email": item.get('email') or '',
+            "nickname": item.get('nickname') or '',
+            "earned_points": int(item.get('earned_points') or 0),
+            "projected_month_points": int(projection.get('projected_month_points') or 0),
+            "estimated_ad_exposure": int(projection.get('estimated_ad_exposure') or 0),
+        })
+    requests = []
+    for row in withdrawal_rows:
+        item = serialize_withdrawal(row)
+        item.update({
+            "user_id": int(row['user_id']),
+            "email": row['email'] or '',
+            "nickname": row['nickname'] or '',
+        })
+        requests.append(item)
+    brand_requests = [serialize_brand_verification_request(r) | {"email": r["email"], "nickname": r["nickname"]} for r in conn.execute("SELECT b.*, u.email, u.nickname FROM app_brand_verification_requests b JOIN users u ON u.id = b.user_id ORDER BY CASE b.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, b.id DESC LIMIT 40").fetchall()]
+    top_keywords = [row_to_dict(r) for r in conn.execute("SELECT keyword, SUM(points_spent) AS total_points, COUNT(*) AS item_count FROM app_keyword_boosts WHERE status = 'active' GROUP BY keyword ORDER BY total_points DESC, keyword ASC LIMIT 20").fetchall()]
+    return {
+        "summary": {
+            "pending_count": pending_count,
+            "approved_count": approved_count,
+            "paid_count": paid_count,
+            "total_pending_points": total_pending_points,
+            "total_paid_points": total_paid_points,
+        },
+        "requests": requests,
+        "top_users": top_users,
+        "brand_requests": brand_requests,
+        "top_keywords": top_keywords,
+    }
+
+@app.post("/api/rewards/brand-verification/request")
+def request_brand_verification(payload: BrandVerificationRequestIn, user=Depends(current_user)):
+    with get_conn() as conn:
+        ensure_brand_verification_tables(conn)
+        profile = conn.execute("SELECT * FROM app_profiles WHERE id = ? AND user_id = ?", (payload.profile_id, user['id'])).fetchone()
+        if not profile:
+            raise HTTPException(status_code=404, detail='프로필을 찾을 수 없습니다.')
+        profile_row = row_to_dict(profile)
+        if (profile_row.get('account_type') or 'personal') == 'personal':
+            conn.execute("UPDATE app_profiles SET account_type = 'brand' WHERE id = ?", (payload.profile_id,))
+        exists = conn.execute("SELECT id FROM app_brand_verification_requests WHERE profile_id = ? AND status IN ('pending','approved') ORDER BY id DESC LIMIT 1", (payload.profile_id,)).fetchone()
+        if exists:
+            raise HTTPException(status_code=400, detail='이미 진행 중이거나 승인된 인증 요청이 있습니다.')
+        conn.execute("INSERT INTO app_brand_verification_requests(user_id, profile_id, business_name, business_category, website_url, note, status, admin_note, created_at, processed_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', '', ?, '')", (user['id'], payload.profile_id, payload.business_name[:120], payload.business_category[:80], payload.website_url[:300], payload.note[:500], utcnow()))
+        return {'ok': True, 'summary': reward_summary_payload(conn, int(user['id']))}
+
+
+@app.post("/api/rewards/keyword-boosts")
+def create_keyword_boost(payload: KeywordBoostCreateIn, user=Depends(current_user)):
+    with get_conn() as conn:
+        ensure_keyword_boost_tables(conn)
+        content_type = (payload.content_type or 'feed_post').strip()
+        if content_type not in {'feed_post', 'community_post'}:
+            raise HTTPException(status_code=400, detail='지원하지 않는 노출 대상입니다.')
+        content_id = int(payload.content_id or 0)
+        if content_id <= 0:
+            raise HTTPException(status_code=400, detail='대상을 선택해주세요.')
+        keyword = normalize_keyword(payload.keyword)
+        if not keyword:
+            raise HTTPException(status_code=400, detail='키워드를 입력해주세요.')
+        points = max(100, min(50000, int(payload.points_spent or 0)))
+        if content_type == 'feed_post':
+            row = conn.execute("SELECT id, user_id FROM feed_posts WHERE id = ?", (content_id,)).fetchone()
+        else:
+            row = conn.execute("SELECT id, user_id FROM community_posts WHERE id = ?", (content_id,)).fetchone()
+        if not row or int(row['user_id']) != int(user['id']):
+            raise HTTPException(status_code=403, detail='본인 콘텐츠만 상위 노출에 사용할 수 있습니다.')
+        profile_row = conn.execute("SELECT id FROM app_profiles WHERE user_id = ? ORDER BY id ASC LIMIT 1", (user['id'],)).fetchone()
+        spend_points(conn, int(user['id']), points, description=f"키워드 '{keyword}' 상위 노출 사용", source_type=content_type, source_id=content_id, source_key=f"boost:{content_type}:{content_id}:{keyword}:{utcnow()}")
+        conn.execute("INSERT INTO app_keyword_boosts(user_id, profile_id, content_type, content_id, keyword, points_spent, status, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, '')", (user['id'], int(profile_row['id']) if profile_row else None, content_type, content_id, keyword, points, utcnow()))
+        return {'ok': True, 'summary': reward_summary_payload(conn, int(user['id'])), 'competition': keyword_competition_payload(conn, keyword, int(user['id']))}
+
+
+@app.get("/api/rewards/keyword-competition")
+def get_keyword_competition(keyword: str = Query(default=''), user=Depends(current_user)):
+    with get_conn() as conn:
+        ensure_keyword_boost_tables(conn)
+        return keyword_competition_payload(conn, keyword, int(user['id']))
+
+
+@app.post("/api/admin/brand-verification/{request_id}/process")
+def process_brand_verification(request_id: int, payload: AdminBrandVerificationProcessIn, user=Depends(require_admin_user)):
+    status = (payload.status or 'approved').strip().lower()
+    if status not in {'approved', 'rejected'}:
+        raise HTTPException(status_code=400, detail='허용되지 않는 처리 상태입니다.')
+    with get_conn() as conn:
+        ensure_brand_verification_tables(conn)
+        row = conn.execute("SELECT * FROM app_brand_verification_requests WHERE id = ?", (request_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail='인증 요청을 찾을 수 없습니다.')
+        req = row_to_dict(row)
+        conn.execute("UPDATE app_brand_verification_requests SET status = ?, admin_note = ?, processed_at = ? WHERE id = ?", (status, payload.note[:500], utcnow(), request_id))
+        if status == 'approved':
+            conn.execute("UPDATE app_profiles SET brand_verified = 1, account_type = 'brand', verification_badge_text = ? WHERE id = ?", ('브랜드/기업 인증', int(req.get('profile_id') or 0)))
+        else:
+            conn.execute("UPDATE app_profiles SET brand_verified = 0, verification_badge_text = '' WHERE id = ?", (int(req.get('profile_id') or 0),))
+        return {'ok': True, 'overview': admin_reward_overview_payload(conn)}
+
 
 def create_default_profile(conn, user_id: int, nickname: str) -> None:
     existing = conn.execute("SELECT id FROM app_profiles WHERE user_id = ? LIMIT 1", (user_id,)).fetchone()
@@ -1186,11 +1521,17 @@ def serialize_feed_story(conn, row: dict, viewer: dict | None = None) -> dict:
     }
 
 
-def fetch_feed_posts(conn, viewer: dict | None, limit: int = 10, offset: int = 0) -> list[dict]:
+def fetch_feed_posts(conn, viewer: dict | None, limit: int = 10, offset: int = 0, keyword: str = '') -> list[dict]:
     viewer_id = int(viewer['id']) if viewer and viewer.get('id') else 0
     rows = [row_to_dict(r) for r in conn.execute("SELECT * FROM feed_posts ORDER BY created_at DESC, id DESC").fetchall()]
+    keyword_norm = normalize_keyword(keyword)
     filtered: list[dict] = []
     for row in rows:
+        text_blob = f"{row.get('title') or ''} {row.get('content') or ''}".lower()
+        if keyword_norm and keyword_norm not in normalize_keyword(text_blob):
+            boost_score = compute_keyword_boost_score(conn, content_type='feed_post', content_id=int(row['id']), keyword=keyword_norm)
+            if boost_score <= 0:
+                continue
         if viewer_id and int(row['user_id']) == viewer_id:
             filtered.append(row)
             continue
@@ -1208,7 +1549,9 @@ def fetch_feed_posts(conn, viewer: dict | None, limit: int = 10, offset: int = 0
         title_bonus = 1 if (item.get('title') or '').strip() else 0
         image_bonus = 1 if (item.get('image_url') or '').strip() else 0
         created = item.get('created_at') or ''
-        return (is_friend, follows_you, following, image_bonus, title_bonus, created, item['id'])
+        boost_bonus = compute_keyword_boost_score(conn, content_type='feed_post', content_id=int(item['id']), keyword=keyword_norm) if keyword_norm else 0
+        text_match = 1 if keyword_norm and keyword_norm in normalize_keyword(f"{item.get('title') or ''} {item.get('content') or ''}") else 0
+        return (boost_bonus, text_match, is_friend, follows_you, following, image_bonus, title_bonus, created, item['id'])
     ranked = sorted(filtered, key=score, reverse=True)
     if not ranked:
         return []
@@ -1257,7 +1600,7 @@ def serialize_community_post(conn, row: dict) -> dict:
     }
 
 
-def fetch_community_posts(conn, primary_category: str = '', secondary_category: str = '') -> list[dict]:
+def fetch_community_posts(conn, primary_category: str = '', secondary_category: str = '', keyword: str = '') -> list[dict]:
     params: list[object] = []
     where: list[str] = []
     sql = "SELECT * FROM community_posts"
@@ -1271,7 +1614,19 @@ def fetch_community_posts(conn, primary_category: str = '', secondary_category: 
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY created_at DESC, id DESC"
     rows = [row_to_dict(r) for r in conn.execute(sql, tuple(params)).fetchall()]
-    return [serialize_community_post(conn, row) for row in rows]
+    keyword_norm = normalize_keyword(keyword)
+    filtered = []
+    for row in rows:
+        text_blob = normalize_keyword(f"{row.get('title') or ''} {row.get('content') or ''}")
+        boost_bonus = compute_keyword_boost_score(conn, content_type='community_post', content_id=int(row['id']), keyword=keyword_norm) if keyword_norm else 0
+        if keyword_norm and keyword_norm not in text_blob and boost_bonus <= 0:
+            continue
+        row['_boost_bonus'] = boost_bonus
+        row['_text_match'] = 1 if keyword_norm and keyword_norm in text_blob else 0
+        filtered.append(row)
+    if keyword_norm:
+        filtered = sorted(filtered, key=lambda item: (int(item.get('_boost_bonus') or 0), int(item.get('_text_match') or 0), item.get('created_at') or '', int(item.get('id') or 0)), reverse=True)
+    return [serialize_community_post(conn, row) for row in filtered]
 
 
 def serialize_career(row: dict) -> dict:
@@ -1421,6 +1776,9 @@ def serialize_profile(conn, row: dict, include_private: bool = False) -> dict:
         "qrs": qrs,
         "questions": [serialize_question(item) for item in question_rows],
         "uploads": [serialize_upload(item) for item in visible_uploads],
+        "account_type": row.get("account_type") or 'personal',
+        "brand_verified": to_bool(row.get("brand_verified")),
+        "verification_badge_text": row.get("verification_badge_text") or ('브랜드 인증' if to_bool(row.get("brand_verified")) else ''),
         "stats": {
             "feed_post_count": feed_post_count,
             "answered_count": answered_count,
@@ -2688,9 +3046,9 @@ def create_feed_story(payload: FeedStoryCreateIn, request: Request, user=Depends
 
 
 @app.get("/api/feed/posts")
-def feed_posts(limit: int = Query(default=10, ge=1, le=20), offset: int = Query(default=0, ge=0, le=500), user=Depends(current_user_optional)):
+def feed_posts(limit: int = Query(default=10, ge=1, le=20), offset: int = Query(default=0, ge=0, le=500), keyword: str = Query(default=''), user=Depends(current_user_optional)):
     with get_conn() as conn:
-        items = fetch_feed_posts(conn, user, limit=limit, offset=offset)
+        items = fetch_feed_posts(conn, user, limit=limit, offset=offset, keyword=keyword)
         total = int(conn.execute("SELECT COUNT(*) FROM feed_posts").fetchone()[0] or 0)
         return {"items": items, "next_offset": offset + len(items), "has_more": total > offset + len(items)}
 
@@ -2780,9 +3138,9 @@ def respond_friend_request(request_id: int, payload: FriendRequestActionIn, user
 
 
 @app.get("/api/community/posts")
-def list_community_posts(primary_category: str = Query(default='전체'), secondary_category: str = Query(default='전체'), user=Depends(current_user_optional)):
+def list_community_posts(primary_category: str = Query(default='전체'), secondary_category: str = Query(default='전체'), keyword: str = Query(default=''), user=Depends(current_user_optional)):
     with get_conn() as conn:
-        return {'items': fetch_community_posts(conn, primary_category, secondary_category)}
+        return {'items': fetch_community_posts(conn, primary_category, secondary_category, keyword)}
 
 
 @app.post("/api/community/posts")
@@ -3118,6 +3476,36 @@ def admin_moderation_history(user=Depends(admin_user), target_type: str = Query(
         else:
             rows = conn.execute("SELECT * FROM app_moderation_notes ORDER BY id DESC LIMIT 200").fetchall()
         return {"items": [row_to_dict(r) for r in rows]}
+
+@app.get("/api/admin/rewards/overview")
+def admin_rewards_overview(user=Depends(admin_user)):
+    with get_conn() as conn:
+        return admin_reward_overview_payload(conn)
+
+
+@app.post("/api/admin/rewards/withdrawals/{withdrawal_id}/process")
+def admin_process_reward_withdrawal(withdrawal_id: int, payload: AdminRewardWithdrawalProcessIn, user=Depends(admin_user)):
+    next_status = (payload.status or 'approved').strip().lower()
+    if next_status not in {'approved', 'rejected', 'paid'}:
+        raise HTTPException(status_code=400, detail='처리 상태가 올바르지 않습니다.')
+    with get_conn() as conn:
+        ensure_reward_tables(conn)
+        row = conn.execute("SELECT * FROM app_withdrawal_requests WHERE id = ?", (withdrawal_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail='출금 요청을 찾을 수 없습니다.')
+        current = row_to_dict(row)
+        rejection_reason = (payload.rejection_reason or '').strip()[:200]
+        note = (payload.note or '').strip()[:200]
+        if next_status == 'rejected' and not rejection_reason:
+            rejection_reason = note or '관리자 반려'
+        conn.execute(
+            "UPDATE app_withdrawal_requests SET status = ?, note = ?, rejection_reason = ?, processed_at = ? WHERE id = ?",
+            (next_status, note or current.get('note') or '', rejection_reason, utcnow(), withdrawal_id),
+        )
+        with suppress(Exception):
+            conn.execute("INSERT INTO app_moderation_notes(admin_user_id, target_type, target_id, note, created_at) VALUES (?, ?, ?, ?, ?)", (user['id'], 'reward_withdrawal', withdrawal_id, f'{next_status}: {note or rejection_reason or "정산 처리"}', utcnow()))
+        return {"ok": True, "overview": admin_reward_overview_payload(conn)}
+
 
 @app.get("/api/admin/overview")
 def admin_overview(user=Depends(admin_user)):
