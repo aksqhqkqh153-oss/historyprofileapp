@@ -28,6 +28,16 @@ const HIDDEN_GRADES = new Set(
 
 let adsenseScriptPromise = null
 
+function isValidAdSenseClient(value) {
+  const client = String(value || '').trim()
+  return /^ca-pub-\d{10,20}$/.test(client)
+}
+
+function isValidAdSenseSlot(value) {
+  const slot = String(value || '').trim()
+  return /^\d{6,20}$/.test(slot)
+}
+
 function ensureAdSenseScript(client) {
   if (typeof window === 'undefined' || !client) return Promise.resolve(false)
   if (window.adsbygoogle) return Promise.resolve(true)
@@ -74,7 +84,7 @@ export default function MonetizationAdBanner({ placement = 'question_profile', c
   const hasLoggedImpressionRef = useRef(false)
   const slot = SLOT_BY_PLACEMENT[placement] || SLOT_BY_PLACEMENT.question_profile
   const effectiveMode = String(mode || DEFAULT_MODE || 'adsense').trim().toLowerCase()
-  const canRenderAdSense = effectiveMode === 'adsense' && ADSENSE_CLIENT && slot
+  const canRenderAdSense = effectiveMode === 'adsense' && isValidAdSenseClient(ADSENSE_CLIENT) && isValidAdSenseSlot(slot)
   const shouldHide = shouldHideAdsForUser(user)
   const directHref = DIRECT_LINK || 'mailto:ads@historyprofile.com?subject=%ED%94%84%EB%A1%9C%ED%95%84%20%EA%B4%91%EA%B3%A0%20%EB%AC%B8%EC%9D%98'
   const displayMode = useMemo(() => {

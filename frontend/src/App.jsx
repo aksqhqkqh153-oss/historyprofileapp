@@ -4862,7 +4862,7 @@ function FeedPostCard({ item, onOpenProfile, onFriendRequest }) {
             {avatar ? <img src={avatar} alt={displayName} /> : <span>{displayName.slice(0, 1)}</span>}
           </span>
           <span className="feed-author-copy">
-            <strong>{displayName}</strong><VerifiedBadge profile={profile} compact />
+            <strong>{displayName}</strong><VerifiedBadge profile={item} compact />
             <span className="muted">{owner.nickname && owner.nickname !== displayName ? owner.nickname : profile.current_work || profile.headline || 'historyprofile 사용자'}</span>
           </span>
         </button>
@@ -5121,22 +5121,6 @@ function HomePage({ user }) {
     navigate(`/?compose=${nextMode}`, { replace: true })
   }
 
-  const questionDiscoveryItems = useMemo(() => {
-    return items
-      .filter(item => Number(item?.profile?.id || 0) > 0)
-      .map(item => ({
-        id: item.id,
-        profileId: item.profile.id,
-        title: item.title || item.content || item.profile?.headline || '질문 보러가기',
-        profileName: item.profile?.display_name || item.profile?.title || item.owner?.nickname || '프로필',
-        score: Number(item.like_count || 0) + Number(item.comment_count || 0) + Number(item.bookmark_count || 0),
-        createdAt: item.created_at || '',
-      }))
-  }, [items])
-
-  const popularQuestionEntries = useMemo(() => questionDiscoveryItems.slice().sort((a, b) => b.score - a.score || String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 6), [questionDiscoveryItems])
-  const recentQuestionEntries = useMemo(() => questionDiscoveryItems.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 6), [questionDiscoveryItems])
-  const randomQuestionEntries = useMemo(() => questionDiscoveryItems.slice().sort((a, b) => String(a.id).localeCompare(String(b.id))).slice(0, 6), [questionDiscoveryItems])
 
   return (
     <div className="stack page-stack feed-home-page">
@@ -5178,28 +5162,13 @@ function HomePage({ user }) {
 
       {error ? <div className="card error">{error}</div> : null}
 
-      <section className="card stack pv-loop-card">
-        <div className="split-row responsive-row">
-          <div>
-            <h3>질문 탐색 루프</h3>
-            <div className="muted small-text">홈에서 질문 화면으로 바로 이동시키는 PV 확장 영역입니다.</div>
-          </div>
-          <Link className="button-link" to="/questions">내 질문 관리</Link>
-        </div>
-        <div className="pv-loop-grid">
-          <QuestionLoopBlock title="인기 질문으로 이동" items={popularQuestionEntries} />
-          <QuestionLoopBlock title="방금 올라온 질문" items={recentQuestionEntries} />
-          <QuestionLoopBlock title="랜덤으로 더 보기" items={randomQuestionEntries} />
-        </div>
-      </section>
 
       <div className="feed-post-list">
         {items.length ? items.map((item, index) => {
           const feedPosition = index + 1
           const shouldShowAdSlot = feedPosition % 10 === 0
           const adBlockIndex = Math.floor(feedPosition / 10)
-          const shouldShowDirectAd = shouldShowAdSlot && directAds.length > 0 && adBlockIndex % 2 === 0
-          const directAdItem = shouldShowDirectAd ? directAds[(adBlockIndex - 1) % directAds.length] : null
+          const directAdItem = shouldShowAdSlot && directAds.length > 0 ? directAds[(adBlockIndex - 1) % directAds.length] : null
           return (
             <React.Fragment key={`feed-post-wrap-${item.id}-${item.created_at}`}>
               <FeedPostCard item={item} onOpenProfile={setSelectedProfile} onFriendRequest={handleFriendRequest} />
@@ -5224,23 +5193,6 @@ function HomePage({ user }) {
   )
 }
 
-
-function QuestionLoopBlock({ title, items }) {
-  const navigate = useNavigate()
-  return (
-    <section className="pv-loop-block">
-      <strong>{title}</strong>
-      <div className="pv-loop-list">
-        {items.length ? items.map(entry => (
-          <button key={`${title}-${entry.id}`} type="button" className="pv-loop-item" onClick={() => navigate(`/questions/${entry.profileId}`)}>
-            <span className="pv-loop-item-title">{String(entry.title || '').slice(0, 44) || '질문 보러가기'}</span>
-            <span className="muted small-text">{entry.profileName}</span>
-          </button>
-        )) : <div className="muted small-text">표시할 질문 후보가 아직 부족합니다.</div>}
-      </div>
-    </section>
-  )
-}
 
 function FriendsPage() {
   const navigate = useNavigate()
@@ -5330,12 +5282,12 @@ function FriendsPage() {
                   <button type="button" className="friend-kakao-main" onClick={() => openFriendProfile(item)}>
                     <span className="friend-kakao-avatar">{item.photo_url ? <img src={item.photo_url} alt={displayName} /> : <span>{displayName.slice(0, 1)}</span>}</span>
                     <span className="friend-kakao-copy">
-                      <strong>{displayName}</strong><VerifiedBadge profile={profile} compact />
+                      <strong>{displayName}</strong><VerifiedBadge profile={item} compact />
                       <span className="muted small-text">{intro}</span>
                     </span>
                   </button>
                   <div className="friend-kakao-actions">
-                    <button type="button" className="ghost icon-button friend-chat-icon-button" onClick={() => navigate('/chats')} aria-label="채팅" title="채팅">
+                    <button type="button" className="ghost icon-button friend-chat-icon-button" onClick={() => openDirectMessageRoom(navigate, item.id)} aria-label="채팅" title="채팅">
                       <IconGlyph name="chatMini" label="채팅" />
                     </button>
                     <div className="friend-more-wrap">
@@ -5388,7 +5340,7 @@ function FriendsPage() {
               </div>
             </div>
             <div className="split-row responsive-row friend-profile-modal-actions">
-              <button type="button" onClick={() => navigate('/chats')}>채팅하기</button>
+              <button type="button" onClick={() => openDirectMessageRoom(navigate, item.id)}>채팅하기</button>
               <button type="button" className="ghost" onClick={() => setSelectedFriend(null)}>닫기</button>
             </div>
           </section>
@@ -5763,58 +5715,10 @@ ${optionText}`, '1')
           </div>
         </section>
 
-        <section className="card stack chat-thread-card">
-          <h3>{selected ? `${selected.nickname || selected.name || '채팅방'} 대화` : '대화상대 선택'}</h3>
-          <div className="message-board" ref={boardRef}>
-            {messages.length ? messages.map(item => (
-              <div key={item.id} className={`message-item ${item.sender_id === selected?.user_id ? 'incoming' : 'outgoing'}`}>
-                {item.has_attachment ? (String(item.message_type || '').startsWith('video') ? <video src={item.attachment_url} poster={item.attachment_preview_url || undefined} controls playsInline preload="metadata" /> : <img src={item.attachment_preview_url || item.attachment_url} alt={item.attachment_name || '첨부'} loading="eager" />) : null}
-                <div>{item.message}</div>
-                <div className="muted small-text">{formatDateLabel(item.created_at)}</div>
-                {item.has_attachment ? <div className="muted small-text">첨부 {item.attachment_size_mb}MB</div> : null}
-              </div>
-            )) : <div className="muted">선택한 채팅의 메시지가 없습니다.</div>}
-          </div>
-          {chatError ? <div className="alert error">{chatError}</div> : null}
-          <div className="inline-form chat-input-row chat-input-row-modern">
-            <button
-              type="button"
-              className={attachmentMenuOpen ? 'chat-plus-button active' : 'chat-plus-button'}
-              onClick={() => setAttachmentMenuOpen(current => !current)}
-              aria-label="보내기 기능 열기"
-              title="보내기 기능"
-            >
-              +
-            </button>
-            <input value={message} onChange={e => setMessage(e.target.value)} placeholder="메시지 입력" onKeyDown={e => { if (e.key === 'Enter') send() }} />
-            <button type="button" onClick={send} disabled={chatUploading}>{chatUploading ? '전송중...' : '전송'}</button>
-          </div>
-          <input
-            ref={filePickerRef}
-            type="file"
-            className="chat-hidden-file-input"
-            onChange={e => handlePickedFile(e.target.files?.[0] || null)}
-          />
-          {attachmentMenuOpen ? (
-            <div className="chat-attachment-sheet" role="dialog" aria-modal="true" aria-label="보내기 메뉴">
-              <button type="button" className="chat-attachment-sheet-backdrop" onClick={() => setAttachmentMenuOpen(false)} aria-label="보내기 메뉴 닫기" />
-              <div className="chat-attachment-sheet-panel card stack">
-                <div className="chat-attachment-sheet-head">
-                  <strong>보내기</strong>
-                  <button type="button" className="ghost small-button" onClick={() => setAttachmentMenuOpen(false)}>닫기</button>
-                </div>
-                <div className="muted small-text">선택한 멀티프로필의 명함, 프로필 링크, 자기소개서, 링크, 파일을 빠르게 보낼 수 있습니다.</div>
-                <div className="chat-attachment-grid">
-                  {chatAttachmentActions.map(item => (
-                    <button key={item.key} type="button" className="chat-attachment-action" onClick={item.onClick} disabled={chatUploading}>
-                      <span className="chat-attachment-action-icon" aria-hidden="true">{item.icon}</span>
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
+        <section className="card stack chat-thread-card chat-thread-card-disabled">
+          <h3>채팅 대화창 비활성화</h3>
+          <div className="muted">이 화면은 채팅 목록만 관리하는 용도로 변경되었습니다.</div>
+          <div className="muted small-text">개별 대화 메시지 조회·입력·전송 UI는 제거되었습니다.</div>
         </section>
       </div>
     </div>

@@ -1,4 +1,4 @@
-Project name: historyprofileapp-frontend
+Project name: historyprofileapp
 Production branch: main
 Framework preset: Vite
 Root directory: frontend
@@ -7,3 +7,11 @@ Build output directory: dist
 Environment Variables:
 VITE_API_BASE_URL=https://api.historyprofile.com
 VITE_TURNSTILE_SITE_KEY=실제값
+VITE_ADSENSE_CLIENT=ca-pub-실제값
+VITE_ADSENSE_SLOT_QUESTION_TOP=실제값(숫자)
+VITE_ADSENSE_SLOT_QUESTION_PROFILE=실제값(숫자)
+VITE_ADSENSE_SLOT_QUESTION_FEED_INLINE=실제값(숫자)
+VITE_ADSENSE_SLOT_HOME_FEED_INLINE=실제값(숫자)
+VITE_ADSENSE_SLOT_REWARDS_INLINE=실제값(숫자)
+VITE_ADS_HIDE_FOR_ADMIN=true
+VITE_ADS_HIDDEN_GRADES=1
