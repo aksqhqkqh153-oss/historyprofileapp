@@ -314,6 +314,11 @@ def admin_user(user=Depends(current_user)):
     return user
 
 
+# Backward-compatible alias for recently added admin endpoints.
+# Railway startup logs showed NameError from Depends(admin_user) during app import.
+require_admin_user = admin_user
+
+
 def room_key_for(a: int, b: int) -> str:
     left, right = sorted((int(a), int(b)))
     return f"{left}:{right}"
@@ -1328,7 +1333,7 @@ def track_direct_ad_click(campaign_id: int):
 
 
 @app.post("/api/admin/direct-ads/{campaign_id}/process")
-def process_direct_ad_campaign(campaign_id: int, payload: AdminDirectAdProcessIn, user=Depends(require_admin_user)):
+def process_direct_ad_campaign(campaign_id: int, payload: AdminDirectAdProcessIn, user=Depends(admin_user)):
     status = (payload.status or 'approved').strip().lower()
     if status not in {'approved', 'rejected'}:
         raise HTTPException(status_code=400, detail='허용되지 않는 처리 상태입니다.')
@@ -1342,7 +1347,7 @@ def process_direct_ad_campaign(campaign_id: int, payload: AdminDirectAdProcessIn
 
 
 @app.post("/api/admin/brand-verification/{request_id}/process")
-def process_brand_verification(request_id: int, payload: AdminBrandVerificationProcessIn, user=Depends(require_admin_user)):
+def process_brand_verification(request_id: int, payload: AdminBrandVerificationProcessIn, user=Depends(admin_user)):
     status = (payload.status or 'approved').strip().lower()
     if status not in {'approved', 'rejected'}:
         raise HTTPException(status_code=400, detail='허용되지 않는 처리 상태입니다.')
