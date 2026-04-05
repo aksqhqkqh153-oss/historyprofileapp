@@ -10,3 +10,9 @@
 - 질문 리스트 수동 광고 위치를 최상단 1개 + 질문 3개마다 1개 구조로 조정
 - AdSense 슬롯 변수 fallback을 question_top/question_profile 모두 지원하도록 보완
 - ads.txt를 실제 Publisher ID 기준으로 갱신
+
+
+## 2026-04-05 PV boost structure tuning
+- 홈에 질문 탐색 루프(인기/최근/랜덤)를 추가해 질문 화면 재진입을 유도.
+- 질문 화면에 추천 질문 카드와 12개 단위 더보기 버튼을 추가해 PV는 늘리고 과도한 렌더링은 완화.
+- 광고 영역 최소 높이를 고정해 CLS 가능성을 낮춤.

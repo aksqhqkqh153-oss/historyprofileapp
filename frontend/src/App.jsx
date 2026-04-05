@@ -4113,6 +4113,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
   const turnstile = useTurnstileConfig()
   const [captchaToken, setCaptchaToken] = useState('')
   const [captchaVersion, setCaptchaVersion] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(12)
 
   const feedItems = useMemo(() => (profile?.questions || []).filter(item => item.status === 'answered' && !item.is_hidden), [profile])
   const newItems = useMemo(() => (profile?.questions || []).filter(item => item.status === 'pending' && !item.is_hidden), [profile])
@@ -4129,8 +4130,27 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
     setNickname(nextDefault)
   }, [askOpen, profile?.id])
 
+  useEffect(() => {
+    setVisibleCount(12)
+  }, [profile?.id, tab])
+
+
   const lockedTab = !isOwner && tab !== 'feed'
-  const visibleItems = lockedTab ? [] : tab === 'feed' ? feedItems : tab === 'new' ? newItems : rejectedItems
+  const allVisibleItems = lockedTab ? [] : tab === 'feed' ? feedItems : tab === 'new' ? newItems : rejectedItems
+  const visibleItems = allVisibleItems.slice(0, visibleCount)
+  const hasMoreVisibleItems = allVisibleItems.length > visibleItems.length
+  const recommendationPool = useMemo(() => {
+    const source = profile?.questions || []
+    return source
+      .filter(item => !item.is_hidden)
+      .sort((a, b) => {
+        const scoreA = Number(a.shared_count || 0) + Number(a.liked_count || 0) + Number(a.comments_count || 0)
+        const scoreB = Number(b.shared_count || 0) + Number(b.liked_count || 0) + Number(b.comments_count || 0)
+        if (scoreA !== scoreB) return scoreB - scoreA
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      })
+      .slice(0, 6)
+  }, [profile])
 
   async function askQuestion() {
     if (!profile?.id || !question.trim()) return
@@ -4251,12 +4271,45 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
         {!lockedTab && visibleItems.length ? (
           <>
             <MonetizationAdBanner placement="question_top" className={isAskedStyle ? 'asked-inline-ad asked-inline-ad-top' : 'question-inline-ad question-inline-ad-top'} compact />
+            {recommendationPool.length ? (
+              <section className={isAskedStyle ? 'asked-recommend-strip' : 'question-recommend-strip'}>
+                <div className="split-row responsive-row question-recommend-head">
+                  <strong>계속 보게 되는 질문</strong>
+                  <span className="muted small-text">인기 반응 순 · 더 많이 눌리는 흐름</span>
+                </div>
+                <div className="question-recommend-grid">
+                  {recommendationPool.map(entry => (
+                    <button
+                      key={`recommend-${entry.id}`}
+                      type="button"
+                      className="question-recommend-card"
+                      onClick={() => {
+                        setTab(entry.status === 'pending' ? 'new' : entry.status === 'rejected' ? 'rejected' : 'feed')
+                        const target = document.getElementById(`question-card-${entry.id}`)
+                        if (target) {
+                          target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        } else {
+                          setVisibleCount(prev => Math.max(prev, 24))
+                          window.requestAnimationFrame(() => {
+                            const delayedTarget = document.getElementById(`question-card-${entry.id}`)
+                            delayedTarget?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          })
+                        }
+                      }}
+                    >
+                      <strong>{(entry.question_text || '').slice(0, 42) || '질문 보기'}</strong>
+                      <span className="muted small-text">좋아요 {formatCompactCount(entry.liked_count || 0)} · 댓글 {formatCompactCount(entry.comments_count || 0)} · 공유 {formatCompactCount(entry.shared_count || 0)}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
             {visibleItems.map((item, index) => {
               const comments = commentLists[item.id] || []
               const canDeleteOwnQuestion = !isOwner && viewerId > 0 && Number(item.asker_user_id || 0) === viewerId
               return (
                 <React.Fragment key={item.id}>
-                  <article className={isAskedStyle ? 'asked-feed-card' : 'question-feed-card'}>
+                  <article id={`question-card-${item.id}`} className={isAskedStyle ? 'asked-feed-card' : 'question-feed-card'}>
               <div className={isAskedStyle ? 'asked-feed-top' : 'question-feed-top'}>
                 <div className="asked-feed-copy">
                   <div className="question-user-line"><strong>{item.display_nickname || item.nickname}</strong><span className="muted small-text">질문일 {formatDateLabel(item.created_at)}</span></div>
@@ -4326,6 +4379,12 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
             })}
           </>
         ) : <div className={isAskedStyle ? 'asked-empty-card' : 'bordered-box muted'}>표시할 항목이 없습니다.</div>}
+        {!lockedTab && hasMoreVisibleItems ? (
+          <div className={isAskedStyle ? 'asked-load-more-box' : 'question-load-more-box'}>
+            <button type="button" className="ghost" onClick={() => setVisibleCount(prev => prev + 12)}>질문 더보기</button>
+            <div className="muted small-text">한 번에 12개씩 더 불러와서 렌더링 부담과 레이아웃 흔들림을 줄입니다.</div>
+          </div>
+        ) : null}
       </div>
     </section>
   )
@@ -4922,6 +4981,23 @@ function HomePage({ user }) {
     navigate(`/?compose=${nextMode}`, { replace: true })
   }
 
+  const questionDiscoveryItems = useMemo(() => {
+    return items
+      .filter(item => Number(item?.profile?.id || 0) > 0)
+      .map(item => ({
+        id: item.id,
+        profileId: item.profile.id,
+        title: item.title || item.content || item.profile?.headline || '질문 보러가기',
+        profileName: item.profile?.display_name || item.profile?.title || item.owner?.nickname || '프로필',
+        score: Number(item.like_count || 0) + Number(item.comment_count || 0) + Number(item.bookmark_count || 0),
+        createdAt: item.created_at || '',
+      }))
+  }, [items])
+
+  const popularQuestionEntries = useMemo(() => questionDiscoveryItems.slice().sort((a, b) => b.score - a.score || String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 6), [questionDiscoveryItems])
+  const recentQuestionEntries = useMemo(() => questionDiscoveryItems.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 6), [questionDiscoveryItems])
+  const randomQuestionEntries = useMemo(() => questionDiscoveryItems.slice().sort((a, b) => String(a.id).localeCompare(String(b.id))).slice(0, 6), [questionDiscoveryItems])
+
   return (
     <div className="stack page-stack feed-home-page">
       <FeedEntryPickerModal open={pickerOpen} onClose={closeComposer} onSelect={handleSelectCompose} />
@@ -4962,6 +5038,20 @@ function HomePage({ user }) {
 
       {error ? <div className="card error">{error}</div> : null}
 
+      <section className="card stack pv-loop-card">
+        <div className="split-row responsive-row">
+          <div>
+            <h3>질문 탐색 루프</h3>
+            <div className="muted small-text">홈에서 질문 화면으로 바로 이동시키는 PV 확장 영역입니다.</div>
+          </div>
+          <Link className="button-link" to="/questions">내 질문 관리</Link>
+        </div>
+        <div className="pv-loop-grid">
+          <QuestionLoopBlock title="인기 질문으로 이동" items={popularQuestionEntries} />
+          <QuestionLoopBlock title="방금 올라온 질문" items={recentQuestionEntries} />
+          <QuestionLoopBlock title="랜덤으로 더 보기" items={randomQuestionEntries} />
+        </div>
+      </section>
 
       <div className="feed-post-list">
         {items.length ? items.map((item, index) => (
@@ -4979,6 +5069,24 @@ function HomePage({ user }) {
         {loading ? <div className="card">피드를 불러오는 중...</div> : hasMore ? <div className="muted small-text">스크롤을 내려 다음 피드를 불러옵니다.</div> : <div className="muted small-text">마지막 피드까지 모두 확인했습니다.</div>}
       </div>
     </div>
+  )
+}
+
+
+function QuestionLoopBlock({ title, items }) {
+  const navigate = useNavigate()
+  return (
+    <section className="pv-loop-block">
+      <strong>{title}</strong>
+      <div className="pv-loop-list">
+        {items.length ? items.map(entry => (
+          <button key={`${title}-${entry.id}`} type="button" className="pv-loop-item" onClick={() => navigate(`/questions/${entry.profileId}`)}>
+            <span className="pv-loop-item-title">{String(entry.title || '').slice(0, 44) || '질문 보러가기'}</span>
+            <span className="muted small-text">{entry.profileName}</span>
+          </button>
+        )) : <div className="muted small-text">표시할 질문 후보가 아직 부족합니다.</div>}
+      </div>
+    </section>
   )
 }
 
