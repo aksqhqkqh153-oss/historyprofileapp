@@ -810,6 +810,35 @@ function RewardsPage() {
   const selectedBoostItems = boostForm.content_type === 'feed_post' ? feedItems : communityItems
   const activeProfile = profiles.find(item => Number(item.id) === Number(selectedProfileId))
 
+  const businessOverviewItems = [
+    { title: '서비스 개요', lines: ['프로필 기반 마이크로 인플루언서 플랫폼', '사용자 = 광고 매체 (Profile, Q&A, Feed)'] },
+    { title: '핵심 수익 공식', lines: ['플랫폼 수익 = 광고수익 + 직접광고 + 키워드입찰 - 사용자 리워드'] },
+    { title: '핵심 문장', lines: ['유저는 콘텐츠를 만들고, 플랫폼은 수익을 만든다'] },
+  ]
+
+  const rewardPolicyRows = [
+    { label: '질문 받기', value: '+1P' },
+    { label: '답변 작성', value: '+3P' },
+    { label: '프로필 조회 100회', value: '+5P' },
+    { label: 'DM 유입', value: '+2P' },
+    { label: '인기 답변', value: '+10P' },
+    { label: '키워드 상위 노출 유지', value: '+5P/day' },
+  ]
+
+  const growthGuideRows = [
+    '프로필 → 질문 → 광고 → 수익 구조 강화',
+    '유저를 광고 매체화',
+    'B2B 광고 확장',
+  ]
+
+  const riskGuideRows = [
+    'AdSense 정책 준수',
+    '부정 활동 감지',
+    '포인트 남용 방지',
+    '광고 클릭 보상 금지',
+    '광고 시청 보상 금지',
+  ]
+
   async function handleShareProfile() {
     const profile = profiles.find(item => Number(item.id) === Number(selectedProfileId))
     if (!profile) return
@@ -934,7 +963,7 @@ function RewardsPage() {
         <div className="split-row responsive-row">
           <div className="stack gap-6">
             <strong>마이크로 인플루언서 리워드센터</strong>
-            <div className="muted small-text">프로필, 경력, 자기소개, 링크, 파일관리 자산을 기반으로 질문·DM·피드 유입을 만들고, 플랫폼 광고 수익 일부를 활동 포인트로 환원하는 구조입니다.</div>
+            <div className="muted small-text">프로필 기반 마이크로 인플루언서 플랫폼 구조를 반영해, 질문·답변·조회·DM 활동을 포인트화하고 광고/직접광고/키워드 입찰 수익 모델을 한 화면에서 연결합니다.</div>
           </div>
           <button type="button" className="ghost" onClick={load}>새로고침</button>
         </div>
@@ -948,6 +977,39 @@ function RewardsPage() {
           <span>최소 출금 {minWithdraw.toLocaleString()}P</span>
           <span>월 출금 {withdrawCount}/{withdrawLimit}회</span>
           <span>{canWithdraw ? '이번 달 출금 신청 가능' : '이번 달 출금 조건 미충족'}</span>
+        </div>
+      </div>
+
+      <div className="grid-3 rewards-metric-grid">
+        {businessOverviewItems.map(item => (
+          <div key={item.title} className="mini-card rewards-rule-card stack gap-6">
+            <strong>{item.title}</strong>
+            {item.lines.map((line, index) => <div key={`${item.title}-${index}`} className="muted small-text">{line}</div>)}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid-2 rewards-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>포인트 지급 로직</strong><span className="muted small-text">광고 시청/클릭 보상 아님</span></div>
+          <div className="stack compact-list">
+            {rewardPolicyRows.map(item => (
+              <div key={item.label} className="mini-card rewards-rule-card">
+                <div className="split-row responsive-row"><strong>{item.label}</strong><strong>{item.value}</strong></div>
+              </div>
+            ))}
+          </div>
+          <div className="bordered-box small-text">활동 점수 = (질문 + 답변 + 조회수 + DM)</div>
+          <div className="bordered-box small-text">예상 포인트 = 활동점수 × 가중치</div>
+          <div className="bordered-box small-text">예상 수익 = 포인트 × 환산 비율</div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>관리/리스크/성장 전략</strong><span className="muted small-text">운영 원칙</span></div>
+          <div className="bordered-box small-text">관리자 시스템: 출금 승인/반려, 광고 승인, 키워드 경쟁 관리</div>
+          <div className="bordered-box small-text">직접 광고 구조: 사용자/기업 광고 신청 → 관리자 승인 → 피드 중간 노출</div>
+          {riskGuideRows.map((item, index) => <div key={`risk-${index}`} className="bordered-box small-text">{item}</div>)}
+          {growthGuideRows.map((item, index) => <div key={`growth-${index}`} className="bordered-box small-text">{item}</div>)}
         </div>
       </div>
 
