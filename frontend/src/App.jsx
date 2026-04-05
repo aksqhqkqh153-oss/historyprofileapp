@@ -760,6 +760,8 @@ function RewardsPage() {
   const [brandForm, setBrandForm] = useState({ business_name: '', business_category: '', website_url: '', note: '' })
   const [boostForm, setBoostForm] = useState({ content_type: 'feed_post', content_id: '', keyword: '', points_spent: 1000 })
   const [competition, setCompetition] = useState(null)
+  const [directAdForm, setDirectAdForm] = useState({ title: '', subtitle: '', description: '', target_url: '', image_url: '', placement: 'home_feed', category: '', target_keyword: '', bid_points: 3000 })
+  const [directAdCompetition, setDirectAdCompetition] = useState(null)
   const [feedItems, setFeedItems] = useState([])
   const [communityItems, setCommunityItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -786,6 +788,7 @@ function RewardsPage() {
       const firstProfile = profileItems[0] || null
       if (firstProfile) {
         setBrandForm(prev => ({ ...prev, business_name: prev.business_name || firstProfile.display_name || firstProfile.title || '' }))
+        setDirectAdForm(prev => ({ ...prev, title: prev.title || `${firstProfile.display_name || firstProfile.title || '프로필'} 소개`, subtitle: prev.subtitle || firstProfile.headline || '' }))
       }
     } catch (err) {
       setError(err.message || '포인트 데이터를 불러오지 못했습니다.')
@@ -894,6 +897,34 @@ function RewardsPage() {
       setCompetition(result)
     } catch (err) {
       window.alert(err.message || '경쟁 현황 조회에 실패했습니다.')
+    }
+  }
+
+  async function handleDirectAdSubmit(e) {
+    e.preventDefault()
+    if (!selectedProfileId) return window.alert('광고주로 사용할 프로필을 먼저 선택해주세요.')
+    setSubmitting(true)
+    try {
+      const payload = { ...directAdForm, profile_id: Number(selectedProfileId || 0), bid_points: Number(directAdForm.bid_points || 0) }
+      const result = await api('/api/rewards/direct-ads', { method: 'POST', body: JSON.stringify(payload) })
+      if (result?.summary) setSummary(result.summary)
+      if (result?.competition) setDirectAdCompetition(result.competition)
+      setDirectAdForm(prev => ({ ...prev, description: '', image_url: '', target_keyword: '' }))
+      window.alert('직접 광고 집행 요청이 접수되었습니다. 관리자 승인 후 홈 피드에 노출됩니다.')
+    } catch (err) {
+      window.alert(err.message || '직접 광고 생성에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDirectAdCompetitionLookup() {
+    try {
+      const params = new URLSearchParams({ placement: directAdForm.placement, category: directAdForm.category || '' })
+      const result = await api(`/api/direct-ads/placements?${params.toString()}`)
+      setDirectAdCompetition(result?.competition || null)
+    } catch (err) {
+      window.alert(err.message || '직접 광고 경쟁 현황 조회에 실패했습니다.')
     }
   }
 
@@ -1009,6 +1040,48 @@ function RewardsPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="grid-2 rewards-grid">
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>직접 광고 집행</strong><span className="muted small-text">홈 피드 자연 노출형</span></div>
+          <div className="muted small-text">회원이 직접 광고 문구와 랜딩 URL을 등록하고 포인트를 사용해 홈 피드 중간 스폰서드 카드로 노출할 수 있습니다.</div>
+          <form className="stack" onSubmit={handleDirectAdSubmit}>
+            <div className="grid-2">
+              <TextField label="광고 제목" value={directAdForm.title} onChange={value => setDirectAdForm(prev => ({ ...prev, title: value }))} />
+              <TextField label="부제목" value={directAdForm.subtitle} onChange={value => setDirectAdForm(prev => ({ ...prev, subtitle: value }))} />
+            </div>
+            <label className="field-label">광고 설명</label>
+            <textarea value={directAdForm.description} onChange={e => setDirectAdForm(prev => ({ ...prev, description: e.target.value }))} placeholder="광고에서 보여줄 핵심 소개 문구를 입력하세요." />
+            <div className="grid-2">
+              <TextField label="랜딩 URL" value={directAdForm.target_url} onChange={value => setDirectAdForm(prev => ({ ...prev, target_url: value }))} />
+              <TextField label="이미지 URL" value={directAdForm.image_url} onChange={value => setDirectAdForm(prev => ({ ...prev, image_url: value }))} />
+            </div>
+            <div className="grid-3">
+              <label className="stack small-text"><span>광고 지면</span><select value={directAdForm.placement} onChange={e => setDirectAdForm(prev => ({ ...prev, placement: e.target.value }))}>{(summary?.direct_ads?.placements || []).map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
+              <TextField label="경쟁 카테고리" value={directAdForm.category} onChange={value => setDirectAdForm(prev => ({ ...prev, category: value }))} />
+              <TextField label="사용 포인트" value={String(directAdForm.bid_points)} onChange={value => setDirectAdForm(prev => ({ ...prev, bid_points: value.replace(/[^0-9]/g, '') }))} />
+            </div>
+            <div className="action-wrap wrap-row">
+              <button type="submit" disabled={submitting}>직접 광고 요청</button>
+              <button type="button" className="ghost" onClick={handleDirectAdCompetitionLookup}>광고 경쟁 보기</button>
+            </div>
+          </form>
+          <div className="stack compact-list">
+            {(summary?.direct_ads?.guide || []).map((item, index) => <div key={`direct-ad-guide-${index}`} className="bordered-box small-text">{item}</div>)}
+            {(summary?.direct_ads?.my_items || []).length ? summary.direct_ads.my_items.map(item => <div key={`direct-ad-${item.id}`} className="bordered-box small-text">{item.title} · {item.placement === 'home_feed' ? '홈 피드' : '질문/답변'} · {Number(item.bid_points || 0).toLocaleString()}P · {item.status}</div>) : <div className="muted small-text">아직 등록한 직접 광고가 없습니다.</div>}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="split-row responsive-row"><strong>직접 광고 경쟁 현황</strong><span className="muted small-text">동일 지면/카테고리 경쟁</span></div>
+          {(directAdCompetition?.leaderboard || []).length ? directAdCompetition.leaderboard.map(item => (
+            <div key={`direct-ad-competition-${item.rank}-${item.user_id}`} className={`bordered-box small-text${Number(item.user_id) === currentUserId ? ' competition-me' : ''}`}>
+              <div className="split-row responsive-row"><strong>{item.rank}위 · {item.nickname}</strong><strong>{Number(item.total_points || 0).toLocaleString()}P</strong></div>
+              <div className="muted small-text">카테고리 {item.category || '전체'} · 캠페인 {Number(item.campaign_count || 0).toLocaleString()}개</div>
+            </div>
+          )) : <div className="muted small-text">광고 지면과 카테고리를 선택한 뒤 경쟁 현황을 조회할 수 있습니다.</div>}
         </div>
       </div>
 
@@ -4618,6 +4691,36 @@ function FeedPostCard({ item, onOpenProfile, onFriendRequest }) {
   )
 }
 
+function DirectAdCard({ item, compact = false }) {
+  async function handleClick() {
+    try { await api(`/api/direct-ads/${item.id}/click`, { method: 'POST' }) } catch {}
+    if (item?.target_url) window.open(item.target_url, '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <article className={`direct-ad-card${compact ? ' compact' : ''}`.trim()}>
+      <div className="split-row responsive-row">
+        <div className="stack gap-6">
+          <div className="small-text muted">스폰서드 · 직접 광고</div>
+          <strong>{item?.title || '광고 캠페인'}</strong>
+          {item?.subtitle ? <div className="muted small-text">{item.subtitle}</div> : null}
+        </div>
+        <div className="stack gap-6 align-end">
+          {item?.brand_verified ? <span className="verified-badge compact">{item?.verification_badge_text || '브랜드 인증'}</span> : null}
+          <span className="small-text muted">{item?.display_name || item?.nickname || '광고주'}</span>
+        </div>
+      </div>
+      {item?.image_url ? <div className="direct-ad-image-wrap"><img className="direct-ad-image" src={item.image_url} alt={item?.title || '광고 이미지'} /></div> : null}
+      {item?.description ? <p className="direct-ad-copy">{item.description}</p> : null}
+      <div className="split-row responsive-row">
+        <div className="muted small-text">{item?.category ? `카테고리 ${item.category}` : '홈 피드 노출'} · 경쟁 포인트 {Number(item?.bid_points || 0).toLocaleString()}P</div>
+        <button type="button" onClick={handleClick}>광고 보기</button>
+      </div>
+    </article>
+  )
+}
+
+
 function StoryViewerModal({ item, open, onClose }) {
   const navigate = useNavigate()
   if (!open || !item?.profile) return null
@@ -4667,6 +4770,7 @@ function HomePage({ user }) {
   const [nextOffset, setNextOffset] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [storyBarVisible, setStoryBarVisible] = useState(true)
+  const [directAds, setDirectAds] = useState([])
   const loadMoreRef = useRef(null)
   const lastScrollTopRef = useRef(0)
   const composeParam = new URLSearchParams(location.search).get('compose')
@@ -4707,9 +4811,19 @@ function HomePage({ user }) {
     }
   }, [])
 
+  const loadDirectAds = React.useCallback(async () => {
+    try {
+      const data = await api('/api/direct-ads/placements?placement=home_feed&limit=3')
+      setDirectAds(Array.isArray(data?.items) ? data.items : [])
+    } catch {
+      setDirectAds([])
+    }
+  }, [])
+
   useEffect(() => {
     loadFeed(true)
     loadStories()
+    loadDirectAds()
   }, [])
 
   useEffect(() => {
@@ -4812,8 +4926,11 @@ function HomePage({ user }) {
 
 
       <div className="feed-post-list">
-        {items.length ? items.map(item => (
-          <FeedPostCard key={`feed-post-${item.id}-${item.created_at}`} item={item} onOpenProfile={setSelectedProfile} onFriendRequest={handleFriendRequest} />
+        {items.length ? items.map((item, index) => (
+          <React.Fragment key={`feed-post-wrap-${item.id}-${item.created_at}`}>
+            <FeedPostCard item={item} onOpenProfile={setSelectedProfile} onFriendRequest={handleFriendRequest} />
+            {directAds.length && (index + 1) % 4 === 0 ? <DirectAdCard item={directAds[index % directAds.length]} compact /> : null}
+          </React.Fragment>
         )) : (
           <div className="card">현재 표시할 피드가 없습니다. 먼저 피드를 작성해보세요.</div>
         )}

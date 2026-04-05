@@ -3214,3 +3214,11 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .verified-badge.compact{padding:1px 6px;font-size:10px}
 .competition-me{border-color:#d8b400;background:#fffbe8}
 .rewards-scroll-list{max-height:420px;overflow:auto}
+
+/* 2026-04-05 direct ads */
+.direct-ad-card{border:1px solid var(--line);background:#fff;padding:14px;display:grid;gap:10px}
+.direct-ad-card.compact{padding:12px;margin:8px 0}
+.direct-ad-image-wrap{border:1px solid var(--line);background:#fafafa;overflow:hidden}
+.direct-ad-image{display:block;width:100%;max-height:240px;object-fit:cover}
+.direct-ad-copy{margin:0;white-space:pre-wrap;word-break:break-word}
+.align-end{align-items:flex-end}

@@ -190,3 +190,21 @@ class AdminBrandVerificationProcessIn(BaseModel):
     status: str = "approved"
     note: str = ""
 
+
+class DirectAdCampaignCreateIn(BaseModel):
+    profile_id: int | None = None
+    title: str = ""
+    subtitle: str = ""
+    description: str = ""
+    target_url: str = ""
+    image_url: str = ""
+    placement: str = "home_feed"
+    category: str = ""
+    target_keyword: str = ""
+    bid_points: int = 0
+
+
+class AdminDirectAdProcessIn(BaseModel):
+    status: str = "approved"
+    note: str = ""
+

@@ -638,6 +638,7 @@ def ensure_profile_tables(conn=None) -> None:
         ensure_reward_tables(conn)
         ensure_brand_verification_tables(conn)
         ensure_keyword_boost_tables(conn)
+        ensure_direct_ad_tables(conn)
         ensure_indexes(conn)
         cleanup_expired_marketing_assets(conn)
 
@@ -668,6 +669,7 @@ REWARD_RULES = {
     "share_profile": {"label": "프로필 공유", "points": 50, "daily_limit": 5, "description": "내 공개 프로필을 공유하면 일 최대 5회 적립"},
     "complete_profile": {"label": "프로필 정리 완료", "points": 500, "daily_limit": 1, "description": "핵심 프로필 정보를 모두 입력하면 1회 적립"},
     "keyword_boost_spend": {"label": "키워드 상위 노출 사용", "points": -1, "daily_limit": 0, "description": "피드/게시글 키워드 상위 노출에 사용한 포인트"},
+    "direct_ad_spend": {"label": "직접 광고 슬롯 사용", "points": -1, "daily_limit": 0, "description": "홈 피드 직접 광고 집행에 사용한 포인트"},
 }
 
 
@@ -752,6 +754,112 @@ def ensure_keyword_boost_tables(conn) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_keyword_boosts_keyword_status ON app_keyword_boosts(keyword, status, created_at DESC)")
 
 
+
+
+def ensure_direct_ad_tables(conn) -> None:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS app_direct_ad_campaigns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        profile_id INTEGER,
+        title TEXT NOT NULL DEFAULT '',
+        subtitle TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        target_url TEXT NOT NULL DEFAULT '',
+        image_url TEXT NOT NULL DEFAULT '',
+        placement TEXT NOT NULL DEFAULT 'home_feed',
+        category TEXT NOT NULL DEFAULT '',
+        target_keyword TEXT NOT NULL DEFAULT '',
+        bid_points INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        admin_note TEXT NOT NULL DEFAULT '',
+        impressions INTEGER NOT NULL DEFAULT 0,
+        clicks INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        processed_at TEXT NOT NULL DEFAULT '',
+        starts_at TEXT NOT NULL DEFAULT '',
+        ends_at TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    with suppress(Exception):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_direct_ads_status_placement ON app_direct_ad_campaigns(status, placement, created_at DESC)")
+
+
+def serialize_direct_ad_campaign(row: Any) -> dict[str, Any]:
+    item = row_to_dict(row)
+    return {
+        "id": int(item.get("id") or 0),
+        "user_id": int(item.get("user_id") or 0),
+        "profile_id": int(item.get("profile_id") or 0),
+        "title": item.get("title") or '',
+        "subtitle": item.get("subtitle") or '',
+        "description": item.get("description") or '',
+        "target_url": item.get("target_url") or '',
+        "image_url": item.get("image_url") or '',
+        "placement": item.get("placement") or 'home_feed',
+        "category": item.get("category") or '',
+        "target_keyword": item.get("target_keyword") or '',
+        "bid_points": int(item.get("bid_points") or 0),
+        "status": item.get("status") or 'pending',
+        "admin_note": item.get("admin_note") or '',
+        "impressions": int(item.get("impressions") or 0),
+        "clicks": int(item.get("clicks") or 0),
+        "created_at": item.get("created_at") or '',
+        "processed_at": item.get("processed_at") or '',
+        "starts_at": item.get("starts_at") or '',
+        "ends_at": item.get("ends_at") or '',
+    }
+
+
+def active_direct_ads_payload(conn, *, placement: str = 'home_feed', limit: int = 3) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT d.*, u.nickname, u.email, p.display_name, p.verification_badge_text, p.brand_verified FROM app_direct_ad_campaigns d LEFT JOIN users u ON u.id = d.user_id LEFT JOIN app_profiles p ON p.id = d.profile_id WHERE d.status = 'approved' AND d.placement = ? ORDER BY d.bid_points DESC, d.id DESC LIMIT ?",
+        (placement, max(1, min(int(limit or 3), 10))),
+    ).fetchall()
+    items=[]
+    for row in rows:
+        item=serialize_direct_ad_campaign(row)
+        item.update({
+            'nickname': row['nickname'] or row['email'] or f"회원 #{row['user_id']}",
+            'display_name': row['display_name'] or row['nickname'] or row['email'] or '광고주',
+            'brand_verified': bool(row['brand_verified']) if 'brand_verified' in row.keys() else False,
+            'verification_badge_text': row['verification_badge_text'] or ('브랜드 인증' if row['brand_verified'] else ''),
+        })
+        items.append(item)
+    return items
+
+
+def direct_ad_competition_payload(conn, *, placement: str = 'home_feed', category: str = '') -> dict[str, Any]:
+    category_norm = normalize_keyword(category)
+    params=[placement]
+    where="WHERE placement = ? AND status IN ('pending','approved')"
+    if category_norm:
+        where += " AND category = ?"
+        params.append(category_norm)
+    rows=conn.execute(f"""
+        SELECT user_id, COALESCE(profile_id, 0) AS profile_id, category, COUNT(*) AS campaign_count, SUM(bid_points) AS total_points, MAX(created_at) AS last_used
+        FROM app_direct_ad_campaigns
+        {where}
+        GROUP BY user_id, COALESCE(profile_id, 0), category
+        ORDER BY total_points DESC, last_used DESC
+        LIMIT 20
+    """, tuple(params)).fetchall()
+    leaderboard=[]
+    for idx,row in enumerate(rows, start=1):
+        user_row=conn.execute("SELECT nickname, email FROM users WHERE id = ?", (row['user_id'],)).fetchone()
+        leaderboard.append({
+            'rank': idx,
+            'user_id': int(row['user_id'] or 0),
+            'profile_id': int(row['profile_id'] or 0),
+            'nickname': (user_row['nickname'] if user_row else '') or (user_row['email'] if user_row else f"회원 #{row['user_id']}"),
+            'category': row['category'] or '',
+            'campaign_count': int(row['campaign_count'] or 0),
+            'total_points': int(row['total_points'] or 0),
+            'last_used': row['last_used'] or '',
+        })
+    return {'placement': placement, 'category': category_norm, 'leaderboard': leaderboard}
+
 def serialize_brand_verification_request(row: Any) -> dict[str, Any]:
     item = row_to_dict(row)
     return {
@@ -785,7 +893,7 @@ def serialize_keyword_boost(row: Any) -> dict[str, Any]:
     }
 
 
-def spend_points(conn, user_id: int, amount: int, *, description: str, source_type: str = '', source_id: int | None = None, source_key: str = '') -> bool:
+def spend_points(conn, user_id: int, amount: int, *, description: str, source_type: str = '', source_id: int | None = None, source_key: str = '', rule_code: str = 'keyword_boost_spend') -> bool:
     points = int(amount or 0)
     if points <= 0:
         return False
@@ -794,7 +902,7 @@ def spend_points(conn, user_id: int, amount: int, *, description: str, source_ty
         raise HTTPException(status_code=400, detail='사용 가능한 포인트가 부족합니다.')
     conn.execute(
         "INSERT INTO app_point_ledger(user_id, rule_code, points, source_type, source_id, source_key, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (user_id, 'keyword_boost_spend', -points, source_type, source_id, source_key or '', description, utcnow()),
+        (user_id, rule_code or 'keyword_boost_spend', -points, source_type, source_id, source_key or '', description, utcnow()),
     )
     return True
 
@@ -985,6 +1093,9 @@ def compute_reward_projection(conn, user_id: int) -> dict[str, Any]:
 
 def reward_summary_payload(conn, user_id: int) -> dict[str, Any]:
     ensure_reward_tables(conn)
+    ensure_brand_verification_tables(conn)
+    ensure_keyword_boost_tables(conn)
+    ensure_direct_ad_tables(conn)
     balance = get_reward_balance(conn, user_id)
     projection = compute_reward_projection(conn, user_id)
     month_earned = int(projection.get('month_earned') or 0)
@@ -1013,6 +1124,18 @@ def reward_summary_payload(conn, user_id: int) -> dict[str, Any]:
         "keyword_boosts": {
             "my_items": [serialize_keyword_boost(row) for row in conn.execute("SELECT * FROM app_keyword_boosts WHERE user_id = ? ORDER BY id DESC LIMIT 20", (user_id,)).fetchall()],
         },
+        "direct_ads": {
+            "my_items": [serialize_direct_ad_campaign(row) for row in conn.execute("SELECT * FROM app_direct_ad_campaigns WHERE user_id = ? ORDER BY id DESC LIMIT 20", (user_id,)).fetchall()],
+            "placements": [
+                {"code": "home_feed", "label": "홈 피드 중간"},
+                {"code": "question_sidebar", "label": "질문/답변 하단"},
+            ],
+            "guide": [
+                "직접 광고는 운영자가 검수 승인한 뒤 노출됩니다.",
+                "포인트를 더 많이 사용할수록 같은 지면/카테고리 경쟁에서 우선 노출됩니다.",
+                "광고주 정보와 랜딩 URL은 관리자 승인 전까지 공개 노출되지 않습니다.",
+            ],
+        },
         "notices": [
             "광고 수익은 플랫폼 운영 수익이며 회원 보상은 활동 포인트 기준으로만 적립됩니다.",
             "광고 시청·클릭 자체는 포인트 지급 기준이 아니며, 부정 트래픽 유도 행위는 제한됩니다.",
@@ -1030,6 +1153,9 @@ def reward_summary_payload(conn, user_id: int) -> dict[str, Any]:
 
 def admin_reward_overview_payload(conn) -> dict[str, Any]:
     ensure_reward_tables(conn)
+    ensure_brand_verification_tables(conn)
+    ensure_keyword_boost_tables(conn)
+    ensure_direct_ad_tables(conn)
     pending_count = int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE status = 'pending'").fetchone()[0] or 0)
     approved_count = int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE status = 'approved'").fetchone()[0] or 0)
     paid_count = int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE status = 'paid'").fetchone()[0] or 0)
@@ -1073,6 +1199,9 @@ def admin_reward_overview_payload(conn) -> dict[str, Any]:
         requests.append(item)
     brand_requests = [serialize_brand_verification_request(r) | {"email": r["email"], "nickname": r["nickname"]} for r in conn.execute("SELECT b.*, u.email, u.nickname FROM app_brand_verification_requests b JOIN users u ON u.id = b.user_id ORDER BY CASE b.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, b.id DESC LIMIT 40").fetchall()]
     top_keywords = [row_to_dict(r) for r in conn.execute("SELECT keyword, SUM(points_spent) AS total_points, COUNT(*) AS item_count FROM app_keyword_boosts WHERE status = 'active' GROUP BY keyword ORDER BY total_points DESC, keyword ASC LIMIT 20").fetchall()]
+    direct_ads = [serialize_direct_ad_campaign(r) | {"email": r["email"], "nickname": r["nickname"]} for r in conn.execute("SELECT d.*, u.email, u.nickname FROM app_direct_ad_campaigns d JOIN users u ON u.id = d.user_id ORDER BY CASE d.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, d.id DESC LIMIT 40").fetchall()]
+    active_direct_ads = int(conn.execute("SELECT COUNT(*) FROM app_direct_ad_campaigns WHERE status = 'approved'").fetchone()[0] or 0)
+    pending_direct_ads = int(conn.execute("SELECT COUNT(*) FROM app_direct_ad_campaigns WHERE status = 'pending'").fetchone()[0] or 0)
     return {
         "summary": {
             "pending_count": pending_count,
@@ -1085,6 +1214,8 @@ def admin_reward_overview_payload(conn) -> dict[str, Any]:
         "top_users": top_users,
         "brand_requests": brand_requests,
         "top_keywords": top_keywords,
+        "direct_ads": direct_ads,
+        "direct_ad_summary": {"active_count": active_direct_ads, "pending_count": pending_direct_ads},
     }
 
 @app.post("/api/rewards/brand-verification/request")
@@ -1135,6 +1266,67 @@ def get_keyword_competition(keyword: str = Query(default=''), user=Depends(curre
     with get_conn() as conn:
         ensure_keyword_boost_tables(conn)
         return keyword_competition_payload(conn, keyword, int(user['id']))
+
+
+@app.post("/api/rewards/direct-ads")
+def create_direct_ad_campaign(payload: DirectAdCampaignCreateIn, user=Depends(current_user)):
+    with get_conn() as conn:
+        ensure_direct_ad_tables(conn)
+        title = (payload.title or '').strip()[:80]
+        if not title:
+            raise HTTPException(status_code=400, detail='광고 제목을 입력해주세요.')
+        target_url = (payload.target_url or '').strip()[:300]
+        if not target_url.startswith('http://') and not target_url.startswith('https://'):
+            raise HTTPException(status_code=400, detail='랜딩 URL은 http:// 또는 https:// 로 시작해야 합니다.')
+        placement = (payload.placement or 'home_feed').strip()
+        if placement not in {'home_feed', 'question_sidebar'}:
+            raise HTTPException(status_code=400, detail='지원하지 않는 광고 지면입니다.')
+        bid_points = max(500, min(500000, int(payload.bid_points or 0)))
+        category = normalize_keyword(payload.category)
+        profile_id = int(payload.profile_id or 0)
+        if profile_id > 0:
+            profile = conn.execute("SELECT id FROM app_profiles WHERE id = ? AND user_id = ?", (profile_id, user['id'])).fetchone()
+            if not profile:
+                raise HTTPException(status_code=403, detail='본인 프로필만 광고주 프로필로 연결할 수 있습니다.')
+        spend_points(conn, int(user['id']), bid_points, description=f"직접 광고 '{title}' 집행", source_type='direct_ad', source_key=f"directad:{title}:{utcnow()}", rule_code='direct_ad_spend')
+        conn.execute("INSERT INTO app_direct_ad_campaigns(user_id, profile_id, title, subtitle, description, target_url, image_url, placement, category, target_keyword, bid_points, status, admin_note, impressions, clicks, created_at, processed_at, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', 0, 0, ?, '', '', '')", (user['id'], profile_id if profile_id > 0 else None, title, (payload.subtitle or '')[:120], (payload.description or '')[:500], target_url, (payload.image_url or '')[:500], placement, category, normalize_keyword(payload.target_keyword), bid_points, utcnow()))
+        return {'ok': True, 'summary': reward_summary_payload(conn, int(user['id'])), 'competition': direct_ad_competition_payload(conn, placement=placement, category=category)}
+
+
+@app.get("/api/direct-ads/placements")
+def list_active_direct_ads(placement: str = Query(default='home_feed'), limit: int = Query(default=3, ge=1, le=10), category: str = Query(default='')):
+    with get_conn() as conn:
+        ensure_direct_ad_tables(conn)
+        items = active_direct_ads_payload(conn, placement=placement, limit=limit)
+        category_norm = normalize_keyword(category)
+        if category_norm:
+            items = [item for item in items if normalize_keyword(item.get('category') or '') == category_norm][:limit]
+        for item in items:
+            conn.execute("UPDATE app_direct_ad_campaigns SET impressions = COALESCE(impressions, 0) + 1 WHERE id = ?", (int(item.get('id') or 0),))
+            item['impressions'] = int(item.get('impressions') or 0) + 1
+        return {'items': items, 'competition': direct_ad_competition_payload(conn, placement=placement, category=category_norm)}
+
+
+@app.post("/api/direct-ads/{campaign_id}/click")
+def track_direct_ad_click(campaign_id: int):
+    with get_conn() as conn:
+        ensure_direct_ad_tables(conn)
+        conn.execute("UPDATE app_direct_ad_campaigns SET clicks = COALESCE(clicks, 0) + 1 WHERE id = ?", (campaign_id,))
+        return {'ok': True}
+
+
+@app.post("/api/admin/direct-ads/{campaign_id}/process")
+def process_direct_ad_campaign(campaign_id: int, payload: AdminDirectAdProcessIn, user=Depends(require_admin_user)):
+    status = (payload.status or 'approved').strip().lower()
+    if status not in {'approved', 'rejected'}:
+        raise HTTPException(status_code=400, detail='허용되지 않는 처리 상태입니다.')
+    with get_conn() as conn:
+        ensure_direct_ad_tables(conn)
+        row = conn.execute("SELECT * FROM app_direct_ad_campaigns WHERE id = ?", (campaign_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail='직접 광고 요청을 찾을 수 없습니다.')
+        conn.execute("UPDATE app_direct_ad_campaigns SET status = ?, admin_note = ?, processed_at = ? WHERE id = ?", (status, (payload.note or '')[:500], utcnow(), campaign_id))
+        return {'ok': True, 'overview': admin_reward_overview_payload(conn)}
 
 
 @app.post("/api/admin/brand-verification/{request_id}/process")

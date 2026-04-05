@@ -207,6 +207,12 @@ export default function AdminPage() {
     await load()
   }
 
+  async function processDirectAd(item, status) {
+    const note = window.prompt(status === 'approved' ? '승인 메모를 입력하세요' : '반려 사유를 입력하세요', status === 'approved' ? '홈 피드 직접 광고 승인' : '광고 문구 또는 URL 수정 필요') || ''
+    await api(`/api/admin/direct-ads/${item.id}/process`, { method: 'POST', body: JSON.stringify({ status, note }) })
+    await load()
+  }
+
   const pendingCounts = useMemo(() => ({
     reports: reports.filter(item => item.status === 'pending').length,
     uploads: uploads.filter(item => item.moderation_status === 'pending').length,
@@ -258,6 +264,8 @@ export default function AdminPage() {
             <Metric label="승인 대기" value={rewardsOverview.summary?.approved_count || 0} />
             <Metric label="지급 완료" value={rewardsOverview.summary?.paid_count || 0} />
             <Metric label="지급 예정 포인트" value={`${formatNumber(rewardsOverview.summary?.total_pending_points || 0)}P`} />
+            <Metric label="직접 광고 승인대기" value={rewardsOverview.direct_ad_summary?.pending_count || 0} />
+            <Metric label="직접 광고 활성" value={rewardsOverview.direct_ad_summary?.active_count || 0} />
           </div>
 
           <div className="grid-2">
@@ -316,6 +324,30 @@ export default function AdminPage() {
                   <div className="muted small-text">활성 콘텐츠 {formatNumber(item.item_count || 0)}개</div>
                 </div>
               )) : <div className="muted small-text">활성 키워드 경쟁이 없습니다.</div>}
+            </div>
+          </div>
+
+          <div className="grid-2">
+            <div className="stack compact-list">
+              <strong>직접 광고 요청</strong>
+              {(rewardsOverview.direct_ads || []).length ? rewardsOverview.direct_ads.map(item => (
+                <div key={`direct-ad-${item.id}`} className="bordered-box stack">
+                  <div className="split-row responsive-row"><strong>{item.title}</strong><strong>{formatNumber(item.bid_points || 0)}P</strong></div>
+                  <div className="muted small-text">{item.nickname || item.email} · {item.placement} · 카테고리 {item.category || '전체'}</div>
+                  <div className="muted small-text">상태: {item.status} · 노출 {formatNumber(item.impressions || 0)}회 · 클릭 {formatNumber(item.clicks || 0)}회</div>
+                  <div className="muted small-text">{item.target_url}</div>
+                  <div className="action-wrap wrap-row">
+                    <button type="button" className="ghost" onClick={() => processDirectAd(item, 'approved')} disabled={item.status === 'approved'}>승인</button>
+                    <button type="button" onClick={() => processDirectAd(item, 'rejected')}>반려</button>
+                  </div>
+                </div>
+              )) : <div className="muted small-text">직접 광고 요청이 없습니다.</div>}
+            </div>
+
+            <div className="stack compact-list">
+              <strong>직접 광고 운영 메모</strong>
+              <div className="bordered-box small-text">홈 피드 스폰서 카드 방식으로만 노출하고, 강제 재생형 광고는 사용하지 않는 운영 정책을 기준으로 구성했습니다.</div>
+              <div className="bordered-box small-text">같은 지면/카테고리에서 사용 포인트가 높을수록 우선 노출되며, 관리자 승인 전까지는 보류 상태입니다.</div>
             </div>
           </div>
         </section>
