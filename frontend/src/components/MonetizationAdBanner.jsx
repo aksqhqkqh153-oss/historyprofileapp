@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useRef } from 'react'
 
 const ADSENSE_CLIENT = String(import.meta.env.VITE_ADSENSE_CLIENT || '').trim()
 const DEFAULT_MODE = String(import.meta.env.VITE_QUESTION_PROFILE_AD_MODE || 'adsense').trim().toLowerCase()
+const QUESTION_TOP_SLOT = String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_TOP || '').trim()
+const QUESTION_PROFILE_SLOT = String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_PROFILE || '').trim()
 const SLOT_BY_PLACEMENT = {
-  question_profile: String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_PROFILE || '').trim(),
+  question_profile: QUESTION_PROFILE_SLOT || QUESTION_TOP_SLOT,
+  question_top: QUESTION_TOP_SLOT || QUESTION_PROFILE_SLOT,
   question_feed_inline: String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_FEED_INLINE || '').trim(),
   home_feed_inline: String(import.meta.env.VITE_ADSENSE_SLOT_HOME_FEED_INLINE || '').trim(),
   rewards_inline: String(import.meta.env.VITE_ADSENSE_SLOT_REWARDS_INLINE || '').trim(),

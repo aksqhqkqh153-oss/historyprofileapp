@@ -4248,11 +4248,15 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
       ) : null}
       <div className={isAskedStyle ? 'asked-feed-list' : 'list question-feed-list'}>
         {lockedTab ? <div className={isAskedStyle ? 'asked-locked-card' : 'bordered-box muted'}>이 항목은 프로필 소유자만 확인할 수 있습니다.</div> : null}
-        {!lockedTab && visibleItems.length ? visibleItems.map(item => {
-          const comments = commentLists[item.id] || []
-          const canDeleteOwnQuestion = !isOwner && viewerId > 0 && Number(item.asker_user_id || 0) === viewerId
-          return (
-            <article key={item.id} className={isAskedStyle ? 'asked-feed-card' : 'question-feed-card'}>
+        {!lockedTab && visibleItems.length ? (
+          <>
+            <MonetizationAdBanner placement="question_top" className={isAskedStyle ? 'asked-inline-ad asked-inline-ad-top' : 'question-inline-ad question-inline-ad-top'} compact />
+            {visibleItems.map((item, index) => {
+              const comments = commentLists[item.id] || []
+              const canDeleteOwnQuestion = !isOwner && viewerId > 0 && Number(item.asker_user_id || 0) === viewerId
+              return (
+                <React.Fragment key={item.id}>
+                  <article className={isAskedStyle ? 'asked-feed-card' : 'question-feed-card'}>
               <div className={isAskedStyle ? 'asked-feed-top' : 'question-feed-top'}>
                 <div className="asked-feed-copy">
                   <div className="question-user-line"><strong>{item.display_nickname || item.nickname}</strong><span className="muted small-text">질문일 {formatDateLabel(item.created_at)}</span></div>
@@ -4313,9 +4317,15 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
                   </div>
                 </div>
               ) : null}
-            </article>
-          )
-        }) : <div className={isAskedStyle ? 'asked-empty-card' : 'bordered-box muted'}>표시할 항목이 없습니다.</div>}
+                  </article>
+                  {(index + 1) % 3 === 0 ? (
+                    <MonetizationAdBanner placement="question_feed_inline" className={isAskedStyle ? 'asked-inline-ad' : 'question-inline-ad'} compact />
+                  ) : null}
+                </React.Fragment>
+              )
+            })}
+          </>
+        ) : <div className={isAskedStyle ? 'asked-empty-card' : 'bordered-box muted'}>표시할 항목이 없습니다.</div>}
       </div>
     </section>
   )
