@@ -8,3 +8,5 @@
 - 홈 피드 광고를 AdSense 수동 스타일 인피드(`data-ad-format="fluid"`, `data-ad-layout-key`) 방식으로 반영
 - 상대방 질문 화면 광고 슬롯이 기존 Question Top / Profile / Feed Inline 변수로 정상 렌더링되도록 유지
 - Cloudflare Pages 환경변수 안내 파일 갱신
+
+- 광고 기본 표시 정책을 관리자/1등급 숨김에서 전체 표시 기준으로 변경

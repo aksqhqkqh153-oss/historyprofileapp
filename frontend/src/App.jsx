@@ -4271,7 +4271,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
         {lockedTab ? <div className={isAskedStyle ? 'asked-locked-card' : 'bordered-box muted'}>이 항목은 프로필 소유자만 확인할 수 있습니다.</div> : null}
         {!lockedTab && visibleItems.length ? (
           <>
-            <MonetizationAdBanner placement="question_top" className={isAskedStyle ? 'asked-inline-ad asked-inline-ad-top' : 'question-inline-ad question-inline-ad-top'} compact user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-top-${profile?.id || 0}`} />
+            <MonetizationAdBanner placement="question_top" mode="adsense" className={isAskedStyle ? 'asked-inline-ad asked-inline-ad-top' : 'question-inline-ad question-inline-ad-top'} compact user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-top-${profile?.id || 0}`} />
             {recommendationPool.length ? (
               <section className={isAskedStyle ? 'asked-recommend-strip' : 'question-recommend-strip'}>
                 <div className="split-row responsive-row question-recommend-head">
@@ -4373,7 +4373,7 @@ function QuestionBoard({ profile, ownerNickname, isOwner, onRefresh, canAsk = tr
               ) : null}
                   </article>
                   {(index + 1) % 3 === 0 ? (
-                    <MonetizationAdBanner placement="question_feed_inline" className={isAskedStyle ? 'asked-inline-ad' : 'question-inline-ad'} compact user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-feed-${item.id}`} />
+                    <MonetizationAdBanner placement="question_feed_inline" mode="adsense" className={isAskedStyle ? 'asked-inline-ad' : 'question-inline-ad'} compact user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-feed-${item.id}`} />
                   ) : null}
                 </React.Fragment>
               )
@@ -4451,7 +4451,7 @@ function AskedQuestionProfileHeader({ data, onOpenAsk, onToggleFollow, followLoa
         <button type="button" className="asked-question-button" onClick={onOpenAsk}>질문하기</button>
         <button type="button" className="ghost asked-share-button" onClick={handleShare}>공유</button>
       </div>
-      <MonetizationAdBanner user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-profile-${profile?.id || 0}`} />
+      <MonetizationAdBanner mode="adsense" user={viewerUser} pageKey={`/questions/${profile?.id || 0}`} eventKeySuffix={`question-profile-${profile?.id || 0}`} />
     </div>
   )
 }
@@ -5007,7 +5007,6 @@ function HomePage({ user }) {
   const [nextOffset, setNextOffset] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [storyBarVisible, setStoryBarVisible] = useState(true)
-  const [directAds, setDirectAds] = useState([])
   const loadMoreRef = useRef(null)
   const lastScrollTopRef = useRef(0)
   const composeParam = new URLSearchParams(location.search).get('compose')
@@ -5048,19 +5047,9 @@ function HomePage({ user }) {
     }
   }, [])
 
-  const loadDirectAds = React.useCallback(async () => {
-    try {
-      const data = await api('/api/direct-ads/placements?placement=home_feed&limit=3')
-      setDirectAds(Array.isArray(data?.items) ? data.items : [])
-    } catch {
-      setDirectAds([])
-    }
-  }, [])
-
   useEffect(() => {
     loadFeed(true)
     loadStories()
-    loadDirectAds()
   }, [])
 
   useEffect(() => {
@@ -5167,17 +5156,11 @@ function HomePage({ user }) {
         {items.length ? items.map((item, index) => {
           const feedPosition = index + 1
           const shouldShowAdSlot = feedPosition % 10 === 0
-          const adBlockIndex = Math.floor(feedPosition / 10)
-          const directAdItem = shouldShowAdSlot && directAds.length > 0 ? directAds[(adBlockIndex - 1) % directAds.length] : null
           return (
             <React.Fragment key={`feed-post-wrap-${item.id}-${item.created_at}`}>
               <FeedPostCard item={item} onOpenProfile={setSelectedProfile} onFriendRequest={handleFriendRequest} />
               {shouldShowAdSlot ? (
-                directAdItem ? (
-                  <DirectAdCard item={directAdItem} compact />
-                ) : (
-                  <MonetizationAdBanner placement="home_feed_inline" className="feed-inline-ad" compact user={user} pageKey="/" eventKeySuffix={`home-${feedPosition}`} />
-                )
+                <MonetizationAdBanner placement="home_feed_inline" className="feed-inline-ad" compact mode="adsense" user={user} pageKey="/" eventKeySuffix={`home-${feedPosition}`} />
               ) : null}
             </React.Fragment>
           )

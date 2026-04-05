@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react'
 import { api } from '../api'
 
 const ADSENSE_CLIENT = String(import.meta.env.VITE_ADSENSE_CLIENT || '').trim()
-const DEFAULT_MODE = String(import.meta.env.VITE_QUESTION_PROFILE_AD_MODE || 'adsense').trim().toLowerCase()
+const DEFAULT_MODE = String(import.meta.env.VITE_QUESTION_PROFILE_AD_MODE || 'adsense').trim().toLowerCase() || 'adsense'
 const QUESTION_TOP_SLOT = String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_TOP || '').trim()
 const QUESTION_PROFILE_SLOT = String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_PROFILE || '').trim()
 const HOME_FEED_LAYOUT_KEY = String(import.meta.env.VITE_ADSENSE_LAYOUT_KEY_HOME_FEED_INLINE || '').trim()
@@ -19,9 +19,9 @@ const DIRECT_DESC = String(import.meta.env.VITE_DIRECT_AD_DESC || '단가가 높
 const DIRECT_CTA = String(import.meta.env.VITE_DIRECT_AD_CTA || '광고 문의').trim()
 const DIRECT_LINK = String(import.meta.env.VITE_DIRECT_AD_LINK || '').trim()
 const DIRECT_IMAGE = String(import.meta.env.VITE_DIRECT_AD_IMAGE || '').trim()
-const HIDE_FOR_ADMIN = String(import.meta.env.VITE_ADS_HIDE_FOR_ADMIN || 'true').trim().toLowerCase() !== 'false'
+const HIDE_FOR_ADMIN = String(import.meta.env.VITE_ADS_HIDE_FOR_ADMIN || 'false').trim().toLowerCase() === 'true'
 const HIDDEN_GRADES = new Set(
-  String(import.meta.env.VITE_ADS_HIDDEN_GRADES || '1')
+  String(import.meta.env.VITE_ADS_HIDDEN_GRADES || '')
     .split(',')
     .map(item => Number(String(item || '').trim()))
     .filter(item => Number.isFinite(item) && item > 0)
@@ -46,6 +46,10 @@ function ensureAdSenseScript(client) {
   adsenseScriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[data-adsense-client="${client}"]`)
     if (existing) {
+      if (existing.dataset.loaded === 'true' || window.adsbygoogle) {
+        resolve(true)
+        return
+      }
       existing.addEventListener('load', () => resolve(true), { once: true })
       existing.addEventListener('error', () => reject(new Error('adsense-script-load-failed')), { once: true })
       return
@@ -55,7 +59,7 @@ function ensureAdSenseScript(client) {
     script.crossOrigin = 'anonymous'
     script.dataset.adsenseClient = client
     script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${client}`
-    script.onload = () => resolve(true)
+    script.onload = () => { script.dataset.loaded = 'true'; resolve(true) }
     script.onerror = () => reject(new Error('adsense-script-load-failed'))
     document.head.appendChild(script)
   })
