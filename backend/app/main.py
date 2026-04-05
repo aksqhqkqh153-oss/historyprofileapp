@@ -668,12 +668,18 @@ def get_storage_limit_bytes(user: dict) -> int:
 
 REWARD_MIN_WITHDRAW_POINTS = 10000
 REWARD_MONTHLY_WITHDRAW_LIMIT = 1
+WITHDRAW_FEE_RATE = 0.05
+REVENUE_POLICY = {
+    "free_features": {"dm": True, "question": True},
+    "paid_features": {"withdraw_fee_rate": WITHDRAW_FEE_RATE},
+    "disabled_features": {"keyword_bidding": True, "dm_charge": True},
+    "monetization": {"adsense": True, "video_ads": True, "direct_ads": True},
+}
 REWARD_RULES = {
     "receive_question": {"label": "질문 받기", "points": 120, "daily_limit": 20, "description": "내 프로필에 새로운 질문이 등록되면 적립"},
     "answer_question": {"label": "답변 작성", "points": 300, "daily_limit": 20, "description": "질문에 답변을 등록하면 적립"},
     "share_profile": {"label": "프로필 공유", "points": 50, "daily_limit": 5, "description": "내 공개 프로필을 공유하면 일 최대 5회 적립"},
     "complete_profile": {"label": "프로필 정리 완료", "points": 500, "daily_limit": 1, "description": "핵심 프로필 정보를 모두 입력하면 1회 적립"},
-    "keyword_boost_spend": {"label": "키워드 상위 노출 사용", "points": -1, "daily_limit": 0, "description": "피드/게시글 키워드 상위 노출에 사용한 포인트"},
     "direct_ad_spend": {"label": "직접 광고 슬롯 사용", "points": -1, "daily_limit": 0, "description": "홈 피드 직접 광고 집행에 사용한 포인트"},
 }
 
@@ -1002,6 +1008,13 @@ def monthly_withdraw_count(conn, user_id: int) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM app_withdrawal_requests WHERE user_id = ? AND created_at >= ? AND created_at < ? AND status IN ('pending', 'approved')", (user_id, start, end)).fetchone()[0] or 0)
 
 
+def calculate_withdraw_cash_amount(points_amount: int) -> tuple[int, int]:
+    gross_points = max(0, int(points_amount or 0))
+    fee_points = int(gross_points * WITHDRAW_FEE_RATE)
+    cash_amount = max(0, gross_points - fee_points)
+    return cash_amount, fee_points
+
+
 def serialize_point_entry(row: Any) -> dict[str, Any]:
     item = row_to_dict(row)
     return {
@@ -1117,6 +1130,8 @@ def reward_summary_payload(conn, user_id: int) -> dict[str, Any]:
         "monthly_withdraw_limit": REWARD_MONTHLY_WITHDRAW_LIMIT,
         "monthly_withdraw_count": month_withdraw_count,
         "can_withdraw": balance['available'] >= REWARD_MIN_WITHDRAW_POINTS and month_withdraw_count < REWARD_MONTHLY_WITHDRAW_LIMIT,
+        "withdraw_fee_rate": WITHDRAW_FEE_RATE,
+        "revenue_policy": REVENUE_POLICY,
         "rules": reward_rule_rows(),
         "brand_verification": {
             "my_requests": [serialize_brand_verification_request(row) for row in conn.execute("SELECT * FROM app_brand_verification_requests WHERE user_id = ? ORDER BY id DESC LIMIT 10", (user_id,)).fetchall()],
@@ -1143,20 +1158,22 @@ def reward_summary_payload(conn, user_id: int) -> dict[str, Any]:
         },
         "creator_model": [
             {"title": "프로필 자산화", "description": "프로필, 경력, 자기소개, 링크, 파일관리 자산을 공개 프로필과 함께 운영해 검색·공유 자산으로 누적합니다."},
-            {"title": "질문/답변 전환", "description": "공개 프로필에서 질문, DM, 피드 유입이 발생하면 광고 노출과 상담 전환이 함께 일어나는 구조입니다."},
+            {"title": "질문/답변 전환", "description": "공개 프로필에서 질문, DM, 피드 유입이 발생하면 AdSense·영상 광고 노출이 함께 발생하는 구조입니다."},
             {"title": "활동 기반 포인트", "description": "광고 시청 자체가 아니라 프로필 공유, 질문 수신, 답변 완료, 공개 자산 완성도 같은 활동에만 포인트를 지급합니다."},
-            {"title": "플랫폼 상위 수익", "description": "광고 영업과 광고주 관리는 플랫폼이 담당하고, 회원에게는 안전한 범위의 포인트/출금 리워드를 제공하는 구조입니다."},
+            {"title": "플랫폼 상위 수익", "description": "자유로운 무료 기능(DM·질문)을 유지하고, 플랫폼은 광고 수익과 출금 수수료 5% 구조로 운영합니다."},
         ],
         "strategy_comparison": [
             {"service": "LinkedIn", "strength": "전문 프로필·경력 관리", "gap": "노출 이후 개인 보상 구조가 약함", "our_edge": "프로필 자산 관리 + 활동 리워드 + 키워드 경쟁을 결합"},
             {"service": "Instagram", "strength": "자기 표현과 팔로우 기반 노출", "gap": "경력·증빙·파일 자산 관리가 약함", "our_edge": "경력·증빙·자기소개·질문 전환까지 한 앱에서 운영"},
-            {"service": "크몽/숨고형 서비스", "strength": "문의/매칭 전환이 빠름", "gap": "개인 브랜딩 자산 축적과 장기 팬화 구조가 약함", "our_edge": "프로필 자산을 쌓으면서 질문·DM·광고 보상을 동시에 운영"},
+            {"service": "크몽/숨고형 서비스", "strength": "문의/매칭 전환이 빠름", "gap": "개인 브랜딩 자산 축적과 장기 팬화 구조가 약함", "our_edge": "프로필 자산을 쌓으면서 질문·DM 무료 기능과 광고 기반 수익화를 동시에 운영"},
             {"service": "노션/링크인바이오", "strength": "링크·파일 정리", "gap": "커뮤니티와 수익화 운영 기능이 약함", "our_edge": "링크·파일관리 + 피드·질문·광고·정산까지 연결"},
         ],
         "notices": [
+            "DM(채팅), 질문(하기/받기)은 무료 기능으로 유지됩니다.",
             "광고 수익은 플랫폼 운영 수익이며 회원 보상은 활동 포인트 기준으로만 적립됩니다.",
             "광고 시청·클릭 자체는 포인트 지급 기준이 아니며, 부정 트래픽 유도 행위는 제한됩니다.",
-            f"현금 전환은 최소 {REWARD_MIN_WITHDRAW_POINTS:,}P부터 가능하며 월 {REWARD_MONTHLY_WITHDRAW_LIMIT}회까지 신청할 수 있습니다.",
+            "키워드 입찰과 DM 과금은 현재 사용하지 않는 정책으로 고정됩니다.",
+            f"현금 전환은 최소 {REWARD_MIN_WITHDRAW_POINTS:,}P부터 가능하며 출금 시 5% 수수료가 적용되고 월 {REWARD_MONTHLY_WITHDRAW_LIMIT}회까지 신청할 수 있습니다.",
         ],
         "insights": [
             f"최근 7일 활동 점수는 {int(projection.get('activity_score_7d') or 0):,}점 입니다.",
@@ -1254,6 +1271,7 @@ def request_brand_verification(payload: BrandVerificationRequestIn, user=Depends
 
 @app.post("/api/rewards/keyword-boosts")
 def create_keyword_boost(payload: KeywordBoostCreateIn, user=Depends(current_user)):
+    raise HTTPException(status_code=403, detail='키워드 입찰 기능은 현재 비활성화되어 있습니다.')
     with get_conn() as conn:
         ensure_keyword_boost_tables(conn)
         content_type = (payload.content_type or 'feed_post').strip()
@@ -1280,9 +1298,7 @@ def create_keyword_boost(payload: KeywordBoostCreateIn, user=Depends(current_use
 
 @app.get("/api/rewards/keyword-competition")
 def get_keyword_competition(keyword: str = Query(default=''), user=Depends(current_user)):
-    with get_conn() as conn:
-        ensure_keyword_boost_tables(conn)
-        return keyword_competition_payload(conn, keyword, int(user['id']))
+    return {"keyword": '', "leaderboard": [], "my_rank": 0, "disabled": True, "message": "키워드 입찰 기능은 현재 비활성화되어 있습니다."}
 
 
 @app.post("/api/rewards/direct-ads")
@@ -3026,9 +3042,14 @@ def create_reward_withdrawal(payload: RewardWithdrawalIn, user=Depends(current_u
             raise HTTPException(status_code=400, detail="이번 달 출금 신청은 이미 완료되었습니다.")
         if balance['available'] < REWARD_MIN_WITHDRAW_POINTS:
             raise HTTPException(status_code=400, detail=f"최소 출금 가능 포인트는 {REWARD_MIN_WITHDRAW_POINTS:,}P 입니다.")
+        points_amount = REWARD_MIN_WITHDRAW_POINTS
+        cash_amount, fee_points = calculate_withdraw_cash_amount(points_amount)
+        note = (payload.note or '').strip()
+        fee_note = f"출금 수수료 5% 적용 ({fee_points:,}P 차감)"
+        merged_note = (fee_note + ("\n" + note if note else "")).strip()
         conn.execute(
             "INSERT INTO app_withdrawal_requests(user_id, points_amount, cash_amount, status, account_holder, bank_name, account_number, note, created_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
-            (int(user['id']), REWARD_MIN_WITHDRAW_POINTS, REWARD_MIN_WITHDRAW_POINTS, account_holder[:40], bank_name[:40], account_number[:60], (payload.note or '').strip()[:200], utcnow()),
+            (int(user['id']), points_amount, cash_amount, account_holder[:40], bank_name[:40], account_number[:60], merged_note[:200], utcnow()),
         )
         return {"ok": True, "summary": reward_summary_payload(conn, int(user['id']))}
 

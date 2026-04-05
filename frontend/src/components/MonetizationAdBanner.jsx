@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef } from 'react'
 
 const ADSENSE_CLIENT = String(import.meta.env.VITE_ADSENSE_CLIENT || '').trim()
-const QUESTION_PROFILE_SLOT = String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_PROFILE || '').trim()
-const AD_MODE = String(import.meta.env.VITE_QUESTION_PROFILE_AD_MODE || 'adsense').trim().toLowerCase()
+const DEFAULT_MODE = String(import.meta.env.VITE_QUESTION_PROFILE_AD_MODE || 'adsense').trim().toLowerCase()
+const SLOT_BY_PLACEMENT = {
+  question_profile: String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_PROFILE || '').trim(),
+  question_feed_inline: String(import.meta.env.VITE_ADSENSE_SLOT_QUESTION_FEED_INLINE || '').trim(),
+  home_feed_inline: String(import.meta.env.VITE_ADSENSE_SLOT_HOME_FEED_INLINE || '').trim(),
+  rewards_inline: String(import.meta.env.VITE_ADSENSE_SLOT_REWARDS_INLINE || '').trim(),
+}
 const DIRECT_LABEL = String(import.meta.env.VITE_DIRECT_AD_LABEL || '추천 광고').trim()
 const DIRECT_TITLE = String(import.meta.env.VITE_DIRECT_AD_TITLE || '브랜드 제휴 광고를 연결해 보세요').trim()
 const DIRECT_DESC = String(import.meta.env.VITE_DIRECT_AD_DESC || '단가가 높은 업종 스폰서를 직접 유치하면 일반 네트워크 광고보다 수익성이 좋아질 수 있습니다.').trim()
@@ -35,45 +40,46 @@ function ensureAdSenseScript(client) {
   return adsenseScriptPromise
 }
 
-export default function MonetizationAdBanner() {
+export default function MonetizationAdBanner({ placement = 'question_profile', className = '', mode, compact = false }) {
   const adRef = useRef(null)
-  const canRenderAdSense = AD_MODE === 'adsense' && ADSENSE_CLIENT && QUESTION_PROFILE_SLOT
-  const directHref = DIRECT_LINK || 'mailto:ads@historyprofile.com?subject=%ED%94%84%EB%A1%9C%ED%95%84%20%EC%A7%88%EB%AC%B8%20%ED%99%94%EB%A9%B4%20%EA%B4%91%EA%B3%A0%20%EB%AC%B8%EC%9D%98'
+  const slot = SLOT_BY_PLACEMENT[placement] || SLOT_BY_PLACEMENT.question_profile
+  const effectiveMode = String(mode || DEFAULT_MODE || 'adsense').trim().toLowerCase()
+  const canRenderAdSense = effectiveMode === 'adsense' && ADSENSE_CLIENT && slot
+  const directHref = DIRECT_LINK || 'mailto:ads@historyprofile.com?subject=%ED%94%84%EB%A1%9C%ED%95%84%20%EA%B4%91%EA%B3%A0%20%EB%AC%B8%EC%9D%98'
   const displayMode = useMemo(() => {
     if (canRenderAdSense) return 'adsense'
-    if (AD_MODE === 'direct') return 'direct'
+    if (effectiveMode === 'direct') return 'direct'
     return 'recommendation'
-  }, [canRenderAdSense])
+  }, [canRenderAdSense, effectiveMode])
 
   useEffect(() => {
     if (!canRenderAdSense || !adRef.current) return
     let mounted = true
-    ensureAdSenseScript(ADSENSE_CLIENT)
-      .then(() => {
-        if (!mounted || !adRef.current || adRef.current.dataset.adStatus) return
-        try {
-          ;(window.adsbygoogle = window.adsbygoogle || []).push({})
-        } catch {}
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [canRenderAdSense])
+    ensureAdSenseScript(ADSENSE_CLIENT).then(() => {
+      if (!mounted || !adRef.current || adRef.current.dataset.adStatus) return
+      try {
+        ;(window.adsbygoogle = window.adsbygoogle || []).push({})
+      } catch {}
+    }).catch(() => {})
+    return () => { mounted = false }
+  }, [canRenderAdSense, placement, slot])
+
+  const wrapClass = `asked-ad-banner ${compact ? 'asked-ad-banner-compact' : ''} ${className}`.trim()
 
   if (displayMode === 'adsense') {
     return (
-      <div className="asked-ad-banner asked-ad-banner-live">
+      <div className={wrapClass}>
         <div className="asked-ad-banner-head">
           <div className="asked-ad-label">AD</div>
           <div className="asked-ad-copy">Google AdSense 반응형 광고</div>
         </div>
         <ins
+          key={`${placement}-${slot}`}
           ref={adRef}
           className="adsbygoogle asked-adsense-slot"
           style={{ display: 'block' }}
           data-ad-client={ADSENSE_CLIENT}
-          data-ad-slot={QUESTION_PROFILE_SLOT}
+          data-ad-slot={slot}
           data-ad-format="auto"
           data-full-width-responsive="true"
         />
@@ -83,7 +89,7 @@ export default function MonetizationAdBanner() {
 
   if (displayMode === 'direct') {
     return (
-      <a className="asked-ad-banner asked-direct-ad" href={directHref} target="_blank" rel="noreferrer">
+      <a className={`${wrapClass} asked-direct-ad`.trim()} href={directHref} target="_blank" rel="noreferrer">
         <div className="asked-ad-banner-head">
           <div className="asked-ad-label">{DIRECT_LABEL}</div>
           <div className="asked-ad-copy">직접 판매형 스폰서 광고</div>
@@ -100,15 +106,15 @@ export default function MonetizationAdBanner() {
   }
 
   return (
-    <div className="asked-ad-banner asked-ad-banner-recommendation">
+    <div className={`${wrapClass} asked-ad-banner-recommendation`.trim()}>
       <div className="asked-ad-banner-head">
         <div className="asked-ad-label">AD</div>
         <div className="asked-ad-copy">추천 수익화 방식</div>
       </div>
       <div className="asked-ad-recommendation">
-        <strong>1순위 기본값: Google AdSense 반응형 디스플레이 광고</strong>
-        <span>설정이 간단하고 공개 질문 페이지처럼 트래픽이 분산된 화면에 바로 적용하기 좋습니다.</span>
-        <span>고정 스폰서를 직접 유치할 수 있으면 `direct` 모드로 바꿔 단가 높은 제휴 광고도 운영할 수 있습니다.</span>
+        <strong>기본값: Google AdSense 반응형 디스플레이 광고</strong>
+        <span>질문 화면 상단, 홈 피드 중간, 리워드센터 안내 영역처럼 콘텐츠 흐름을 해치지 않는 위치에 자동 대응형 광고를 노출합니다.</span>
+        <span>추후 영상 광고를 붙일 때도 동일한 지면 전략을 유지할 수 있습니다.</span>
       </div>
     </div>
   )

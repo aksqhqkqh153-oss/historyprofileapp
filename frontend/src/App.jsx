@@ -677,7 +677,7 @@ function MorePage({ onOpenSheet, isAdmin }) {
     { path: '/introductions-manager', label: 'AI 자기소개서', desc: 'AI 초안 생성 결과를 저장/복원/수정', icon: 'document' },
     { path: '/vault', label: '클라우드 저장함', desc: '요금제별 저장용량 전략과 보관 자산 관리', icon: 'folder' },
     { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
-    { path: '/rewards', label: '리워드/정산', desc: '마이크로 인플루언서 활동 포인트, 예상 수익, 출금 신청, 광고 운영 현황 확인', icon: 'coin' },
+    { path: '/rewards', label: '리워드/정산', desc: '무료 DM·질문 정책, 광고 수익 구조, 출금 신청 현황 확인', icon: 'coin' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용 플레이어로 청취', icon: 'music' }] : []),
   ]
 
@@ -758,8 +758,7 @@ function RewardsPage() {
   const [selectedProfileId, setSelectedProfileId] = useState(getStoredActiveProfileId())
   const [withdrawForm, setWithdrawForm] = useState({ account_holder: '', bank_name: '', account_number: '', note: '' })
   const [brandForm, setBrandForm] = useState({ business_name: '', business_category: '', website_url: '', note: '' })
-  const [boostForm, setBoostForm] = useState({ content_type: 'feed_post', content_id: '', keyword: '', points_spent: 1000 })
-  const [competition, setCompetition] = useState(null)
+  
   const [directAdForm, setDirectAdForm] = useState({ title: '', subtitle: '', description: '', target_url: '', image_url: '', placement: 'home_feed', category: '', target_keyword: '', bid_points: 3000 })
   const [directAdCompetition, setDirectAdCompetition] = useState(null)
   const [feedItems, setFeedItems] = useState([])
@@ -807,22 +806,23 @@ function RewardsPage() {
   const withdrawCount = Number(summary?.monthly_withdraw_count || 0)
   const withdrawLimit = Number(summary?.monthly_withdraw_limit || 1)
   const canWithdraw = Boolean(summary?.can_withdraw)
-  const selectedBoostItems = boostForm.content_type === 'feed_post' ? feedItems : communityItems
   const activeProfile = profiles.find(item => Number(item.id) === Number(selectedProfileId))
+  const withdrawFeeRate = Number(summary?.withdraw_fee_rate || 0.05)
+  const withdrawFeePercent = Math.round(withdrawFeeRate * 100)
+  const withdrawCashEstimate = Math.max(0, Math.floor(minWithdraw * (1 - withdrawFeeRate)))
 
   const businessOverviewItems = [
-    { title: '서비스 개요', lines: ['프로필 기반 마이크로 인플루언서 플랫폼', '사용자 = 광고 매체 (Profile, Q&A, Feed)'] },
-    { title: '핵심 수익 공식', lines: ['플랫폼 수익 = 광고수익 + 직접광고 + 키워드입찰 - 사용자 리워드'] },
-    { title: '핵심 문장', lines: ['유저는 콘텐츠를 만들고, 플랫폼은 수익을 만든다'] },
+    { title: '서비스 개요', lines: ['자유롭게 쓰는 공개 프로필 · 질문 · DM 플랫폼', '트래픽이 쌓일수록 AdSense·영상 광고 수익이 커지는 구조'] },
+    { title: '고정 수익 모델', lines: ['무료 기능: DM(채팅), 질문(하기·받기)', `유료 기능: 출금 수수료 ${withdrawFeePercent}%`] },
+    { title: '비활성화 정책', lines: ['키워드 입찰 미사용', 'DM 과금 미사용'] },
   ]
 
   const rewardPolicyRows = [
-    { label: '질문 받기', value: '+1P' },
-    { label: '답변 작성', value: '+3P' },
-    { label: '프로필 조회 100회', value: '+5P' },
-    { label: 'DM 유입', value: '+2P' },
-    { label: '인기 답변', value: '+10P' },
-    { label: '키워드 상위 노출 유지', value: '+5P/day' },
+    { label: '질문 받기', value: '무료 기능 유지' },
+    { label: '질문 하기', value: '무료 기능 유지' },
+    { label: 'DM(채팅)', value: '무료 기능 유지' },
+    { label: '출금 신청', value: `수수료 ${withdrawFeePercent}%` },
+    { label: '광고 수익', value: 'AdSense / 영상 광고' },
   ]
 
   const growthGuideRows = [
@@ -903,32 +903,6 @@ function RewardsPage() {
     }
   }
 
-  async function handleBoostSubmit(e) {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      const result = await api('/api/rewards/keyword-boosts', { method: 'POST', body: JSON.stringify({ ...boostForm, content_id: Number(boostForm.content_id || 0), points_spent: Number(boostForm.points_spent || 0) }) })
-      if (result?.summary) setSummary(result.summary)
-      if (result?.competition) setCompetition(result.competition)
-      window.alert('키워드 상위 노출 포인트 사용이 반영되었습니다.')
-    } catch (err) {
-      window.alert(err.message || '키워드 상위 노출 적용에 실패했습니다.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleCompetitionLookup(keyword) {
-    const normalized = String(keyword || boostForm.keyword || '').trim()
-    if (!normalized) return
-    try {
-      const result = await api(`/api/rewards/keyword-competition?keyword=${encodeURIComponent(normalized)}`)
-      setCompetition(result)
-    } catch (err) {
-      window.alert(err.message || '경쟁 현황 조회에 실패했습니다.')
-    }
-  }
-
   async function handleDirectAdSubmit(e) {
     e.preventDefault()
     if (!selectedProfileId) return window.alert('광고주로 사용할 프로필을 먼저 선택해주세요.')
@@ -963,7 +937,7 @@ function RewardsPage() {
         <div className="split-row responsive-row">
           <div className="stack gap-6">
             <strong>마이크로 인플루언서 리워드센터</strong>
-            <div className="muted small-text">프로필 기반 마이크로 인플루언서 플랫폼 구조를 반영해, 질문·답변·조회·DM 활동을 포인트화하고 광고/직접광고/키워드 입찰 수익 모델을 한 화면에서 연결합니다.</div>
+            <div className="muted small-text">DM과 질문은 무료로 유지하고, 플랫폼은 AdSense·영상 광고와 출금 수수료 5% 구조로 운영하는 정책을 반영한 화면입니다.</div>
           </div>
           <button type="button" className="ghost" onClick={load}>새로고침</button>
         </div>
@@ -975,6 +949,7 @@ function RewardsPage() {
         </div>
         <div className="rewards-policy-strip">
           <span>최소 출금 {minWithdraw.toLocaleString()}P</span>
+          <span>출금 수수료 {withdrawFeePercent}%</span>
           <span>월 출금 {withdrawCount}/{withdrawLimit}회</span>
           <span>{canWithdraw ? '이번 달 출금 신청 가능' : '이번 달 출금 조건 미충족'}</span>
         </div>
@@ -991,7 +966,7 @@ function RewardsPage() {
 
       <div className="grid-2 rewards-grid">
         <div className="card stack">
-          <div className="split-row responsive-row"><strong>포인트 지급 로직</strong><span className="muted small-text">광고 시청/클릭 보상 아님</span></div>
+          <div className="split-row responsive-row"><strong>고정 정책</strong><span className="muted small-text">무료 기능 유지</span></div>
           <div className="stack compact-list">
             {rewardPolicyRows.map(item => (
               <div key={item.label} className="mini-card rewards-rule-card">
@@ -999,19 +974,21 @@ function RewardsPage() {
               </div>
             ))}
           </div>
-          <div className="bordered-box small-text">활동 점수 = (질문 + 답변 + 조회수 + DM)</div>
-          <div className="bordered-box small-text">예상 포인트 = 활동점수 × 가중치</div>
-          <div className="bordered-box small-text">예상 수익 = 포인트 × 환산 비율</div>
+          <div className="bordered-box small-text">수익 구조 = 페이지뷰/질문 트래픽 증가 → AdSense·영상 광고 노출 증가</div>
+          <div className="bordered-box small-text">DM 과금과 키워드 입찰은 사용하지 않습니다.</div>
+          <div className="bordered-box small-text">사용자 출금 시에만 {withdrawFeePercent}% 수수료가 적용됩니다.</div>
         </div>
 
         <div className="card stack">
           <div className="split-row responsive-row"><strong>관리/리스크/성장 전략</strong><span className="muted small-text">운영 원칙</span></div>
-          <div className="bordered-box small-text">관리자 시스템: 출금 승인/반려, 광고 승인, 키워드 경쟁 관리</div>
-          <div className="bordered-box small-text">직접 광고 구조: 사용자/기업 광고 신청 → 관리자 승인 → 피드 중간 노출</div>
+          <div className="bordered-box small-text">관리자 시스템: 출금 승인/반려, 광고 지면 관리, 부정 활동 감지</div>
+          <div className="bordered-box small-text">광고 구조: 공개 질문/피드 트래픽 기반 AdSense·영상 광고 노출</div>
           {riskGuideRows.map((item, index) => <div key={`risk-${index}`} className="bordered-box small-text">{item}</div>)}
           {growthGuideRows.map((item, index) => <div key={`growth-${index}`} className="bordered-box small-text">{item}</div>)}
         </div>
       </div>
+
+      <MonetizationAdBanner placement="rewards_inline" className="rewards-inline-ad" />
 
       <div className="card stack">
         <div className="split-row responsive-row">
@@ -1031,7 +1008,7 @@ function RewardsPage() {
           <div className="mini-card rewards-rule-card stack">
             <div className="split-row responsive-row"><strong>현재 리워드 상태</strong><strong>{Number(summary?.estimated?.expected_cash_krw || 0).toLocaleString()}원</strong></div>
             <div className="muted small-text">예상 현금 전환 금액은 활동 점수 기반 추정치이며 실제 광고 정산 금액과 1:1로 연결되지 않습니다.</div>
-            <div className="muted small-text">질문 수 {Number(summary?.estimated?.received_questions || 0).toLocaleString()}건 · 답변 완료 {Number(summary?.estimated?.answered_questions || 0).toLocaleString()}건 · 최근 공유 {Number(summary?.estimated?.profile_shares_7d || 0).toLocaleString()}회</div>
+            <div className="muted small-text">질문 수 {Number(summary?.estimated?.received_questions || 0).toLocaleString()}건 · 답변 완료 {Number(summary?.estimated?.answered_questions || 0).toLocaleString()}건 · 최근 공유 {Number(summary?.estimated?.profile_shares_7d || 0).toLocaleString()}회 · 홈/질문 광고 누적 최적화</div>
           </div>
           <div className="mini-card rewards-rule-card stack">
             <div className="split-row responsive-row"><strong>운영 안내</strong><strong>월 1회 출금</strong></div>
@@ -1178,46 +1155,9 @@ function RewardsPage() {
 
       <div className="grid-2 rewards-grid">
         <div className="card stack">
-          <div className="split-row responsive-row"><strong>키워드 상위 노출</strong><span className="muted small-text">포인트 사용형</span></div>
-          <div className="muted small-text">내가 작성한 피드/게시글을 특정 키워드 검색 시 상위권에 더 잘 보이도록 포인트를 사용할 수 있습니다.</div>
-          <form className="stack" onSubmit={handleBoostSubmit}>
-            <div className="grid-2">
-              <label className="stack small-text"><span>대상</span><select value={boostForm.content_type} onChange={e => setBoostForm(prev => ({ ...prev, content_type: e.target.value, content_id: '' }))}><option value="feed_post">피드</option><option value="community_post">게시글</option></select></label>
-              <label className="stack small-text"><span>콘텐츠</span><select value={boostForm.content_id} onChange={e => setBoostForm(prev => ({ ...prev, content_id: e.target.value }))}><option value="">선택</option>{selectedBoostItems.map(item => <option key={`${boostForm.content_type}-${item.id}`} value={item.id}>{(item.display_title || item.title || item.summary || item.content || '콘텐츠').slice(0, 40)}</option>)}</select></label>
-            </div>
-            <div className="grid-2">
-              <TextField label="키워드" value={boostForm.keyword} onChange={value => setBoostForm(prev => ({ ...prev, keyword: value }))} />
-              <TextField label="사용 포인트" value={String(boostForm.points_spent)} onChange={value => setBoostForm(prev => ({ ...prev, points_spent: value.replace(/[^0-9]/g, '') }))} />
-            </div>
-            <div className="action-wrap wrap-row">
-              <button type="submit" disabled={submitting}>포인트 사용하고 노출 강화</button>
-              <button type="button" className="ghost" onClick={() => handleCompetitionLookup(boostForm.keyword)}>경쟁 현황 보기</button>
-            </div>
-          </form>
-          <div className="stack compact-list">
-            {(summary?.keyword_boosts?.my_items || []).length ? summary.keyword_boosts.my_items.map(item => (
-              <div key={`boost-${item.id}`} className="bordered-box small-text">{item.keyword} · {item.content_type === 'feed_post' ? '피드' : '게시글'} · {Number(item.points_spent || 0).toLocaleString()}P 사용 · {formatDateLabel(item.created_at)}</div>
-            )) : <div className="muted small-text">아직 사용한 키워드 노출 포인트가 없습니다.</div>}
-          </div>
-        </div>
-
-        <div className="card stack">
-          <div className="split-row responsive-row"><strong>키워드 경쟁 현황</strong><span className="muted small-text">누구와 경쟁하는지 확인</span></div>
-          <div className="muted small-text">같은 키워드에 포인트를 사용한 사용자와 사용 포인트 순위를 보여줍니다.</div>
-          {(competition?.leaderboard || []).length ? competition.leaderboard.map(item => (
-            <div key={`competition-${item.rank}-${item.user_id}-${item.content_id}`} className={`bordered-box small-text${item.is_me ? ' competition-me' : ''}`}>
-              <div className="split-row responsive-row"><strong>{item.rank}위 · {item.nickname}</strong><strong>{Number(item.points_spent || 0).toLocaleString()}P</strong></div>
-              <div className="muted small-text">{item.content_type === 'feed_post' ? '피드' : '게시글'} · {item.content_title || '콘텐츠'} </div>
-            </div>
-          )) : <div className="muted small-text">키워드를 조회하면 경쟁 순위가 표시됩니다.</div>}
-          {competition?.my_rank ? <div className="bordered-box small-text">내 현재 순위: {competition.my_rank}위 · 키워드: {competition.keyword}</div> : null}
-        </div>
-      </div>
-
-      <div className="grid-2 rewards-grid">
-        <div className="card stack">
-          <div className="split-row responsive-row"><strong>현금 전환 신청</strong><span className="muted small-text">월 1회 · 최소 10,000P</span></div>
-          <div className="muted small-text">광고 보상금이 아니라 서비스 활동 포인트 정산 요청입니다. 관리자 검수 후 순차 지급됩니다.</div>
+          <div className="split-row responsive-row"><strong>현금 전환 신청</strong><span className="muted small-text">월 1회 · 최소 10,000P · 수수료 5%</span></div>
+          <div className="muted small-text">광고 보상금이 아니라 서비스 활동 포인트 정산 요청입니다. 관리자 검수 후 순차 지급되며 출금 시 수수료 5%가 적용됩니다.</div>
+          <div className="bordered-box small-text">예상 지급액: {minWithdraw.toLocaleString()}P 신청 시 약 {withdrawCashEstimate.toLocaleString()}P 지급</div>
           <form className="stack" onSubmit={handleWithdrawSubmit}>
             <div className="grid-2">
               <TextField label="예금주" value={withdrawForm.account_holder} onChange={value => setWithdrawForm(prev => ({ ...prev, account_holder: value }))} />
@@ -1226,7 +1166,7 @@ function RewardsPage() {
             <TextField label="계좌번호" value={withdrawForm.account_number} onChange={value => setWithdrawForm(prev => ({ ...prev, account_number: value }))} />
             <label className="field-label">관리자 메모</label>
             <textarea value={withdrawForm.note} onChange={e => setWithdrawForm(prev => ({ ...prev, note: e.target.value }))} placeholder="정산 시 참고할 내용을 입력하세요." />
-            <button type="submit" disabled={!canWithdraw || submitting}>{submitting ? '처리중' : `${minWithdraw.toLocaleString()}P 출금 신청`}</button>
+            <button type="submit" disabled={!canWithdraw || submitting}>{submitting ? '처리중' : `${minWithdraw.toLocaleString()}P 출금 신청 (${withdrawFeePercent}% 수수료)`}</button>
           </form>
           {!canWithdraw ? <div className="muted small-text">출금 조건: 출금 가능 포인트 {minWithdraw.toLocaleString()}P 이상, 이번 달 출금 신청 0회</div> : null}
         </div>
@@ -1242,7 +1182,7 @@ function RewardsPage() {
               </div>
             )) : <div className="muted">아직 적립 내역이 없습니다.</div>}
             {(summary?.withdrawals || []).length ? summary.withdrawals.map(item => (
-              <div key={`withdraw-${item.id}`} className="bordered-box small-text">출금 {Number(item.points_amount || 0).toLocaleString()}P · {item.status} · {formatDateLabel(item.created_at)}</div>
+              <div key={`withdraw-${item.id}`} className="bordered-box small-text">출금 {Number(item.points_amount || 0).toLocaleString()}P → 실지급 {Number(item.cash_amount || 0).toLocaleString()}P · 수수료 {Number(item.fee_points || 0).toLocaleString()}P · {item.status} · {formatDateLabel(item.created_at)}</div>
             )) : <div className="muted">아직 출금 신청 내역이 없습니다.</div>}
           </div>
         </div>
@@ -2461,7 +2401,7 @@ function MoreBottomSheet({ open, onClose, onSelect, isAdmin }) {
     { path: '/introductions-manager', label: '자기소개서관리', desc: '회사/직무별 문항 세트 저장 · 비교 · 복원', icon: 'document' },
     { path: '/share-links-manager', label: '링크공유관리', desc: '채용용 · 영업용 · 소개용 공개 링크 생성', icon: 'link' },
     { path: '/video-watch', label: '영상시청', desc: '공개 YouTube 재생목록·영상 링크를 바로 열어 시청', icon: 'music' },
-    { path: '/rewards', label: '리워드/정산', desc: '마이크로 인플루언서 활동 포인트, 예상 수익, 출금 신청, 광고 운영 현황 확인', icon: 'coin' },
+    { path: '/rewards', label: '리워드/정산', desc: '무료 DM·질문 정책, 광고 수익 구조, 출금 신청 현황 확인', icon: 'coin' },
     ...(isAdmin ? [{ path: '/music', label: '음악듣기', desc: '공개 YouTube 재생목록을 관리자 전용으로 재생', icon: 'music' }] : []),
     { path: '/more', label: '기타기능', desc: '업데이트 예정', icon: 'more', disabled: true },
   ]
@@ -5020,6 +4960,7 @@ function HomePage({ user }) {
         {items.length ? items.map((item, index) => (
           <React.Fragment key={`feed-post-wrap-${item.id}-${item.created_at}`}>
             <FeedPostCard item={item} onOpenProfile={setSelectedProfile} onFriendRequest={handleFriendRequest} />
+            {(index + 1) % 5 === 0 ? <MonetizationAdBanner placement="home_feed_inline" className="feed-inline-ad" compact /> : null}
             {directAds.length && (index + 1) % 4 === 0 ? <DirectAdCard item={directAds[index % directAds.length]} compact /> : null}
           </React.Fragment>
         )) : (

@@ -3222,3 +3222,6 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .direct-ad-image{display:block;width:100%;max-height:240px;object-fit:cover}
 .direct-ad-copy{margin:0;white-space:pre-wrap;word-break:break-word}
 .align-end{align-items:flex-end}
+
+
+.feed-inline-ad,.rewards-inline-ad,.question-inline-ad{margin:10px 0 14px}.asked-ad-banner-compact{padding:12px 14px;border-radius:18px}.asked-ad-banner-compact .asked-adsense-slot{min-height:90px}.rewards-inline-ad{margin-top:0}.feed-inline-ad .asked-ad-copy,.question-inline-ad .asked-ad-copy{font-size:13px}
