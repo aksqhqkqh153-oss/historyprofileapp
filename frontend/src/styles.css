@@ -3242,3 +3242,25 @@ label { color: #374151; font-size: 13px; font-weight: 700; }
 .question-ask-profile-avatar{width:56px;height:56px;}
 .question-ask-standalone-card textarea{min-height:180px;}
 .question-ask-nav-row{justify-content:flex-start;gap:12px;}
+.business-card-feature-strip{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.business-card-utility-card{margin:0 0 14px;padding:14px 16px;border-radius:20px;background:linear-gradient(180deg,#f8fbff,#fff);border:1px solid var(--line)}
+.business-card-preset-row{display:flex;flex-wrap:wrap;gap:8px}
+.business-card-bottom-actions-wrap{flex-wrap:wrap}
+.business-card-social-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.business-card-social-grid-span{grid-column:1/-1}
+.business-card-preview-top-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;margin-bottom:12px}
+.business-card-logo{width:56px;height:56px;border-radius:16px;object-fit:cover;background:rgba(255,255,255,.76);border:1px solid rgba(255,255,255,.26);box-shadow:0 10px 20px rgba(15,23,42,.08)}
+.business-card-logo-placeholder{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;letter-spacing:.08em;color:#64748b}
+.business-card-qr-box{width:64px;height:64px;border-radius:16px;padding:6px;background:#fff;box-shadow:0 12px 22px rgba(15,23,42,.12);flex:0 0 auto}
+.business-card-qr-box img{width:100%;height:100%;display:block;object-fit:contain}
+.business-card-social-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.business-card-social-chip{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);font-size:11px;font-weight:700;letter-spacing:.02em;backdrop-filter:blur(8px)}
+.business-card-safe-guide{position:absolute;inset:16px;border:1px dashed rgba(255,255,255,.7);border-radius:calc(var(--bc-radius,28px) - 8px);pointer-events:none;box-shadow:inset 0 0 0 10px rgba(255,255,255,.08)}
+.business-card-safe-guide::after{content:'SAFE';position:absolute;right:10px;bottom:8px;font-size:10px;font-weight:800;letter-spacing:.12em;color:rgba(255,255,255,.82)}
+@media (max-width:640px){
+  .business-card-social-grid{grid-template-columns:1fr}
+  .business-card-preview-top-row{margin-bottom:10px}
+  .business-card-logo{width:48px;height:48px;border-radius:14px}
+  .business-card-qr-box{width:54px;height:54px;border-radius:14px;padding:5px}
+  .business-card-feature-strip{margin-bottom:10px}
+}

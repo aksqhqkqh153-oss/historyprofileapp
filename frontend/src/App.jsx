@@ -7577,6 +7577,17 @@ function BusinessCardBuilderPage() {
     address: '',
     tagline: '',
   })
+  const [logoImage, setLogoImage] = useState('')
+  const [accentColor, setAccentColor] = useState('#2563eb')
+  const [qrLink, setQrLink] = useState('')
+  const [showSafeGuide, setShowSafeGuide] = useState(false)
+  const [socialLinks, setSocialLinks] = useState({
+    instagram: '',
+    youtube: '',
+    kakao: '',
+    customLabel: '',
+    customUrl: '',
+  })
 
   const sizeOptions = [
     { value: 'standard_90x50', label: '90 × 50mm', widthMm: 90, heightMm: 50 },
@@ -7602,6 +7613,54 @@ function BusinessCardBuilderPage() {
     { value: '#e0f2fe', label: '아이스 블루' },
     { value: '#f5f3ff', label: '실버 바이올렛' },
     { value: '#111827', label: '딥 블랙' },
+  ]
+
+  const accentColorOptions = [
+    { value: '#2563eb', label: '블루' },
+    { value: '#0f172a', label: '잉크 블랙' },
+    { value: '#10b981', label: '민트 그린' },
+    { value: '#f59e0b', label: '골드' },
+    { value: '#ec4899', label: '핑크' },
+    { value: '#7c3aed', label: '바이올렛' },
+  ]
+
+  const quickFillPresets = [
+    {
+      id: 'creator',
+      label: '크리에이터',
+      data: {
+        jobTitle: '콘텐츠 크리에이터',
+        company: '프토리 스튜디오',
+        tagline: '프로필·링크·콘텐츠를 한 장으로 정리해 전달합니다.',
+        website: 'https://www.historyprofile.com',
+      },
+      socials: { instagram: '@creator', youtube: 'youtube.com/@creator', kakao: 'pf.kakao.com/_creator', customLabel: '포트폴리오', customUrl: 'https://portfolio.example.com' },
+      qrLink: 'https://www.historyprofile.com',
+    },
+    {
+      id: 'freelancer',
+      label: '프리랜서',
+      data: {
+        jobTitle: '프리랜서 디자이너',
+        company: '개인 브랜드',
+        tagline: '상담부터 포트폴리오, 견적 문의까지 바로 연결됩니다.',
+        website: 'https://portfolio.example.com',
+      },
+      socials: { instagram: '@brandname', youtube: '', kakao: 'open.kakao.com/o/sample', customLabel: '노션', customUrl: 'https://notion.so/example' },
+      qrLink: 'https://portfolio.example.com',
+    },
+    {
+      id: 'corp',
+      label: '기업/영업',
+      data: {
+        jobTitle: '사업개발 매니저',
+        company: '히스토리프로필',
+        tagline: '회사 소개, 제품 자료, 문의 링크를 명함에서 바로 공유합니다.',
+        website: 'https://www.historyprofile.com/about',
+      },
+      socials: { instagram: '', youtube: '', kakao: 'pf.kakao.com/_historyprofile', customLabel: '회사소개서', customUrl: 'https://www.historyprofile.com/about' },
+      qrLink: 'https://www.historyprofile.com/about',
+    },
   ]
 
   const patternOptions = [
@@ -7704,6 +7763,29 @@ function BusinessCardBuilderPage() {
   const currentShopForm = shopForms.find(item => item.id === template) || null
   const activeShopPreview = shopForms.find(item => item.id === shopPreviewId) || null
 
+  const socialPreviewItems = useMemo(() => {
+    const items = [
+      socialLinks.instagram ? { label: 'IG', value: socialLinks.instagram } : null,
+      socialLinks.youtube ? { label: 'YT', value: socialLinks.youtube } : null,
+      socialLinks.kakao ? { label: 'KAKAO', value: socialLinks.kakao } : null,
+      socialLinks.customUrl ? { label: socialLinks.customLabel || 'LINK', value: socialLinks.customUrl } : null,
+    ].filter(Boolean)
+    return items.slice(0, 4)
+  }, [socialLinks])
+
+  const resolvedQrLink = useMemo(() => {
+    const candidates = [
+      qrLink,
+      socialLinks.customUrl,
+      form.website,
+      form.email ? `mailto:${form.email}` : '',
+      form.phone ? `tel:${String(form.phone).replace(/[^0-9+]/g, '')}` : '',
+    ]
+    return candidates.map(value => String(value || '').trim()).find(Boolean) || ''
+  }, [qrLink, socialLinks.customUrl, form.website, form.email, form.phone])
+
+  const qrImageUrl = resolvedQrLink ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encodeURIComponent(resolvedQrLink)}` : ''
+
   useEffect(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(BUSINESS_CARD_STORAGE_KEY) || '[]')
@@ -7744,16 +7826,16 @@ function BusinessCardBuilderPage() {
   }
 
   useEffect(() => {
-    const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern
+    const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern || logoImage || Object.values(socialLinks).some(value => String(value || '').trim()) || qrLink
     if (!hasContent || !isTemplateUnlocked(template)) return
     const timer = window.setTimeout(() => {
       persistCurrentCard({ silent: true, title: form.name?.trim() || form.company?.trim() || '최근 작업' })
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern, gradientPreset, gradientAngle, reflectionBaseColor, reflectionAngle, reflectionOpacity, unlockedShopForms])
+  }, [template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern, gradientPreset, gradientAngle, reflectionBaseColor, reflectionAngle, reflectionOpacity, logoImage, accentColor, qrLink, socialLinks, unlockedShopForms])
 
   function persistCurrentCard({ silent = false, title } = {}) {
-    const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern
+    const hasContent = Object.values(form).some(value => String(value || '').trim()) || uploadedPhoto || uploadedPattern || logoImage || Object.values(socialLinks).some(value => String(value || '').trim()) || qrLink
     if (!hasContent) {
       if (!silent) window.alert('저장할 명함 정보가 없습니다.')
       return null
@@ -7775,13 +7857,17 @@ function BusinessCardBuilderPage() {
       reflectionBaseColor,
       reflectionAngle,
       reflectionOpacity,
+      logoImage,
+      accentColor,
+      qrLink,
+      socialLinks,
       updatedAt: new Date().toISOString(),
     }
     let savedSnapshot = snapshot
     setSavedCards(current => {
       const comparable = JSON.stringify({
         template, cardSize, form, backgroundMode, backgroundColor, patternPreset, uploadedPhoto, uploadedPattern,
-        gradientPreset, gradientAngle, reflectionBaseColor, reflectionAngle, reflectionOpacity
+        gradientPreset, gradientAngle, reflectionBaseColor, reflectionAngle, reflectionOpacity, logoImage, accentColor, qrLink, socialLinks
       })
       const next = [snapshot, ...current.filter(item => JSON.stringify({
         template: item.template,
@@ -7797,6 +7883,10 @@ function BusinessCardBuilderPage() {
         reflectionBaseColor: item.reflectionBaseColor,
         reflectionAngle: item.reflectionAngle,
         reflectionOpacity: item.reflectionOpacity,
+        logoImage: item.logoImage,
+        accentColor: item.accentColor,
+        qrLink: item.qrLink,
+        socialLinks: item.socialLinks,
       }) !== comparable)].slice(0, 20)
       localStorage.setItem(BUSINESS_CARD_STORAGE_KEY, JSON.stringify(next))
       savedSnapshot = next[0]
@@ -7827,6 +7917,16 @@ function BusinessCardBuilderPage() {
     setReflectionBaseColor(target.reflectionBaseColor || '#f8fafc')
     setReflectionAngle(Number(target.reflectionAngle ?? 28))
     setReflectionOpacity(Number(target.reflectionOpacity ?? 0.38))
+    setLogoImage(target.logoImage || '')
+    setAccentColor(target.accentColor || '#2563eb')
+    setQrLink(target.qrLink || '')
+    setSocialLinks({
+      instagram: target.socialLinks?.instagram || '',
+      youtube: target.socialLinks?.youtube || '',
+      kakao: target.socialLinks?.kakao || '',
+      customLabel: target.socialLinks?.customLabel || '',
+      customUrl: target.socialLinks?.customUrl || '',
+    })
     setForm({
       name: target.form?.name || '',
       jobTitle: target.form?.jobTitle || '',
@@ -7846,6 +7946,85 @@ function BusinessCardBuilderPage() {
     reader.readAsDataURL(file)
   }
 
+
+  function updateSocialField(key, value) {
+    setSocialLinks(current => ({ ...current, [key]: value }))
+  }
+
+  function applyQuickFill(preset) {
+    if (!preset) return
+    setForm(current => ({ ...current, ...preset.data }))
+    if (preset.socials) setSocialLinks(current => ({ ...current, ...preset.socials }))
+    if (preset.qrLink) setQrLink(preset.qrLink)
+    window.alert(`${preset.label} 기본 구성이 적용되었습니다.`)
+  }
+
+  function downloadVCard() {
+    if (!ensureTemplateUnlocked('VCF 내보내기', template)) return
+    const lines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `FN:${form.name || '이름 없음'}`,
+      form.company ? `ORG:${form.company}` : '',
+      form.jobTitle ? `TITLE:${form.jobTitle}` : '',
+      form.phone ? `TEL;TYPE=CELL:${String(form.phone).replace(/[^0-9+]/g, '')}` : '',
+      form.email ? `EMAIL;TYPE=INTERNET:${form.email}` : '',
+      form.website ? `URL:${String(form.website).startsWith('http') ? form.website : `https://${form.website}`}` : '',
+      form.address ? `ADR;TYPE=WORK:;;${form.address};;;;` : '',
+      form.tagline ? `NOTE:${String(form.tagline).replace(/\n/g, ' ')}` : '',
+      'END:VCARD',
+    ].filter(Boolean)
+    const blob = new Blob([lines.join('\n')], { type: 'text/vcard;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${(form.name || form.company || 'business-card').replace(/\s+/g, '-').toLowerCase()}.vcf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1200)
+  }
+
+  function downloadHtmlSnippet() {
+    if (!ensureTemplateUnlocked('HTML 내보내기', template)) return
+    const socialHtml = socialPreviewItems.length
+      ? `<div class="socials">${socialPreviewItems.map(item => `<span>${escapeXml(item.label)} · ${escapeXml(item.value)}</span>`).join('')}</div>`
+      : ''
+    const html = `<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeXml(form.name || form.company || 'Business Card')}</title>
+<style>
+body{font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f8fafc;padding:24px;color:#0f172a}
+.card{max-width:520px;margin:0 auto;padding:28px;border-radius:24px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.12);border-top:8px solid ${accentColor}}
+.role{margin-top:8px;color:#475569}.meta{margin-top:18px;display:grid;gap:8px}.tag{margin-top:18px;line-height:1.6}.socials{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}.socials span{padding:6px 10px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:13px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>${escapeXml(form.name || '이름')}</h1>
+  <div class="role">${escapeXml([form.jobTitle, form.company].filter(Boolean).join(' · '))}</div>
+  <div class="meta">
+    ${[form.phone, form.email, form.website, form.address].filter(Boolean).map(item => `<div>${escapeXml(item)}</div>`).join('')}
+  </div>
+  <div class="tag">${escapeXml(form.tagline || '')}</div>
+  ${socialHtml}
+</div>
+</body>
+</html>`
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${(form.name || form.company || 'business-card').replace(/\s+/g, '-').toLowerCase()}-snippet.html`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1200)
+  }
+
   async function copySummary() {
     if (!ensureTemplateUnlocked('정보 복사', template)) return
     const lines = [
@@ -7856,6 +8035,8 @@ function BusinessCardBuilderPage() {
       form.website,
       form.address,
       form.tagline,
+      resolvedQrLink ? `QR 링크: ${resolvedQrLink}` : '',
+      ...socialPreviewItems.map(item => `${item.label}: ${item.value}`),
     ].filter(Boolean)
     await navigator.clipboard.writeText(lines.join('\n'))
     window.alert('명함 정보가 복사되었습니다.')
@@ -7976,6 +8157,7 @@ function BusinessCardBuilderPage() {
     reflectionColor = reflectionBaseColor,
     reflectionRotate = reflectionAngle,
     reflectionAlpha = reflectionOpacity,
+    accentValue = accentColor,
   } = {}) {
     if (mode === 'photo' && photoUrl) {
       return {
@@ -8056,10 +8238,11 @@ function BusinessCardBuilderPage() {
     reflectionColor = reflectionBaseColor,
     reflectionRotate = reflectionAngle,
     reflectionAlpha = reflectionOpacity,
+    accentValue = accentColor,
   } = {}) {
     if (!ensureTemplateUnlocked('원본 파일 받기', templateValue)) return
     const size = sizeOptions.find(item => item.value === sizeValue) || sizeOptions[0]
-    const appearance = getPreviewAppearance({ templateValue, mode: appearanceMode, solidColor, photoUrl, patternUrl, patternValue, gradientValue, gradientRotate, reflectionColor, reflectionRotate, reflectionAlpha })
+    const appearance = getPreviewAppearance({ templateValue, mode: appearanceMode, solidColor, photoUrl, patternUrl, patternValue, gradientValue, gradientRotate, reflectionColor, reflectionRotate, reflectionAlpha, accentValue })
     const width = 1080
     const height = Math.round(width * (size.heightMm / size.widthMm))
     const isLightText = appearance.color === '#ffffff' || appearance.color === '#f8fafc'
@@ -8071,17 +8254,27 @@ function BusinessCardBuilderPage() {
     const infoItems = [previewData.phone || '010-0000-0000', previewData.email || 'name@example.com', previewData.website || 'www.example.com', previewData.address || '서울시 강남구 테헤란로 00']
     const tagline = previewData.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'
     const html = `
-      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;padding:38px;display:flex;flex-direction:column;justify-content:space-between;border-radius:42px;box-sizing:border-box;overflow:hidden;${appearance.htmlBackgroundCss}color:${appearance.color};font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
-        <div style="display:inline-flex;align-self:flex-start;padding:12px 18px;border-radius:999px;font-size:30px;font-weight:800;${badgeStyle}">${escapeXml((templateOptions.find(item => item.value === templateValue)?.label || templateValue) + ' · ' + size.label)}</div>
-        <div>
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;padding:38px;display:flex;flex-direction:column;justify-content:space-between;border-radius:42px;box-sizing:border-box;overflow:hidden;position:relative;${appearance.htmlBackgroundCss}color:${appearance.color};font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
+        <div style="position:absolute;left:0;top:0;width:14px;height:100%;background:${accentValue};opacity:.94"></div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;position:relative;z-index:1;">
+          <div style="display:inline-flex;align-self:flex-start;padding:12px 18px;border-radius:999px;font-size:30px;font-weight:800;${badgeStyle}">${escapeXml((templateOptions.find(item => item.value === templateValue)?.label || templateValue) + ' · ' + size.label)}</div>
+          ${logoImage ? `<img src="${escapeXml(logoImage)}" alt="logo" style="width:120px;height:120px;object-fit:cover;border-radius:24px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.72)" />` : ''}
+        </div>
+        <div style="position:relative;z-index:1;">
           <div style="font-size:88px;font-weight:900;letter-spacing:-0.04em;line-height:1.05;word-break:keep-all;overflow-wrap:anywhere;">${escapeXml(fullName)}</div>
           <div style="margin-top:18px;font-size:34px;opacity:.82;overflow-wrap:anywhere;">${escapeXml(roleLine)}</div>
-          <div style="height:2px;background:currentColor;opacity:.14;margin:28px 0 24px;"></div>
+          <div style="height:2px;background:${accentValue};opacity:.38;margin:28px 0 24px;"></div>
           <div style="display:grid;gap:12px;font-size:28px;line-height:1.55;overflow-wrap:anywhere;">
             ${infoItems.map(item => `<div>${escapeXml(item)}</div>`).join('')}
           </div>
         </div>
-        <div style="font-size:24px;line-height:1.65;opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeXml(tagline)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;position:relative;z-index:1;">
+          <div style="flex:1 1 auto;">
+            <div style="font-size:24px;line-height:1.65;opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeXml(tagline)}</div>
+            ${socialPreviewItems.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">${socialPreviewItems.map(item => `<span style="display:inline-flex;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.18);font-size:18px">${escapeXml(item.label)}</span>`).join('')}</div>` : ''}
+          </div>
+          ${qrImageUrl ? `<div style="width:154px;height:154px;padding:10px;border-radius:20px;background:#fff;display:flex;align-items:center;justify-content:center;"><img src="${escapeXml(qrImageUrl)}" alt="qr" style="width:100%;height:100%;object-fit:contain" /></div>` : ''}
+        </div>
       </div>
     `
     const svg = `
@@ -8119,7 +8312,7 @@ function BusinessCardBuilderPage() {
     hideBadge = false
   }) {
     const previewSize = sizeOptions.find(item => item.value === sizeValue) || sizeOptions[0]
-    const appearance = getPreviewAppearance({ templateValue, mode: appearanceMode, solidColor, photoUrl, patternUrl, patternValue, gradientValue, gradientRotate, reflectionColor, reflectionRotate, reflectionAlpha })
+    const appearance = getPreviewAppearance({ templateValue, mode: appearanceMode, solidColor, photoUrl, patternUrl, patternValue, gradientValue, gradientRotate, reflectionColor, reflectionRotate, reflectionAlpha, accentValue })
     const layout = getTemplateLayout(templateValue)
     const label = templateOptions.find(item => item.value === templateValue)?.label || templateValue
     return (
@@ -8127,6 +8320,7 @@ function BusinessCardBuilderPage() {
         className={`business-card-preview business-card-preview-${templateValue} business-card-preview-family-${layout.family} ${className}`.trim()}
         style={{
           '--card-width-mm': previewSize.widthMm,
+          '--bc-accent-color': accentValue,
           '--card-height-mm': previewSize.heightMm,
           '--card-ratio': `${previewSize.widthMm} / ${previewSize.heightMm}`,
           '--bc-text-align': layout.textAlign,
@@ -8146,13 +8340,18 @@ function BusinessCardBuilderPage() {
         }}
       >
         <div className="business-card-preview-overlay" />
-        <div className="business-card-preview-accent" style={{ background: layout.accent }} />
+        <div className="business-card-preview-accent" style={{ background: accentValue || layout.accent }} />
+        {showGuide ? <div className="business-card-safe-guide" aria-hidden="true" /> : null}
         {hideBadge ? null : (
           <div className={`business-card-preview-badge business-card-preview-badge-${layout.badgeTone}`}>
             {label}{badgeSuffix ? ` · ${badgeSuffix}` : ''}
           </div>
         )}
         <div className="business-card-preview-main">
+          <div className="business-card-preview-top-row">
+            {logoUrl ? <img className="business-card-logo" src={logoUrl} alt="명함 로고" /> : <div className="business-card-logo business-card-logo-placeholder">LOGO</div>}
+            {qrUrl ? <div className="business-card-qr-box"><img src={qrUrl} alt="명함 QR" /></div> : null}
+          </div>
           <div className="business-card-name">{previewData.name || '홍길동'}</div>
           <div className="business-card-role">{[previewData.jobTitle || '직함', previewData.company || '회사명'].filter(Boolean).join(' · ')}</div>
           <div className="business-card-divider" />
@@ -8164,6 +8363,11 @@ function BusinessCardBuilderPage() {
         </div>
         <div className="business-card-preview-foot">
           <div className="business-card-tagline">{previewData.tagline || '한 줄 소개를 입력하면 이 영역에 반영됩니다.'}</div>
+          {socialItems?.length ? (
+            <div className="business-card-social-row">
+              {socialItems.map(item => <span key={`${item.label}-${item.value}`} className="business-card-social-chip">{item.label}</span>)}
+            </div>
+          ) : null}
         </div>
       </div>
     )
@@ -8199,7 +8403,18 @@ function BusinessCardBuilderPage() {
               <div className="business-card-section-head">
                 <div>
                   <h3>세부 설정</h3>
+                  <div className="muted small-text">오픈소스 기반 실무 편의 기능을 확장해 둔 명함 빌더입니다. 필요한 항목만 남기고 정리해서 사용하면 됩니다.</div>
                 </div>
+              </div>
+
+              <div className="business-card-feature-strip">
+                <span className="chip">로고 업로드</span>
+                <span className="chip">QR 링크</span>
+                <span className="chip">SNS 칩</span>
+                <span className="chip">VCF 저장</span>
+                <span className="chip">HTML 스니펫</span>
+                <span className="chip">안전영역 가이드</span>
+                <span className="chip">업종 프리셋</span>
               </div>
 
               <div className="business-card-control-grid business-card-control-grid-top business-card-control-grid-top-4">
@@ -8239,6 +8454,14 @@ function BusinessCardBuilderPage() {
                   <select value={cardSize} onChange={e => setCardSize(e.target.value)}>
                     {sizeOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
+                </div>
+              </div>
+
+              <div className="card stack business-card-utility-card">
+                <div className="split-row responsive-row"><strong>빠른 시작</strong><span className="muted small-text">업종별 기본 문구와 링크 구조를 한 번에 채웁니다.</span></div>
+                <div className="business-card-preset-row">
+                  {quickFillPresets.map(item => <button key={item.id} type="button" className="ghost" onClick={() => applyQuickFill(item)}>{item.label}</button>)}
+                  <button type="button" className="ghost" onClick={() => setShowSafeGuide(current => !current)}>{showSafeGuide ? '안전영역 숨기기' : '안전영역 보기'}</button>
                 </div>
               </div>
 
@@ -8325,6 +8548,21 @@ function BusinessCardBuilderPage() {
                 <TextField label="연락처" value={form.phone} onChange={value => updateField('phone', value)} />
                 <TextField label="이메일" value={form.email} onChange={value => updateField('email', value)} />
                 <TextField label="웹사이트" value={form.website} onChange={value => updateField('website', value)} />
+                <div className="stack business-card-field">
+                  <label>브랜드 포인트 컬러</label>
+                  <select value={accentColor} onChange={e => setAccentColor(e.target.value)}>
+                    {accentColorOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </div>
+                <div className="stack business-card-field business-card-background-option business-card-background-option-wide">
+                  <label>로고 업로드</label>
+                  <input type="file" accept="image/*" onChange={e => readLocalImage(e.target.files?.[0], setLogoImage)} />
+                </div>
+                <div className="stack business-card-field business-card-field-span-full">
+                  <label>QR 연결 링크</label>
+                  <input value={qrLink} onChange={e => setQrLink(e.target.value)} placeholder="예: https://www.historyprofile.com / 비워두면 웹사이트·커스텀 링크를 자동 사용" />
+                  <div className="muted small-text">무료 QR 이미지 서비스를 사용해 즉시 미리보기합니다. 링크를 비워두면 웹사이트 또는 커스텀 링크를 자동 연결합니다.</div>
+                </div>
                 <div className="business-card-field business-card-field-span-full">
                   <TextField label="주소" value={form.address} onChange={value => updateField('address', value)} />
                 </div>
@@ -8332,10 +8570,22 @@ function BusinessCardBuilderPage() {
                   <label>한줄 소개</label>
                   <textarea value={form.tagline} onChange={e => updateField('tagline', e.target.value)} placeholder="예: 고객의 이력을 한 장의 프로필로 정리합니다." rows={4} />
                 </div>
+                <div className="stack business-card-field business-card-field-span-full">
+                  <label>SNS / 외부 링크</label>
+                  <div className="business-card-social-grid">
+                    <input value={socialLinks.instagram} onChange={e => updateSocialField('instagram', e.target.value)} placeholder="인스타그램 ID 또는 URL" />
+                    <input value={socialLinks.youtube} onChange={e => updateSocialField('youtube', e.target.value)} placeholder="유튜브 채널 URL" />
+                    <input value={socialLinks.kakao} onChange={e => updateSocialField('kakao', e.target.value)} placeholder="카카오채널 또는 오픈채팅 URL" />
+                    <input value={socialLinks.customLabel} onChange={e => updateSocialField('customLabel', e.target.value)} placeholder="커스텀 링크 이름" />
+                    <input className="business-card-social-grid-span" value={socialLinks.customUrl} onChange={e => updateSocialField('customUrl', e.target.value)} placeholder="커스텀 링크 URL" />
+                  </div>
+                </div>
               </div>
 
-              <div className="business-card-head-actions business-card-bottom-actions">
+              <div className="business-card-head-actions business-card-bottom-actions business-card-bottom-actions-wrap">
                 <button type="button" className="ghost" onClick={copySummary}>정보복사</button>
+                <button type="button" className="ghost" onClick={downloadVCard}>VCF 저장</button>
+                <button type="button" className="ghost" onClick={downloadHtmlSnippet}>HTML 스니펫</button>
                 <button type="button" className="ghost business-card-bottom-original-button" onClick={() => downloadOriginalFile()}>원본파일받기</button>
                 <button type="button" className="business-card-action-desktop" onClick={printCard}>인쇄하기</button>
                 <button type="button" className="business-card-action-mobile" onClick={saveCard}>저장</button>
