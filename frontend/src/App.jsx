@@ -8307,6 +8307,7 @@ body{font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;backgrou
     reflectionColor = reflectionBaseColor,
     reflectionRotate = reflectionAngle,
     reflectionAlpha = reflectionOpacity,
+    accentValue = accentColor,
     className = '',
     badgeSuffix = '',
     hideBadge = false
