@@ -8308,6 +8308,7 @@ body{font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;backgrou
     reflectionRotate = reflectionAngle,
     reflectionAlpha = reflectionOpacity,
     accentValue = accentColor,
+    showGuide = false,
     className = '',
     badgeSuffix = '',
     hideBadge = false
@@ -8394,6 +8395,7 @@ body{font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;backgrou
                 reflectionColor={reflectionBaseColor}
                 reflectionRotate={reflectionAngle}
                 reflectionAlpha={reflectionOpacity}
+                showGuide={showSafeGuide}
                 badgeSuffix={currentSize.label}
               />
             </div>
